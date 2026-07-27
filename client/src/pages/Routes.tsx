@@ -373,13 +373,15 @@ function Planner({ vehicles }: { vehicles: Vehicle[] }): React.JSX.Element {
                 <MapContainer center={[result.origem.lat, result.origem.lon]} zoom={11} className="h-full w-full" scrollWheelZoom>
                   <TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                   <FitAll pts={mapPts} />
-                  <Polyline positions={result.geometry.coordinates} pathOptions={{ color: '#0284c7', weight: 4, opacity: 0.8 }} />
+                  {/* traçado em Signal Orange (acento da marca) p/ separar do
+                      azul dos marcadores numerados. */}
+                  <Polyline positions={result.geometry.coordinates} pathOptions={{ color: '#ff6a2b', weight: 4, opacity: 0.85 }} />
                   <CircleMarker center={[result.origem.lat, result.origem.lon]} radius={9} pathOptions={{ color: '#fff', weight: 2, fillColor: '#111827', fillOpacity: 1 }}>
                     <Tooltip permanent direction="center" className="!bg-transparent !border-0 !shadow-none !p-0 !text-[10px] !font-bold !text-white">●</Tooltip>
                   </CircleMarker>
                   {result.stops.map((s) => (
                     <CircleMarker key={s.company_id} center={[s.lat, s.lon]} radius={11}
-                      pathOptions={{ color: '#fff', weight: 2, fillColor: '#039855', fillOpacity: 1 }}>
+                      pathOptions={{ color: '#fff', weight: 2, fillColor: '#2438c4', fillOpacity: 1 }}>
                       <Tooltip permanent direction="center" className="!bg-transparent !border-0 !shadow-none !p-0 !text-[11px] !font-bold !text-white">{s.seq + 1}</Tooltip>
                       <Popup>
                         <span className="block text-sm font-semibold text-ink-800">{s.seq + 1}. {s.nome_fantasia || s.razao_social}</span>

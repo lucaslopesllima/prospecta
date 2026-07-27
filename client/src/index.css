@@ -7,22 +7,26 @@
 /* ─────────────────────────────────────────────────────────────
    Design system — "Rovva" CRM & Analytics
    Inspired by modern analytics-SaaS conventions:
-   refined violet brand · cool neutral canvas · elevated surfaces.
+   Rovva Blue brand · cool neutral canvas · elevated surfaces.
    Tailwind v4 @theme → generates bg-brand-600, text-ink-500, etc.
    ───────────────────────────────────────────────────────────── */
 @theme {
-  /* brand — green, the single accent that carries identity */
-  --color-brand-50:  #ecfdf3;
-  --color-brand-100: #d1fadf;
-  --color-brand-200: #a6f4c5;
-  --color-brand-300: #6ce9a6;
-  --color-brand-400: #32d583;
-  --color-brand-500: #12b76a;
-  --color-brand-600: #039855;
-  --color-brand-700: #027a48;
-  --color-brand-800: #05603a;
-  --color-brand-900: #054f31;
-  --color-brand-950: #053321;
+  /* brand — Rovva Blue (marca/IDENTIDADE.md): 500 = primária #3D5AF1,
+     700 = Blue 700 #2438C4 (hover/gradiente), 50 = tint #EEF1FE. A rampa
+     entre as âncoras é interpolada e conferida em contraste: branco sobre
+     600 = 6.7:1, 700 sobre 50 = 7.7:1, 400 sobre canvas dark = 5.9:1.
+     400 (#6E86FF) é o tom de texto da marca sobre fundo escuro. */
+  --color-brand-50:  #eef1fe;
+  --color-brand-100: #dde3fd;
+  --color-brand-200: #c1cbfb;
+  --color-brand-300: #9dacf8;
+  --color-brand-400: #6e86ff;
+  --color-brand-500: #3d5af1;
+  --color-brand-600: #2f49de;
+  --color-brand-700: #2438c4;
+  --color-brand-800: #1e2e9c;
+  --color-brand-900: #1b287c;
+  --color-brand-950: #131b52;
 
   /* ink — cool, slightly blue neutral for text / surfaces / sidebar */
   --color-ink-50:  #f6f7fb;

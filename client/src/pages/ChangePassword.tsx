@@ -4,6 +4,7 @@ import { api, ApiError, setToken } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import { Btn, Card, cn } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
+import { LogoMark } from '../lib/logo.tsx';
 
 // regra visível em tempo real (✓/○) — usuário não descobre o requisito só ao errar
 function Rule({ ok, children }: { ok: boolean; children: React.ReactNode }): React.JSX.Element {
@@ -50,9 +51,7 @@ export function ChangePassword(): React.JSX.Element {
   return (
     <div className="grid min-h-dvh place-items-center bg-ink-50 p-4">
       <Card className="w-full max-w-sm p-6">
-        <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 text-white shadow-sm shadow-brand-600/30">
-          <Icon name="target" size={20} />
-        </span>
+        <LogoMark size={40} className="rounded-xl shadow-sm shadow-black/20" />
         <h1 className="mt-4 text-lg font-bold tracking-tight text-ink-900">Defina sua senha</h1>
         <p className="mt-1 text-sm text-ink-500">
           Olá{user?.nome ? `, ${user.nome}` : ''}! Sua senha atual é provisória — escolha uma definitiva para continuar.

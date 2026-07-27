@@ -4,6 +4,7 @@ import { useAuth } from './lib/auth.tsx';
 import { api } from './lib/api.ts';
 import type { Notification } from './lib/types.ts';
 import { Icon, type IconName } from './lib/icons.tsx';
+import { LogoMark, LogoWord } from './lib/logo.tsx';
 import { SafeButton, cn } from './lib/ui.tsx';
 import { ThemeToggle } from './lib/theme.tsx';
 import { onQueueChange, queued } from './lib/offline.ts';
@@ -147,13 +148,9 @@ function useNavGroups(): NavGroup[] {
 function Brand({ compact }: { compact?: boolean }): React.JSX.Element {
   return (
     <div className="flex items-center gap-2.5">
-      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 text-white shadow-sm shadow-brand-600/30">
-        <Icon name="target" size={18} />
-      </span>
+      <LogoMark size={32} className="shrink-0 rounded-xl shadow-sm shadow-black/30" />
       {!compact && (
-        <span className="text-[15px] font-bold tracking-tight text-white">
-          Rovva
-        </span>
+        <LogoWord className="text-[15px] font-bold tracking-tight text-white" accent="text-brand-400" />
       )}
     </div>
   );
@@ -400,7 +397,7 @@ function MobileNavFab(): React.JSX.Element {
         </nav>
       )}
       <button onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-label={open ? 'Fechar menu' : 'Abrir menu'}
-        className="fixed top-[max(env(safe-area-inset-top),1rem)] left-4 z-[1100] grid h-14 w-14 place-items-center rounded-2xl bg-brand-600 text-white shadow-[0_8px_20px_-6px_rgba(3,152,85,0.6)] transition-transform active:scale-95">
+        className="fixed top-[max(env(safe-area-inset-top),1rem)] left-4 z-[1100] grid h-14 w-14 place-items-center rounded-2xl bg-brand-600 text-white shadow-[0_8px_20px_-6px_rgba(47,73,222,0.6)] transition-transform active:scale-95">
         <Icon name={open ? 'x' : 'menu'} size={26} className="transition-transform duration-200" />
       </button>
     </div>

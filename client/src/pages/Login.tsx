@@ -4,6 +4,7 @@ import { api } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import { Btn, cn } from '../lib/ui.tsx';
 import { Icon, type IconName } from '../lib/icons.tsx';
+import { LogoMark, LogoWord } from '../lib/logo.tsx';
 import { isEmail } from '../lib/format.ts';
 
 const FEATURES: { icon: IconName; title: string; desc: string }[] = [
@@ -58,10 +59,8 @@ export function Login(): React.JSX.Element {
         <div className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-brand-600/30 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-20 -left-10 h-72 w-72 rounded-full bg-brand-500/20 blur-3xl" />
         <div className="relative flex items-center gap-2.5">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 shadow-sm shadow-brand-600/30">
-            <Icon name="target" size={20} />
-          </span>
-          <span className="text-lg font-bold tracking-tight">Rovva</span>
+          <LogoMark size={36} className="rounded-xl shadow-sm shadow-black/30" />
+          <LogoWord className="text-lg font-bold tracking-tight" accent="text-brand-400" />
         </div>
         <div className="relative space-y-6">
           <h2 className="max-w-sm text-2xl font-bold leading-snug tracking-tight">
@@ -87,10 +86,8 @@ export function Login(): React.JSX.Element {
       <div className="grid place-items-center bg-ink-50 p-4">
         <div className="w-full max-w-sm">
           <div className="mb-6 flex items-center gap-2.5 lg:hidden">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 text-white shadow-sm shadow-brand-600/30">
-              <Icon name="target" size={20} />
-            </span>
-            <span className="text-lg font-bold tracking-tight text-ink-900">Rovva</span>
+            <LogoMark size={36} className="rounded-xl shadow-sm shadow-black/20" />
+            <LogoWord className="text-lg font-bold tracking-tight text-ink-900" />
           </div>
 
           <h1 className="text-xl font-bold tracking-tight text-ink-900">
