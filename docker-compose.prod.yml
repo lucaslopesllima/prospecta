@@ -94,6 +94,12 @@ services:
       # entra quem já tem conta criada por dentro. Ligue com SIGNUP_ENABLED=true
       # no .env quando quiser abrir a inscrição.
       SIGNUP_ENABLED: ${SIGNUP_ENABLED:-false}
+      # Senha do login da base de demonstração (docs/DEMO_DATA.md §7). Precisa
+      # estar no ambiente do CONTAINER, e não só no .env: `.env` alimenta a
+      # substituição do compose, mas quem lê a variável é o scripts/seed-demo.ts
+      # rodando aqui dentro (via exec ou cron). Sem valor o seed recusa semear —
+      # em produção não há default.
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-}
       # Pool/timeout do Postgres (db.ts), TTL do JWT (config.ts) e nível de log
       # (app.ts). Passthrough do .env — todos com default no próprio código.
       PG_POOL_MAX: ${PG_POOL_MAX:-20}
