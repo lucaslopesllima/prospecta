@@ -1,6 +1,6 @@
 // Só roda no projeto "pwa" (playwright.config.ts) — build de produção do
 // client (service worker ativo; `vite dev` tem devOptions.enabled:false) servido
-// pelo Fastify em :8090 (docker-compose.e2e.yml, serviço app-pwa). Rodar com
+// pelo Fastify em :8091 (docker-compose.e2e.yml, serviço app-pwa). Rodar com
 // `npm run test:pwa` (builda a imagem antes).
 import { test, expect } from '@playwright/test';
 import { registerOrg, setSession } from '../../fixtures/auth.ts';

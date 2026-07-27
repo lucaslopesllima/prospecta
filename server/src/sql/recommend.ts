@@ -175,6 +175,9 @@ WITH cand AS (
     FROM companies c
     ${cdsJoin}
     WHERE c.situacao_cadastral = 'ativa'
+      -- empresas da base de demonstração (migração 073) são fictícias e vivem no
+      -- mesmo pool global: nunca podem ser sugeridas para nenhum tenant.
+      AND c.source <> 'demo'
       AND c.municipio_id = ANY($1::int[])
       AND ${cnaePredicate}
       AND (c.uf = ANY($9::bpchar[]) OR c.regiao = ANY($10::regiao_br[]))

@@ -1,0 +1,15 @@
+-- 072 — marca de organização de demonstração.
+--
+-- A base de demo (docs/DEMO_DATA.md) é uma org como outra qualquer, com dados
+-- fictícios semeados por scripts/seed-demo.ts. O que ela NÃO tem é integração
+-- externa: não existe instância do WhatsApp na Evolution por trás dela.
+--
+-- Sem essa marca a tela de WhatsApp fica inutilizável na demo: o front bloqueia
+-- em `status !== 'conectado'` e revalida o estado real na Evolution, que
+-- responde desconectado — o visitante cai no QR Code e nunca vê as conversas
+-- semeadas. Com a marca, o app roda o WhatsApp em circuito fechado para essa
+-- org (ver server/src/demo.ts): conectado para a UI, envio gravado só no banco.
+--
+-- Booleano na organização (e não uma tabela de flags) porque é o único eixo de
+-- demo que existe hoje e o custo de ler junto com a org é zero.
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS demo boolean NOT NULL DEFAULT false;

@@ -26,7 +26,7 @@ Workspace novo `e2e/` na raiz (package.json próprio, independente de client/ser
 e2e/
 ├── package.json              # @playwright/test, pg, dotenv
 ├── tsconfig.json
-├── playwright.config.ts      # chromium default; projects: chromium, mobile (Pixel 7), pwa (build prod :8080)
+├── playwright.config.ts      # chromium default; projects: chromium, mobile (Pixel 7), pwa (build prod :8091)
 ├── global-setup.ts           # cria rs_e2e + migrations (reusa migrate-lib.ts) + seed companies
 ├── fixtures/
 │   ├── index.ts              # test estendido (mergeTests)
@@ -64,7 +64,7 @@ export default defineConfig({
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
     { name: 'mobile', use: { ...devices['Pixel 7'] }, testMatch: /07-agenda|20-pwa/ },
-    // pwa: baseURL http://localhost:8080 (build prod servido pelo Fastify), testMatch /20-pwa/
+    // pwa: baseURL http://localhost:8091 (build prod servido pelo Fastify), testMatch /20-pwa/
   ],
   // Sem webServer: a stack sobe via docker compose (ver Ambiente).
 });
@@ -148,7 +148,7 @@ loginAs: async ({ page, request }, use) => {
 - `11-rotas/`: rota 3+ paradas (clientes com geom via API) → otimizar (stub OSRM) → ordem exibida = stub; custo combustível; limite 25 paradas.
 - `14-whatsapp/`: conectar (QR fake renderiza); enviar (stub confirma POST); **receber: webhook → mensagem aparece via WS sem reload**; mídia.
 - `13-email/`: template CRUD; agendar; disparo assertado no Mailpit.
-- `20-pwa-offline/` (projeto `pwa`, **build de produção** servido pelo Fastify :8080 — Vite dev não tem SW): `navigator.serviceWorker.ready` → `context.setOffline(true)` → agenda do dia renderiza (SW NetworkFirst) → check-in enfileira (IndexedDB, `lib/offline.ts`) → online → fila sincroniza (assert via API).
+- `20-pwa-offline/` (projeto `pwa`, **build de produção** servido pelo Fastify :8091 — Vite dev não tem SW): `navigator.serviceWorker.ready` → `context.setOffline(true)` → agenda do dia renderiza (SW NetworkFirst) → check-in enfileira (IndexedDB, `lib/offline.ts`) → online → fila sincroniza (assert via API).
 
 ### Fase 4 — RBAC + relatórios + conta (~30 testes)
 

@@ -20,23 +20,27 @@ export function companyRoutes(app: FastifyInstance): void {
     const digits = q.replace(/\D/g, '');
     // in_funnel: empresa já tem relationship neste org (qualquer status). O client
     // usa pra exibir o resultado opaco/desativado em vez de escondê-lo.
+    // source <> 'demo': as empresas fictícias da base de demonstração (migração
+    // 073) estão no mesmo pool global e não podem vazar para a busca de nenhum
+    // tenant — mesma regra do recommend.
     const SELECT = `
       SELECT c.id, c.cnpj, c.razao_social, c.nome_fantasia, c.telefone1, c.telefone2, c.email,
              c.logradouro, c.numero, c.bairro, c.cep, c.uf, m.nome AS cidade,
              EXISTS (SELECT 1 FROM company_relationships r WHERE r.org_id = $2 AND r.company_id = c.id) AS in_funnel
-      FROM companies c LEFT JOIN municipios m ON m.id = c.municipio_id`;
+      FROM companies c LEFT JOIN municipios m ON m.id = c.municipio_id
+      WHERE c.source <> 'demo'`;
     // CNPJ quando o termo não tem letras (só dígitos + máscara) e ≥4 dígitos.
     // Casado com maskSearchCNPJ no client, que formata o CNPJ na busca.
     if (digits.length >= 4 && !/[a-zA-Z]/.test(q)) {
       const companies = await query(
-        `${SELECT} WHERE c.cnpj LIKE $1 ORDER BY c.cnpj LIMIT 10`,
+        `${SELECT} AND c.cnpj LIKE $1 ORDER BY c.cnpj LIMIT 10`,
         [`${digits}%`, orgId],
       );
       return { companies };
     }
     const companies = await query(
       `${SELECT}
-       WHERE c.razao_social ILIKE '%' || $1 || '%' OR c.nome_fantasia ILIKE '%' || $1 || '%'
+       AND (c.razao_social ILIKE '%' || $1 || '%' OR c.nome_fantasia ILIKE '%' || $1 || '%')
        ORDER BY c.razao_social LIMIT 10`,
       [q.trim(), orgId],
     );

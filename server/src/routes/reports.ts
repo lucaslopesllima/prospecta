@@ -134,6 +134,7 @@ export function reportRoutes(app: FastifyInstance): void {
          SELECT c.municipio_id, count(*) AS qtd
          FROM companies c
          WHERE c.municipio_id = ANY($2::int[]) AND c.situacao_cadastral = 'ativa'
+           AND c.source <> 'demo' -- fictícias da base de demo não são mercado potencial
          GROUP BY c.municipio_id
        ) pot ON pot.municipio_id = m.id
        LEFT JOIN (

@@ -8,7 +8,7 @@
 # node_modules em volumes nomeados (instalados no container — sem conflito glibc/musl).
 #
 # UI:  http://localhost:5173   (proxy /api -> serviço app)
-# API: http://localhost:8080
+# API: http://localhost:8090   (host; dentro do compose o app continua em :8080)
 services:
   db:
     image: postgis/postgis:16-3.4
@@ -94,8 +94,12 @@ services:
       - app_node_modules:/app/node_modules
       - wa_media_dev:/data/wa-media
     command: sh -c "npm install && node scripts/migrate.ts && node --watch src/index.ts"
+    # Porta do HOST vem de APP_PORT (.env) — só a publicação muda; dentro do
+    # compose o app continua escutando 8080, então app:8080 segue valendo para
+    # web, nginx e webhook. Default 8090 porque 8080 é disputado (Tomcat, outros
+    # backends locais); quem quiser 8080 põe APP_PORT=8080 no .env.
     ports:
-      - "8080:8080"
+      - "${APP_PORT:-8090}:8080"
 
   web:
     image: node:24-slim

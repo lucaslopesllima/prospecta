@@ -565,7 +565,7 @@ Prefira o cookie assinado: prende o callback ao browser que iniciou o fluxo.
 
 No Google Cloud Console: OAuth consent screen (externo), Client ID tipo "Web application",
 **Authorized redirect URIs** = `https://<domínio>/api/auth/google/callback` (produção **e**
-`http://localhost:8080/...` para dev). Guardar as credenciais no `.env` da VPS (ver
+`http://localhost:8090/...` para dev). Guardar as credenciais no `.env` da VPS (ver
 `docs/DEPLOY.md`), nunca no repositório.
 
 ### 3.6 Client

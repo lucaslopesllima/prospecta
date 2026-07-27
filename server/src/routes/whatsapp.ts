@@ -6,6 +6,7 @@ import { one, query, withClient } from '../db.ts';
 import { requireAuth, requirePermission, authorizeToken, AuthError } from '../auth.ts';
 import { invalidOrgRef } from '../orgRefs.ts';
 import { audit } from '../audit.ts';
+import { isDemoOrg } from '../demo.ts';
 import * as evo from '../evolution.ts';
 import { mediaEnabled, saveMedia, saveAvatar, mediaStream } from '../mediaStore.ts';
 import { addConn, removeConn, broadcast } from '../ws.ts';
@@ -56,6 +57,9 @@ function safeMediaType(mime: string | null): { type: string; inline: boolean } {
 // Rebaixa a URL atual da foto de perfil na Evolution (grupo tem endpoint próprio).
 // Usado quando não há URL guardada ou a guardada expirou.
 async function refreshFotoUrl(orgId: number, jid: string): Promise<string | null> {
+  // Org demo: as fotos vêm do cache semeado (foto_b64/foto_path). Sem instância
+  // real, rebaixar a URL só renderia erro — segue sem foto.
+  if (await isDemoOrg(orgId)) return null;
   const inst = instanceName(orgId);
   if (jid.endsWith('@g.us')) return (await evo.groupInfo(inst, jid)).pictureUrl;
   return evo.profilePicture(inst, jidToNumero(jid));
@@ -92,8 +96,14 @@ export function whatsappRoutes(app: FastifyInstance): void {
     const s = await one<{ status: string; numero: string | null; updated_at: string; include_sender_name: boolean }>(
       'SELECT status, numero, updated_at, include_sender_name FROM org_whatsapp_settings WHERE org_id = $1', [orgId],
     );
+    // Org demo: sempre habilitada e conectada. Sem isso o front cai no painel de
+    // QR (ou no aviso de integração desligada) e as conversas semeadas nunca
+    // aparecem — a demo não tem instância na Evolution. Ver demo.ts.
+    const demo = await isDemoOrg(orgId);
     return {
-      enabled: evo.evolutionEnabled(), status: s?.status ?? 'desconectado', numero: s?.numero ?? null,
+      enabled: demo || evo.evolutionEnabled(),
+      status: demo ? 'conectado' : (s?.status ?? 'desconectado'),
+      numero: s?.numero ?? null,
       include_sender_name: s?.include_sender_name ?? false,
     };
   });
@@ -121,6 +131,9 @@ export function whatsappRoutes(app: FastifyInstance): void {
   app.post('/api/whatsapp/connect', { preHandler: [requireAuth, requirePermission('whatsapp.connect')] }, async (req, reply) => {
     const orgId = req.auth!.orgId;
     const name = await ensureSettings(orgId);
+    // Org demo já é "conectada" por definição — criar instância de verdade
+    // colocaria a base de demonstração falando com números reais.
+    if (await isDemoOrg(orgId)) return reply.code(409).send({ error: 'conta de demonstração: o WhatsApp já está ativo em modo demo' });
     try {
       try { await evo.createInstance(name); } catch { /* já existe: segue pro connect */ }
       // O Baileys gera o QR de forma assíncrona (~1-3s após o create). A 1ª
@@ -145,6 +158,10 @@ export function whatsappRoutes(app: FastifyInstance): void {
   app.get('/api/whatsapp/connection', { preHandler: [requireAuth, requirePermission('whatsapp.view')] }, async (req, reply) => {
     const orgId = req.auth!.orgId;
     await ensureSettings(orgId);
+    // Org demo: responde conectado sem consultar a Evolution. É este endpoint
+    // que o front usa para confirmar o estado real — na VPS, onde a Evolution
+    // está no ar para as orgs reais, a consulta voltaria desconectado.
+    if (await isDemoOrg(orgId)) return { status: 'conectado' };
     try {
       const state = await evo.connectionState(instanceName(orgId));
       const status = mapState(state);
@@ -158,6 +175,9 @@ export function whatsappRoutes(app: FastifyInstance): void {
 
   app.post('/api/whatsapp/disconnect', { preHandler: [requireAuth, requirePermission('whatsapp.connect')] }, async (req, reply) => {
     const orgId = req.auth!.orgId;
+    // Desconectar na demo só serviria para o visitante quebrar a própria tela
+    // (cairia no QR e não teria como voltar).
+    if (await isDemoOrg(orgId)) return reply.code(409).send({ error: 'conta de demonstração: não é possível desconectar' });
     try {
       await evo.logout(instanceName(orgId));
     } catch (e) {
@@ -180,8 +200,9 @@ export function whatsappRoutes(app: FastifyInstance): void {
       [orgId],
     );
     // Conserta nomes de grupo em massa, uma vez por sessão (não bloqueia a
-    // resposta; ao terminar avisa o front pra recarregar a lista).
-    if (!groupsSynced.has(orgId)) {
+    // resposta; ao terminar avisa o front pra recarregar a lista). Org demo não
+    // tem grupos na Evolution para consultar — os nomes semeados já são finais.
+    if (!groupsSynced.has(orgId) && !(await isDemoOrg(orgId))) {
       groupsSynced.add(orgId);
       syncGroupNames(orgId).then(
         (n) => { if (n > 0) broadcast(orgId, 'chat-foto', { chat_id: 0 }); },
@@ -444,8 +465,13 @@ export function whatsappRoutes(app: FastifyInstance): void {
       // Prefixa só o texto que sai pro contato (quando a org liga o flag); o corpo
       // guardado e a prévia ficam crus — o app já rotula o remetente no balão.
       const outgoing = await applySenderPrefix(orgId, req.auth!.userId, text) ?? text;
-      const sent = await evo.sendText(instanceName(orgId), chat.numero || chat.remote_jid, outgoing);
-      const evolutionId = sent.key?.id ?? null;
+      // Org demo: circuito fechado — a mensagem é gravada e espelhada no WS
+      // como qualquer outra, mas nada é entregue a um número real. Sem
+      // evolution_id (não existe mensagem lá fora para deduplicar depois).
+      const sent = await isDemoOrg(orgId)
+        ? null
+        : await evo.sendText(instanceName(orgId), chat.numero || chat.remote_jid, outgoing);
+      const evolutionId = sent?.key?.id ?? null;
       const msg = await insertMessage(orgId, chatId, { evolutionId, fromMe: true, corpo: text, status: 'enviado', senderUserId: req.auth!.userId });
       await upsertChat(orgId, chat.remote_jid, { preview: text, incNaoLidas: false });
       if (msg) broadcast(orgId, 'message', { chat_id: Number(chatId), message: msg });
@@ -525,18 +551,21 @@ export function whatsappRoutes(app: FastifyInstance): void {
       // Legenda que vai pro contato leva o prefixo do remetente (quando ligado);
       // corpo guardado fica cru. Áudio não tem legenda.
       const outCaption = await applySenderPrefix(orgId, req.auth!.userId, b.caption ?? null);
-      const sent = b.mediatype === 'audio'
-        ? await evo.sendAudio(name, dest, b.media)
-        : await evo.sendMedia(name, dest, {
-            mediatype: b.mediatype, media: b.media,
-            mimetype: b.mimetype ?? undefined, fileName: b.fileName ?? undefined, caption: outCaption ?? undefined,
-          });
+      // Org demo: só persiste o anexo (mesma regra do envio de texto).
+      const sent = await isDemoOrg(orgId)
+        ? null
+        : b.mediatype === 'audio'
+          ? await evo.sendAudio(name, dest, b.media)
+          : await evo.sendMedia(name, dest, {
+              mediatype: b.mediatype, media: b.media,
+              mimetype: b.mimetype ?? undefined, fileName: b.fileName ?? undefined, caption: outCaption ?? undefined,
+            });
       const tipo = b.mediatype === 'image' ? 'imagem' : b.mediatype === 'video' ? 'video' : b.mediatype === 'audio' ? 'audio' : 'documento';
       // Com disco habilitado grava o binário no volume; senão cacheia o base64 na
       // linha (pra exibir de imediato sem rebaixar da Evolution).
       const disk = mediaEnabled();
       const msg = await insertMessage(orgId, chatId, {
-        evolutionId: sent.key?.id ?? null, fromMe: true, tipo, corpo: b.caption ?? null,
+        evolutionId: sent?.key?.id ?? null, fromMe: true, tipo, corpo: b.caption ?? null,
         status: 'enviado', mime: b.mimetype ?? null, fileName: b.fileName ?? null,
         mediaB64: disk ? null : b.media, senderUserId: req.auth!.userId,
       });
@@ -616,8 +645,11 @@ export function whatsappRoutes(app: FastifyInstance): void {
     const digits = normalizeNumero(numero);
     if (digits.length < 12) return reply.code(400).send({ error: 'número inválido (use DDD + número)' });
     let jid = `${digits}@s.whatsapp.net`;
+    // Org demo: aceita o número como informado (não há instância para conferir
+    // se ele existe no WhatsApp, e o envio nunca sai daqui mesmo).
+    const demo = await isDemoOrg(orgId);
     try {
-      const res = await evo.whatsappNumbers(instanceName(orgId), [digits]);
+      const res = demo ? [] : await evo.whatsappNumbers(instanceName(orgId), [digits]);
       const hit = res.find((r) => r.exists);
       if (hit?.jid) jid = hit.jid;
       // Só nega quando a Evolution devolveu resultado e nenhum existe. Resposta
@@ -643,9 +675,16 @@ export function whatsappRoutes(app: FastifyInstance): void {
   app.get('/api/whatsapp/chats/:id/group', { preHandler: [requireAuth, requirePermission('whatsapp.view')] }, async (req, reply) => {
     const orgId = req.auth!.orgId;
     const id = (req.params as { id: string }).id;
-    const chat = await one<{ remote_jid: string }>('SELECT remote_jid FROM whatsapp_chats WHERE id = $1 AND org_id = $2', [id, orgId]);
+    const chat = await one<{ remote_jid: string; nome: string | null }>(
+      'SELECT remote_jid, nome FROM whatsapp_chats WHERE id = $1 AND org_id = $2', [id, orgId],
+    );
     if (!chat) return reply.code(404).send({ error: 'conversa não encontrada' });
     if (!chat.remote_jid.endsWith('@g.us')) return reply.code(400).send({ error: 'conversa não é um grupo' });
+    // Org demo: descrição e participantes moram na Evolution, que não existe
+    // aqui. Devolve o que a base tem, sem 502 no painel de detalhes.
+    if (await isDemoOrg(orgId)) {
+      return { subject: chat.nome ?? 'Grupo', desc: null, size: 0, participants: [] };
+    }
     try {
       const g = await evo.groupDetails(instanceName(orgId), chat.remote_jid);
       const participants = g.participants.map((p) => ({ numero: jidToNumero(p.id), jid: p.id, admin: p.admin }));

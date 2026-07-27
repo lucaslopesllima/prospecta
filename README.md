@@ -43,7 +43,7 @@ Fastify 5 + PostgreSQL 16/PostGIS + `pg` (SQL cru) · React 19 + Vite 6 + Tailwi
 docker compose up
 ```
 
-- UI: **http://localhost:5173** · API: `:8080` · Evolution: `:8081`
+- UI: **http://localhost:5173** · API: `:8090` (`APP_PORT`) · Evolution: `:8081`
 - Migrations rodam no boot. Acesse a UI → **Criar conta** (cria org + admin).
 - Não precisa de `.env` no dev.
 

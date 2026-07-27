@@ -6,7 +6,9 @@ import { compression } from 'vite-plugin-compression2';
 
 // Dev: proxy /api to the Fastify server. Prod: Fastify serves the built assets.
 // In docker-compose.dev the API service is reachable at http://app:8080 (VITE_PROXY_TARGET).
-const proxyTarget = process.env.VITE_PROXY_TARGET ?? 'http://localhost:8080';
+// O fallback é para `vite dev` rodando NO HOST, fora do compose: aí a API está na
+// porta publicada pelo container (APP_PORT, default 8090), não na interna.
+const proxyTarget = process.env.VITE_PROXY_TARGET ?? 'http://localhost:8090';
 
 export default defineConfig({
   plugins: [

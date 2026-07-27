@@ -3,6 +3,7 @@
 // (UPDATE condiciona em status='pendente'). Sem instância conectada na org o
 // envio TRAVA (segue pendente) — só falha real de envio vira 'erro'.
 import { query, one } from './db.ts';
+import { isDemoOrg } from './demo.ts';
 import * as evo from './evolution.ts';
 import { instanceName, insertMessage, upsertChat, scheduleWhatsappTx, nextOccurrence, applySenderPrefix } from './whatsapp.ts';
 import type { WaRecorrencia } from './whatsapp.ts';
@@ -31,22 +32,27 @@ export async function processDueWhatsapp(now = new Date()): Promise<number> {
     [now.toISOString()],
   );
 
-  // status de conexão por org, cacheado dentro da varredura (promise: dedupe
-  // mesmo com consultas concorrentes).
-  const conn = new Map<string, Promise<boolean>>();
+  // status de conexão (e marca de demo) por org, cacheado dentro da varredura
+  // (promise: dedupe mesmo com consultas concorrentes).
+  const conn = new Map<string, Promise<{ ok: boolean; demo: boolean }>>();
   let sent = 0;
   // Concorrência limitada: 5 envios em paralelo por vez, em vez de estritamente
   // sequencial — cada item continua isolado (try/catch).
   const CONCURRENCY = 5;
   for (let i = 0; i < due.length; i += CONCURRENCY) {
     await Promise.all(due.slice(i, i + CONCURRENCY).map(async (s) => {
-      let okP = conn.get(s.org_id);
-      if (okP === undefined) {
-        okP = one<{ status: string }>('SELECT status FROM org_whatsapp_settings WHERE org_id = $1', [s.org_id])
-          .then((row) => row?.status === 'conectado');
-        conn.set(s.org_id, okP);
+      let stateP = conn.get(s.org_id);
+      if (stateP === undefined) {
+        // Org demo está sempre "conectada" (circuito fechado, ver demo.ts): o
+        // agendamento vence, vira mensagem na conversa e nada sai pra fora.
+        stateP = Promise.all([
+          one<{ status: string }>('SELECT status FROM org_whatsapp_settings WHERE org_id = $1', [s.org_id]),
+          isDemoOrg(s.org_id),
+        ]).then(([row, demo]) => ({ ok: demo || row?.status === 'conectado', demo }));
+        conn.set(s.org_id, stateP);
       }
-      if (!(await okP)) return; // sem instância conectada: trava (segue pendente)
+      const { ok, demo } = await stateP;
+      if (!ok) return; // sem instância conectada: trava (segue pendente)
 
       const orgId = Number(s.org_id);
       // Destino igual ao envio interativo: número quando houver, senão o jid. LID
@@ -65,8 +71,8 @@ export async function processDueWhatsapp(now = new Date()): Promise<number> {
         // Prefixa só o texto enviado (quando a org liga o flag); corpo/prévia crus.
         const ownerId = s.owner_user_id != null ? Number(s.owner_user_id) : null;
         const outgoing = await applySenderPrefix(orgId, ownerId, s.corpo) ?? s.corpo;
-        const res = await evo.sendText(instanceName(orgId), dest, outgoing);
-        const evolutionId = res.key?.id ?? null;
+        const res = demo ? null : await evo.sendText(instanceName(orgId), dest, outgoing);
+        const evolutionId = res?.key?.id ?? null;
 
         // garante a conversa (caso o chat_id tenha sumido) e espelha a mensagem.
         const chat = await upsertChat(orgId, remoteJid, { preview: s.corpo, incNaoLidas: false });

@@ -1,0 +1,17 @@
+-- 073 — origem 'demo' no pool global de empresas.
+--
+-- A base de demonstração (docs/DEMO_DATA.md) precisa de empresas com nome de
+-- mercado ("Supermercado Bom Preço") para as telas de carteira, pedidos, rotas
+-- e WhatsApp — CNPJ real de terceiro não serve. Essas empresas moram no pool
+-- global `companies` (é lá que company_relationships aponta), e o pool NÃO é do
+-- tenant: sem uma marca de origem, a empresa fictícia apareceria na prospecção
+-- de qualquer outra org.
+--
+-- 'demo' separado de 'manual' porque manual é dado legítimo que o usuário
+-- cadastrou e quer reencontrar na busca; demo é descartável e deve ficar fora
+-- de toda superfície de descoberta (recommend + /companies/search + contagem de
+-- mercado potencial dos relatórios). O filtro é explícito nesses três pontos.
+--
+-- ADD VALUE roda dentro da transação do runner (permitido desde o PG 12); o
+-- valor novo só pode ser USADO em outra transação — esta migração não o usa.
+ALTER TYPE company_source ADD VALUE IF NOT EXISTS 'demo';

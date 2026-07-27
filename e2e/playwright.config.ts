@@ -6,7 +6,7 @@ import 'dotenv/config';
 // "pwa" — só lá tem service worker registrado, ver client/vite.config.ts
 // devOptions.enabled:false).
 const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:5173';
-const PWA_BASE_URL = process.env.E2E_PWA_BASE_URL ?? 'http://localhost:8090';
+const PWA_BASE_URL = process.env.E2E_PWA_BASE_URL ?? 'http://localhost:8091';
 
 export default defineConfig({
   testDir: './tests',

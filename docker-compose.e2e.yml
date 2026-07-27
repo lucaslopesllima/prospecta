@@ -54,7 +54,8 @@ services:
   # Build de produção (client buildado + Fastify servindo os estáticos via
   # CLIENT_DIR — ver Dockerfile raiz) só para a suíte 20-pwa-offline: o service
   # worker do PWA não roda em `vite dev` (devOptions.enabled:false), só no build
-  # real. Porta separada (8090) — não conflita com o `app` de dev em :8080.
+  # real. Porta separada (8091) — não conflita com o `app` de dev, publicado em
+  # :8090 por APP_PORT (docker-compose.yml).
   app-pwa:
     build:
       context: .
@@ -73,4 +74,4 @@ services:
       EVOLUTION_API_KEY: e2e-evolution-key
       WHATSAPP_WEBHOOK_TOKEN: e2e-webhook-token
     ports:
-      - "8090:8080"
+      - "8091:8080"
