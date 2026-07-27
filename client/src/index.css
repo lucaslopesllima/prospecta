@@ -85,6 +85,20 @@
 
   --color-surface: #181c2b;  /* cartões/modais elevados sobre o canvas */
 
+  /* brand no escuro — mesma família Rovva Blue, mas afinada pro canvas:
+     hue puxado 230→226 (o mesmo dos neutros ink, tira o viés violeta) e
+     saturação baixada (500: 87%→72%, 600: 73%→66%), senão o azul fica
+     elétrico contra o slate. Lightness sobe pra funcionar sobre escuro —
+     600 sobre canvas = 4.1:1 (texto grande/score) e branco sobre 600 =
+     4.6:1 (botão primário). 50–200 seguem os da identidade: continuam
+     servindo de fundo claro com texto brand-700 por cima. */
+  --color-brand-300: #92a8f2;
+  --color-brand-400: #7592f0;
+  --color-brand-500: #5d7ce5;
+  --color-brand-600: #4d6edb;
+  --color-brand-700: #2f52c6;
+  --color-brand-800: #2945a3;
+
   /* sombra rende pouco no escuro: aprofunda + serve de separador */
   --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.40);
   --shadow-pop:  0 12px 32px -12px rgb(0 0 0 / 0.65);
