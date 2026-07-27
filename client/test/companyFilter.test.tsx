@@ -8,7 +8,7 @@ import { useCompanyFilter, CompanyFilterBar, loadPartida, loadTerritorioIds, fai
 import { api } from '../src/lib/api.ts';
 import type { Municipio } from '../src/lib/types.ts';
 
-vi.mock('../src/lib/api.ts', () => ({ api: { get: vi.fn(), invalidate: vi.fn() }, ApiError: class extends Error {} }));
+vi.mock('../src/lib/api.ts', () => ({ api: { get: vi.fn(), invalidate: vi.fn() }, BUSCA_DEBOUNCE_MS: 300, ApiError: class extends Error {} }));
 const m = vi.mocked(api);
 
 const co = (over: Partial<FilterableCompany>): FilterableCompany => ({

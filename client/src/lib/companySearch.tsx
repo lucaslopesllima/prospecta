@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { api } from './api.ts';
+import { api, BUSCA_DEBOUNCE_MS } from './api.ts';
 import type { CompanyHit } from './types.ts';
 import { Icon } from './icons.tsx';
 import { maskSearchCNPJ } from './format.ts';
@@ -32,7 +32,7 @@ export function CompanySearch({ onPick, placeholder = 'Buscar empresa por CNPJ o
         .then((r) => { setHits(r.companies); setOpen(true); })
         .catch(() => undefined)
         .finally(() => setLoading(false));
-    }, 300);
+    }, BUSCA_DEBOUNCE_MS);
     return () => { clearTimeout(t); ctrl.abort(); };
   }, [q]);
 

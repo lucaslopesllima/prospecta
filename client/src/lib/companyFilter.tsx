@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { api } from './api.ts';
+import { api, BUSCA_DEBOUNCE_MS } from './api.ts';
 import type { Municipio } from './types.ts';
 import { maskSearchCNPJ, maskCEP, maskMoneyBR, dec, decBR } from './format.ts';
 import { Btn, SafeButton, Hint, cn } from './ui.tsx';
@@ -224,7 +224,7 @@ function CnaeSearchInput({ value, onChange, label }: { value: string; onChange: 
       const r = await api.get<{ grupos: CnaeGrupo[] }>(`/api/cnae/search?q=${encodeURIComponent(term)}`).catch(() => null);
       setGrupos(r?.grupos ?? []);
       setOpen(true);
-    }, 250);
+    }, BUSCA_DEBOUNCE_MS);
   }, [q]);
 
   const add = (code: number, descricao?: string): void => {
@@ -501,7 +501,7 @@ function RecommendConfig({ f }: { f: CompanyFilter }): React.JSX.Element {
         const r = await api.get<{ municipios: Municipio[] }>(`/api/municipios/search?q=${encodeURIComponent(munQ.trim())}`, { signal: ctrl.signal });
         setMunResults(r?.municipios ?? []);
       } catch { /* abortada ou falhou: ignora */ }
-    }, 250);
+    }, BUSCA_DEBOUNCE_MS);
     return () => ctrl.abort();
   }, [munQ]);
 

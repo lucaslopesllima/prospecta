@@ -7,7 +7,7 @@ import { CompanySearch } from '../src/lib/companySearch.tsx';
 import { api } from '../src/lib/api.ts';
 import type { CompanyHit } from '../src/lib/types.ts';
 
-vi.mock('../src/lib/api.ts', () => ({ api: { get: vi.fn(), invalidate: vi.fn() }, ApiError: class extends Error {} }));
+vi.mock('../src/lib/api.ts', () => ({ api: { get: vi.fn(), invalidate: vi.fn() }, BUSCA_DEBOUNCE_MS: 300, ApiError: class extends Error {} }));
 const m = vi.mocked(api);
 
 const hit = (over: Partial<CompanyHit> = {}): CompanyHit => ({

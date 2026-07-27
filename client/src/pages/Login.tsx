@@ -13,7 +13,10 @@ const FEATURES: { icon: IconName; title: string; desc: string }[] = [
 
 export function Login(): React.JSX.Element {
   const { user, login, register } = useAuth();
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  // TEMPORÁRIO: cadastro público bloqueado — mode fica travado em 'login' e o
+  // seletor Entrar/Criar conta está comentado abaixo. Para reabrir, restaurar
+  // `const [mode, setMode] = ...` e descomentar o bloco do seletor.
+  const [mode] = useState<'login' | 'register'>('login');
   const [tipoConta, setTipoConta] = useState<'individual' | 'escritorio'>('individual');
   const [orgNome, setOrgNome] = useState('');
   const [email, setEmail] = useState('');
@@ -70,7 +73,6 @@ export function Login(): React.JSX.Element {
             ))}
           </ul>
         </div>
-        <p className="relative text-xs text-ink-400">Base compartilhada · Receita Federal · multi-tenant</p>
       </div>
 
       {/* form */}
@@ -90,6 +92,7 @@ export function Login(): React.JSX.Element {
             {mode === 'login' ? 'Entre para ver suas recomendações.' : 'Comece a prospectar em minutos.'}
           </p>
 
+          {/* TEMPORÁRIO: cadastro público bloqueado (o server também rejeita /api/auth/register).
           <div className="mt-5 grid grid-cols-2 gap-1 rounded-xl bg-ink-100 p-1 text-sm font-medium">
             {(['login', 'register'] as const).map((m) => (
               <button key={m} onClick={() => setMode(m)}
@@ -98,6 +101,7 @@ export function Login(): React.JSX.Element {
               </button>
             ))}
           </div>
+          */}
 
           <form onSubmit={submit} className="mt-5 space-y-3">
             {mode === 'register' && (

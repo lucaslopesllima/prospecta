@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { api } from '../lib/api.ts';
+import { api, BUSCA_DEBOUNCE_MS } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import { useSellers, SellerFilter } from '../lib/sellers.tsx';
 import type { Order, OrderStatus, RepresentedCompany } from '../lib/types.ts';
@@ -103,7 +103,7 @@ export function Orders(): React.JSX.Element {
 
   // Debounce do campo de busca de empresa (300ms). <2 chars não filtra.
   useEffect(() => {
-    const t = setTimeout(() => setCompanyTerm(companyQ.trim().length >= 2 ? companyQ.trim() : ''), 300);
+    const t = setTimeout(() => setCompanyTerm(companyQ.trim().length >= 2 ? companyQ.trim() : ''), BUSCA_DEBOUNCE_MS);
     return () => clearTimeout(t);
   }, [companyQ]);
 

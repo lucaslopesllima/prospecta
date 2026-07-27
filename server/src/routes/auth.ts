@@ -15,6 +15,13 @@ export function authRoutes(app: FastifyInstance): void {
     rateLimit: { max: app.authRateLimitMax, timeWindow: config.authRateLimitWindow },
   };
 
+  // TEMPORÁRIO: cadastro público bloqueado. A rota inteira está comentada abaixo;
+  // o client também esconde o botão "Criar conta" (client/src/pages/Login.tsx).
+  // Para reabrir, descomentar o bloco e remover este handler 403.
+  app.post('/api/auth/register', { config: authLimit }, async (_req, reply) =>
+    reply.code(403).send({ error: 'cadastro temporariamente indisponível' }));
+
+  /*
   // Register a new tenant (org + admin user + default kanban stages + empty target profile).
   app.post('/api/auth/register', {
     config: authLimit,
@@ -70,6 +77,7 @@ export function authRoutes(app: FastifyInstance): void {
       client.release();
     }
   });
+  */
 
   app.post('/api/auth/login', {
     config: authLimit,

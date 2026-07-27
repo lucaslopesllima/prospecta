@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import 'leaflet/dist/leaflet.css';
 import { MapContainer, TileLayer, CircleMarker, Popup, Polyline, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import type { LatLngBoundsExpression } from 'leaflet';
-import { api, ApiError } from '../lib/api.ts';
+import { api, ApiError, BUSCA_DEBOUNCE_MS } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import type { Recommendation, GeocodeResult, CompanyDetail } from '../lib/types.ts';
 import { Btn, Badge, Card, EmptyState, PageHeader, SafeButton, ScoreBar, Segmented, Spinner, StatCard, cn, type Tone } from '../lib/ui.tsx';
@@ -253,7 +253,7 @@ export function Recommend(): React.JSX.Element {
       setLoading(false);
       return;
     }
-    const t = setTimeout(() => { void load(0); }, 350);
+    const t = setTimeout(() => { void load(0); }, BUSCA_DEBOUNCE_MS);
     return () => clearTimeout(t);
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [filter.fq, filter.fCnae, filter.fPorte, territorioIds.join(','),

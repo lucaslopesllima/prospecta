@@ -1,6 +1,13 @@
 // Tiny fetch wrapper. Native fetch, no axios. Adds Bearer token, parses JSON, throws on error.
 const TOKEN_KEY = 'rs_token';
 
+// Espera de digitação de TODA busca que consulta o servidor (CNAE, municípios,
+// prospecção, CompanySearch, filtro de empresa em Pedidos). Um número só p/ o
+// app responder no mesmo ritmo em toda tela — antes eram 250/300/350ms soltos.
+// Filtro que roda em memória (catálogo, clientes, conversas) NÃO usa: sem rede,
+// esperar só atrasaria a digitação.
+export const BUSCA_DEBOUNCE_MS = 300;
+
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
