@@ -26,18 +26,35 @@ services:
       - work_mem=32MB
       - -c
       - maintenance_work_mem=512MB
+      # autovacuum_work_mem: sem isto o autovacuum herda maintenance_work_mem
+      # (× 3 workers). Fixo e pequeno; maintenance_work_mem segue valendo pro
+      # CREATE INDEX manual.
+      - -c
+      - autovacuum_work_mem=256MB
       - -c
       - random_page_cost=1.1
       - -c
       - effective_io_concurrency=200
+      # Esta máquina tem mais núcleos que a VPS — em produção o valor é menor
+      # (PG_MAX_PARALLEL_PER_GATHER no .env da VPS). Ver docker-compose.prod.yml.
       - -c
       - max_parallel_workers_per_gather=4
       - -c
       - jit=off
+      # WAL: teto baixo => checkpoint constante => cada primeira escrita numa
+      # página vira full-page image no WAL. Subir o teto troca disco por I/O.
+      - -c
+      - max_wal_size=8GB
+      - -c
+      - min_wal_size=2GB
+      - -c
+      - wal_buffers=64MB
       # autoprewarm: salva o conteúdo do buffer cache e recarrega após restart,
       # evitando primeira busca fria (índices trgm/gist têm GBs).
+      # pg_stat_statements: precisa estar pré-carregado aqui também, senão o
+      # CREATE EXTENSION da migration 071 falha no boot local e nos testes.
       - -c
-      - shared_preload_libraries=pg_prewarm
+      - shared_preload_libraries=pg_prewarm,pg_stat_statements
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres

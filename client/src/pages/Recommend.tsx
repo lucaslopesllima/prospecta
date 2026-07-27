@@ -8,7 +8,7 @@ import { useAuth } from '../lib/auth.tsx';
 import type { Recommendation, GeocodeResult, CompanyDetail } from '../lib/types.ts';
 import { Btn, Badge, Card, EmptyState, PageHeader, SafeButton, ScoreBar, Segmented, Spinner, StatCard, cn, type Tone } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
-import { CompanyFilterBar, useCompanyFilter, faixasParams } from '../lib/companyFilter.tsx';
+import { CompanyFilterBar, useCompanyFilter, faixasParams, faixasInvalidas } from '../lib/companyFilter.tsx';
 import { CompanyModal } from '../lib/companyModal.tsx';
 import { NewContactModal, EMPTY_CONTACT, contactBody, type ContactForm } from '../lib/contactForm.tsx';
 import { Cnae } from '../lib/cnae.tsx';
@@ -196,6 +196,8 @@ export function Recommend(): React.JSX.Element {
   // Sem município definido, a tela fica vazia e pede a configuração.
   const territorioIds = filter.territorio.map((m) => m.id);
   const semTerritorio = territorioIds.length === 0;
+  // faixa mín > máx: a busca fica parada até o usuário ajustar (ver load()).
+  const faixaRuim = faixasInvalidas(filter.faixas);
 
   // Aborta a busca anterior antes de disparar a próxima — sem isso uma resposta
   // lenta de filtro antigo pode sobrescrever a da busca atual (race).
@@ -241,6 +243,14 @@ export function Recommend(): React.JSX.Element {
     if (semTerritorio) {  // sem território -> tela vazia, sem consultar
       setRecs([]); setDone(true); setOffset(0); setErr('');
       setLoading(false); // sem isso o spinner inicial nunca dá lugar ao empty state
+      return;
+    }
+    // faixa com mínimo > máximo: não consulta (o servidor devolveria lista vazia
+    // e pareceria "nenhuma empresa" em vez de filtro mal preenchido). O aviso vai
+    // no campo e na tarja acima da lista; aqui só segura a busca até o ajuste.
+    if (faixaRuim) {
+      loadCtl.current?.abort();
+      setLoading(false);
       return;
     }
     const t = setTimeout(() => { void load(0); }, 350);
@@ -366,6 +376,17 @@ export function Recommend(): React.JSX.Element {
   // comiam a altura útil da lista de forma permanente. Só o header fica fixo.
   const painelLista = (
     <div className="space-y-4">
+      {faixaRuim && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <Icon name="alertTriangle" size={16} className="shrink-0" />
+          <span>Busca pausada: o valor inicial de uma faixa está maior que o limite.</span>
+          {!filtersOpen && (
+            <button onClick={() => setFiltersOpen(true)} className="font-semibold text-brand-700 hover:underline">
+              Abrir filtros
+            </button>
+          )}
+        </div>
+      )}
       <div className={cn('grid transition-[grid-template-rows] duration-200 ease-out',
         filtersOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
         <div className={cn('overflow-hidden transition-opacity duration-200 ease-out',

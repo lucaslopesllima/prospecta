@@ -4,7 +4,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, render, screen, waitFor, fireEvent, act, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useCompanyFilter, CompanyFilterBar, loadPartida, loadTerritorioIds, faixasParams, PESO_HINT, type FilterableCompany, type Faixas } from '../src/lib/companyFilter.tsx';
+import { useCompanyFilter, CompanyFilterBar, loadPartida, loadTerritorioIds, faixasParams, faixasInvalidas, PESO_HINT, type FilterableCompany, type Faixas } from '../src/lib/companyFilter.tsx';
 import { api } from '../src/lib/api.ts';
 import type { Municipio } from '../src/lib/types.ts';
 
@@ -287,21 +287,30 @@ describe('RecommendConfig', () => {
 
   it('faixas de capital/idade: máscara, aviso de min>max, persistência e params', async () => {
     render(<Bar recommend />);
-    await userEvent.type(screen.getByLabelText('Capital social mínimo'), '1000000');
+    const capMin = screen.getByLabelText('Capital social mínimo');
+    await userEvent.type(capMin, '1000000');
+    expect((capMin as HTMLInputElement).value).toBe('1.000.000');   // máscara de dinheiro
     await userEvent.type(screen.getByLabelText('Capital social máximo'), '500000');
-    expect(await screen.findByText('Mínimo maior que o máximo.')).toBeInTheDocument();
+    expect(await screen.findByText(/valor inicial não pode ser maior que o limite/)).toBeInTheDocument();
+    expect(capMin).toHaveAttribute('aria-invalid', 'true');
+    expect(faixasInvalidas({ capMin: '1.000.000', capMax: '500.000', idadeMin: '', idadeMax: '' })).toBe(true);
 
     // anos só aceita dígitos (máx. 3)
     const idadeMin = screen.getByLabelText('Tempo de vida mínimo');
     await userEvent.type(idadeMin, 'a12b');
     expect((idadeMin as HTMLInputElement).value).toBe('12');
+    // faixa de anos invertida também é sinalizada
+    await userEvent.type(screen.getByLabelText('Tempo de vida máximo'), '5');
+    expect(faixasInvalidas({ capMin: '', capMax: '', idadeMin: '12', idadeMax: '5' })).toBe(true);
+    expect(faixasInvalidas({ capMin: '1.000', capMax: '5.000', idadeMin: '2', idadeMax: '5' })).toBe(false);
 
     await waitFor(() => {
       const saved = JSON.parse(localStorage.getItem('companyFilter:bar') ?? '{}') as { faixas?: Faixas };
       expect(saved.faixas?.idadeMin).toBe('12');
     });
 
-    expect(faixasParams({ capMin: '1000000', capMax: '', idadeMin: '12', idadeMax: '' }))
+    // o valor mascarado vira número puro no query string
+    expect(faixasParams({ capMin: '1.000.000', capMax: '', idadeMin: '12', idadeMax: '' }))
       .toEqual({ cap_min: '1000000', idade_min: '12' });
     expect(faixasParams({ capMin: '', capMax: '', idadeMin: '', idadeMax: '' })).toEqual({});
 
@@ -329,7 +338,7 @@ describe('RecommendConfig', () => {
         { munis: { id: number }[]; pesos: { idade: number } };
       expect(tela.fq).toBe('11.222.333');       // guardado já mascarado
       expect(tela.fPorte).toBe('micro');
-      expect(tela.faixas.capMin).toBe('250000');
+      expect(tela.faixas.capMin).toBe('250.000');
       expect(tela.faixas.idadeMin).toBe('7');
       expect(reco.pesos.idade).toBe(0.55);
       expect(reco.munis.map((m) => m.id)).toContain(100);
@@ -340,7 +349,7 @@ describe('RecommendConfig', () => {
     render(<Bar recommend />);
     expect((screen.getByPlaceholderText('Razão, fantasia ou CNPJ') as HTMLInputElement).value).toBe('11.222.333');
     expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('micro');
-    expect((screen.getByLabelText('Capital social mínimo') as HTMLInputElement).value).toBe('250000');
+    expect((screen.getByLabelText('Capital social mínimo') as HTMLInputElement).value).toBe('250.000');
     expect((screen.getByLabelText('Tempo de vida mínimo') as HTMLInputElement).value).toBe('7');
     expect((screen.getAllByRole('slider')[4] as HTMLInputElement).value).toBe('0.55');
     expect(loadTerritorioIds()).toContain(100);

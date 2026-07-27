@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api.ts';
 import type { Municipio } from './types.ts';
-import { maskSearchCNPJ, maskCEP, maskMoney, dec } from './format.ts';
+import { maskSearchCNPJ, maskCEP, maskMoneyBR, dec, decBR } from './format.ts';
 import { Btn, SafeButton, Hint, cn } from './ui.tsx';
 import { Icon } from './icons.tsx';
 import { Cnae, seedCnae } from './cnae.tsx';
@@ -44,6 +44,23 @@ const PESO_SLIDER_HINT = 'O peso multiplica o fator: 0 desliga, 1 faz ele pesar 
 // campos guardam o valor editável mascarado; '' = sem limite naquela ponta.
 export interface Faixas { capMin: string; capMax: string; idadeMin: string; idadeMax: string }
 export const FAIXAS_VAZIAS: Faixas = { capMin: '', capMax: '', idadeMin: '', idadeMax: '' };
+
+// Reaplica a máscara no que veio do localStorage: valores salvos antes da máscara
+// de milhar ('1000000') passam a exibir '1.000.000' já na abertura da tela.
+function normFaixas(f: Partial<Faixas> | undefined): Faixas {
+  const v = { ...FAIXAS_VAZIAS, ...f };
+  return { ...v, capMin: maskMoneyBR(v.capMin), capMax: maskMoneyBR(v.capMax) };
+}
+
+// Faixa inválida = mínimo maior que o máximo (com as duas pontas preenchidas).
+// Bloqueia a busca: mandar cap_min > cap_max ao servidor só devolve lista vazia.
+export function faixaCapitalInvalida(f: Faixas): boolean {
+  return f.capMin.trim() !== '' && f.capMax.trim() !== '' && decBR(f.capMin) > decBR(f.capMax);
+}
+export function faixaIdadeInvalida(f: Faixas): boolean {
+  return f.idadeMin.trim() !== '' && f.idadeMax.trim() !== '' && dec(f.idadeMin) > dec(f.idadeMax);
+}
+export const faixasInvalidas = (f: Faixas): boolean => faixaCapitalInvalida(f) || faixaIdadeInvalida(f);
 
 // Endereço de partida das rotas: origem que o usuário define à mão nos filtros,
 // geocodificada para lat/lon. Sobrescreve o endereço da conta nos cálculos de
@@ -119,7 +136,7 @@ export function useCompanyFilter(storageKey = 'default'): CompanyFilter {
   const [territorio, setTerritorio] = useState<Municipio[]>(reco.munis);
   const [pesos, setPesos] = useState<Pesos>(reco.pesos);
   const [partida, setPartida] = useState<Partida | null>(reco.partida);
-  const [faixas, setFaixas] = useState<Faixas>({ ...FAIXAS_VAZIAS, ...saved?.faixas });
+  const [faixas, setFaixas] = useState<Faixas>(() => normFaixas(saved?.faixas));
 
   // Persiste o estado do filtro a cada mudança.
   useEffect(() => {
@@ -390,11 +407,13 @@ export function CompanyFilterBar({ f, recommend = false }: { f: CompanyFilter; r
             carregada não traz capital social nem data de abertura. */}
         {recommend && (
           <>
-            <FaixaField label="Capital social" unidade="R$" hint={FAIXA_HINT.capital} mask={maskMoney}
+            <FaixaField label="Capital social" unidade="R$" hint={FAIXA_HINT.capital} mask={maskMoneyBR}
+              prefixo="R$" invalido={faixaCapitalInvalida(f.faixas)}
               min={f.faixas.capMin} max={f.faixas.capMax}
               onMin={(v) => f.setFaixas({ ...f.faixas, capMin: v })}
               onMax={(v) => f.setFaixas({ ...f.faixas, capMax: v })} />
             <FaixaField label="Tempo de vida" unidade="anos" hint={FAIXA_HINT.idade} mask={maskAnos}
+              invalido={faixaIdadeInvalida(f.faixas)}
               min={f.faixas.idadeMin} max={f.faixas.idadeMax}
               onMin={(v) => f.setFaixas({ ...f.faixas, idadeMin: v })}
               onMax={(v) => f.setFaixas({ ...f.faixas, idadeMax: v })} />
@@ -416,34 +435,41 @@ const FAIXA_HINT = {
 
 export function faixasParams(f: Faixas): Record<string, string> {
   const out: Record<string, string> = {};
-  if (f.capMin.trim()) out.cap_min = String(dec(f.capMin));
-  if (f.capMax.trim()) out.cap_max = String(dec(f.capMax));
+  // capital vem mascarado com milhar -> decBR; anos são dígitos puros -> dec.
+  if (f.capMin.trim()) out.cap_min = String(decBR(f.capMin));
+  if (f.capMax.trim()) out.cap_max = String(decBR(f.capMax));
   if (f.idadeMin.trim()) out.idade_min = String(dec(f.idadeMin));
   if (f.idadeMax.trim()) out.idade_max = String(dec(f.idadeMax));
   return out;
 }
 
 // Um par mín/máx no grid do filtro simples (mesma célula que Nome/CNAE/Porte).
-function FaixaField({ label, unidade, hint, mask, min, max, onMin, onMax }: {
+// `prefixo` desenha o R$ dentro do campo (dinheiro nunca é type="number").
+function FaixaField({ label, unidade, hint, mask, prefixo, invalido, min, max, onMin, onMax }: {
   label: string; unidade: string; hint: string; mask: (v: string) => string;
+  prefixo?: string; invalido: boolean;
   min: string; max: string; onMin: (v: string) => void; onMax: (v: string) => void;
 }): React.JSX.Element {
-  const invalido = min.trim() !== '' && max.trim() !== '' && dec(min) > dec(max);
+  const campoCls = cn(inputCls, prefixo && 'pl-9', invalido && 'border-rose-300 focus:border-rose-400 focus:ring-rose-200');
+  const campo = (v: string, ph: string, aria: string, onChange: (s: string) => void): React.JSX.Element => (
+    <div className="relative flex-1">
+      {prefixo && <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink-400">{prefixo}</span>}
+      <input value={v} inputMode="decimal" placeholder={ph} maxLength={20}
+        onChange={(e) => onChange(mask(e.target.value))}
+        aria-label={aria} aria-invalid={invalido} className={campoCls} />
+    </div>
+  );
   return (
     <div className="block">
       <span className="mb-1 flex items-center gap-1.5 text-xs font-medium text-ink-500">
         {label} <span className="text-ink-300">({unidade})</span> <Hint text={hint} />
       </span>
       <div className="flex items-center gap-2">
-        <input value={min} inputMode="decimal" placeholder="mín." maxLength={16}
-          onChange={(e) => onMin(mask(e.target.value))}
-          aria-label={`${label} mínimo`} className={inputCls} />
+        {campo(min, 'mín.', `${label} mínimo`, onMin)}
         <span className="shrink-0 text-xs text-ink-400">até</span>
-        <input value={max} inputMode="decimal" placeholder="máx." maxLength={16}
-          onChange={(e) => onMax(mask(e.target.value))}
-          aria-label={`${label} máximo`} className={inputCls} />
+        {campo(max, 'máx.', `${label} máximo`, onMax)}
       </div>
-      {invalido && <p className="mt-1 text-[11px] text-rose-600">Mínimo maior que o máximo.</p>}
+      {invalido && <p className="mt-1 text-[11px] text-rose-600">O valor inicial não pode ser maior que o limite — a busca fica parada até ajustar.</p>}
     </div>
   );
 }

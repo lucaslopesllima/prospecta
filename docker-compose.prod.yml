@@ -18,18 +18,46 @@ services:
       - work_mem=${PG_WORK_MEM:-32MB}
       - -c
       - maintenance_work_mem=${PG_MAINTENANCE_WORK_MEM:-1GB}
+      # autovacuum_work_mem: sem isto o autovacuum herda maintenance_work_mem.
+      # Com 3 workers e maintenance_work_mem=1GB isso vira pico de 3GB de RAM
+      # durante o vacuum de companies (30M linhas) — numa VPS de 16GB com 4GB
+      # já presos em shared_buffers, é caminho pra OOM. maintenance_work_mem
+      # grande continua valendo pro CREATE INDEX manual, que é quem precisa.
+      - -c
+      - autovacuum_work_mem=${PG_AUTOVACUUM_WORK_MEM:-256MB}
       - -c
       - random_page_cost=1.1
       - -c
       - effective_io_concurrency=200
+      # Paralelismo calibrado pelos vCPUs da VPS, NÃO pela máquina de dev.
+      # Cada gather usa líder + N workers; com N=4 em 4 vCPU uma única busca
+      # ocupa a máquina inteira, e o work_mem é multiplicado por (1+N) por nó
+      # de sort. Regra: per_gather ~= vCPU/2.
       - -c
-      - max_parallel_workers_per_gather=4
+      - max_parallel_workers_per_gather=${PG_MAX_PARALLEL_PER_GATHER:-2}
+      - -c
+      - max_parallel_workers=${PG_MAX_PARALLEL_WORKERS:-4}
       - -c
       - jit=off
+      # WAL: com max_wal_size baixo o checkpoint dispara direto e cada primeira
+      # escrita numa página após o checkpoint grava a página inteira no WAL
+      # (full-page image). Com 1GB a base gerou 79M de FPI / 597GB de WAL em 19
+      # dias — quase todo o volume era FPI. Subir o teto troca disco (barato,
+      # 150GB livres) por I/O e CPU de escrita.
+      - -c
+      - max_wal_size=${PG_MAX_WAL_SIZE:-8GB}
+      - -c
+      - min_wal_size=${PG_MIN_WAL_SIZE:-2GB}
+      # wal_buffers 16MB estourou 12,4M de vezes (wal_buffers_full) — backend
+      # bloqueia esperando flush do WAL toda vez que enche.
+      - -c
+      - wal_buffers=${PG_WAL_BUFFERS:-64MB}
       # autoprewarm: salva o conteúdo do buffer cache e recarrega após restart,
       # evitando primeira busca fria (índices trgm/gist têm GBs).
+      # pg_stat_statements: sem ele não dá pra saber qual query está lenta nem
+      # qual derrama temp file. Extensão criada pela migration 071.
       - -c
-      - shared_preload_libraries=pg_prewarm
+      - shared_preload_libraries=pg_prewarm,pg_stat_statements
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}

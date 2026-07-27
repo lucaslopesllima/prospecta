@@ -114,6 +114,24 @@ export const maskMoney = (v: string, maxInt = 12): string => {
   return rest.length ? `${intCut},${rest.join('').slice(0, 2)}` : intCut;
 };
 
+// Máscara de dinheiro COM separador de milhar (1.234.567,89) — para campos onde
+// a ordem de grandeza é o que importa (ex.: faixa de capital social, onde
+// "1000000" e "10000000" são indistinguíveis a olho). Difere de maskMoney, que
+// guarda o valor sem agrupamento. Parear sempre com decBR() na leitura: dec()
+// não entende o ponto de milhar. '' fica ''.
+export const maskMoneyBR = (v: string, maxInt = 12): string => {
+  // ponto digitado é milhar (cai fora); vírgula é o decimal. Só a 1ª vírgula vale.
+  const [int, ...rest] = v.replace(/[^\d.,]/g, '').replace(/\./g, '').split(',');
+  const intCut = (int ?? '').slice(0, maxInt);
+  const grouped = intCut.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return rest.length ? `${grouped},${rest.join('').slice(0, 2)}` : grouped;
+};
+
+// Number de string em pt-BR COM milhar: '1.234.567,89' -> 1234567.89. Contraparte
+// de maskMoneyBR (dec() sozinho lê o ponto de milhar como decimal e dá NaN).
+export const decBR = (s: string | null | undefined): number =>
+  s == null || s.trim() === '' ? NaN : Number(s.replace(/\./g, '').replace(',', '.'));
+
 // Capa um número em [min, max]. NaN/inválido → min. Para sanitizar inputs
 // numéricos que salvam fora de <form> (min/max nativos não disparam sem submit).
 export const clampNum = (v: number | string | null | undefined, min: number, max: number): number => {

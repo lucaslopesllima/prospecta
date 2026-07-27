@@ -92,6 +92,28 @@ describe('Recommend', () => {
     expect(url).toContain('munis=100');
   });
 
+  it('faixa de capital com mínimo > máximo não consulta a base e avisa', async () => {
+    comTerritorio();
+    // filtro persistido da tela com a faixa invertida (min 1.000.000 > max 500.000)
+    localStorage.setItem('companyFilter:prospeccao', JSON.stringify({
+      fq: '', fCnae: '', fPorte: '', usarAlvo: true,
+      faixas: { capMin: '1.000.000', capMax: '500.000', idadeMin: '', idadeMax: '' },
+    }));
+    mount();
+    expect(await screen.findByText(/Busca pausada/)).toBeInTheDocument();
+    expect(m.get.mock.calls.some((c) => String(c[0]).startsWith('/api/recommend'))).toBe(false);
+
+    // corrigir o máximo destrava a busca
+    await userEvent.click(screen.getByRole('button', { name: 'Abrir filtros' }));
+    const capMax = await screen.findByLabelText('Capital social máximo');
+    await userEvent.clear(capMax);
+    await userEvent.type(capMax, '2000000');
+    expect(await screen.findByText('Loja Alvo', undefined, { timeout: 2000 })).toBeInTheDocument();
+    const url = m.get.mock.calls.map((c) => String(c[0])).find((u) => u.startsWith('/api/recommend'))!;
+    expect(url).toContain('cap_min=1000000');
+    expect(url).toContain('cap_max=2000000');
+  });
+
   it('adicionar ao funil marca o card e cria o contato da empresa', async () => {
     comTerritorio();
     m.post.mockResolvedValue({ relationship: { id: 1 } });

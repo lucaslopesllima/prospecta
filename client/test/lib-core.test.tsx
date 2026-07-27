@@ -1,7 +1,7 @@
 // Fecha gaps de format.ts (maskMoney/clampNum/waLink) e do cache em memória do
 // api.ts (cachePrefix/cachedGet/invalidate). api real; fetch global mockado.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { maskMoney, clampNum, waLink, csvNum } from '../src/lib/format.ts';
+import { maskMoney, maskMoneyBR, decBR, clampNum, waLink, csvNum } from '../src/lib/format.ts';
 import { api } from '../src/lib/api.ts';
 
 describe('format — maskMoney/clampNum/waLink', () => {
@@ -10,6 +10,22 @@ describe('format — maskMoney/clampNum/waLink', () => {
     expect(maskMoney('1234')).toBe('1234');
     expect(maskMoney('12,567')).toBe('12,56');
     expect(maskMoney('123456789012345', 4)).toBe('1234');
+  });
+  it('maskMoneyBR: agrupa milhar, vírgula única com 2 casas e teto de inteiros', () => {
+    expect(maskMoneyBR('')).toBe('');
+    expect(maskMoneyBR('1000000')).toBe('1.000.000');
+    expect(maskMoneyBR('R$ 1.234.567,89')).toBe('1.234.567,89');   // reaplicar é idempotente
+    expect(maskMoneyBR('1234,567')).toBe('1.234,56');
+    expect(maskMoneyBR('12,3,4')).toBe('12,34');                    // só a 1ª vírgula é decimal
+    expect(maskMoneyBR('-500')).toBe('500');                        // sem negativo
+    expect(maskMoneyBR('123456789012345', 4)).toBe('1.234');
+  });
+  it('decBR: lê o ponto como milhar (dec sozinho daria NaN)', () => {
+    expect(decBR('1.234.567,89')).toBe(1234567.89);
+    expect(decBR('1000')).toBe(1000);
+    expect(decBR('')).toBeNaN();
+    expect(decBR('  ')).toBeNaN();
+    expect(decBR(null)).toBeNaN();
   });
   it('clampNum: capa em [min,max], NaN→min, aceita vírgula', () => {
     expect(clampNum(5, 0, 10)).toBe(5);
