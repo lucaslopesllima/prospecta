@@ -71,9 +71,7 @@ function RequireOffice({ children }: { children: ReactNode }): React.JSX.Element
 }
 
 type NavItem = { to: string; label: string; icon: IconName; requires?: string; officeOnly?: boolean };
-// foot: grupo sem categoria ancorado no rodapé do menu (ex.: Logs) — sem label,
-// mas embaixo em vez de flutuar pro topo junto do Dashboard.
-type NavGroup = { label?: string; items: NavItem[]; foot?: boolean };
+type NavGroup = { label?: string; items: NavItem[] };
 
 // Menu agrupado por intenção (chunking): reduz carga cognitiva e aproxima
 // itens do mesmo fluxo de trabalho. Dashboard fica solto no topo; grupos e
@@ -108,25 +106,21 @@ const NAV_GROUPS_RAW: NavGroup[] = [
   { label: 'Sistema', items: [
     { to: '/equipe', label: 'Vendedores', icon: 'users', requires: 'users.list', officeOnly: true },
     { to: '/grupos', label: 'Grupos Usuários', icon: 'shield', requires: 'groups.list', officeOnly: true },
-    { to: '/config', label: 'Config', icon: 'settings' },
-  ] },
-  // Sem categoria, ancorado no rodapé.
-  { foot: true, items: [
     { to: '/logs', label: 'Logs', icon: 'clock', requires: 'audit.read' },
+    { to: '/config', label: 'Config', icon: 'settings' },
   ] },
 ];
 
 // Ordena grupos e itens por label (pt-BR, insensível a acento/caixa). Grupo sem
-// label flutua pro topo (Dashboard); grupo foot (Logs) fica ancorado no rodapé;
-// os rotulados no meio, em ordem alfabética.
+// label flutua pro topo (Dashboard); os rotulados abaixo, em ordem alfabética.
 const byLabel = (a: string, b: string): number => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' });
-const groupRank = (g: NavGroup): number => (g.foot ? 2 : g.label == null ? 0 : 1);
+const groupRank = (g: NavGroup): number => (g.label == null ? 0 : 1);
 const NAV_GROUPS: NavGroup[] = NAV_GROUPS_RAW
   .map((g) => ({ ...g, items: [...g.items].sort((a, b) => byLabel(a.label, b.label)) }))
   .sort((a, b) => {
     const ra = groupRank(a), rb = groupRank(b);
     if (ra !== rb) return ra - rb;
-    return ra === 1 ? byLabel(a.label!, b.label!) : 0; // rotulados: alfabético; topo/rodapé: ordem de definição
+    return ra === 1 ? byLabel(a.label!, b.label!) : 0; // rotulados: alfabético; topo: ordem de definição
   });
 
 // Lista achatada — mobile (barra + folha "Mais") e título da página usam ordem linear.
@@ -213,7 +207,7 @@ function Sidebar(): React.JSX.Element {
           // acordeon só no modo expandido; recolhido sempre mostra os itens
           const isClosed = !collapsed && g.label != null && closed.has(g.label);
           return (
-          <div key={g.label ?? (g.foot ? 'foot' : 'top')} className={cn('flex flex-col gap-1', gi > 0 && 'mt-2')}>
+          <div key={g.label ?? 'top'} className={cn('flex flex-col gap-1', gi > 0 && 'mt-2')}>
             {g.label && (collapsed
               // recolhido: cabeçalho some, separador fino marca a fronteira do grupo
               ? <div className="mx-2 mb-1 border-t border-white/10" />
@@ -371,7 +365,7 @@ function MobileNavFab(): React.JSX.Element {
         <nav aria-label="Navegação"
           className="fixed top-[calc(env(safe-area-inset-top)+4.5rem)] left-4 z-[1100] max-h-[70vh] w-64 max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain rounded-2xl border border-ink-200 bg-surface p-2 shadow-pop animate-[toastIn_.18s_ease-out]">
           {groups.map((g, gi) => (
-            <div key={g.label ?? (g.foot ? 'foot' : 'top')} className={cn(gi > 0 && 'mt-1.5 border-t border-ink-100 pt-1.5')}>
+            <div key={g.label ?? 'top'} className={cn(gi > 0 && 'mt-1.5 border-t border-ink-100 pt-1.5')}>
               {g.label && <p className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-ink-400">{g.label}</p>}
               {g.items.map((n) => (
                 <NavLink key={n.to} to={n.to} end={n.to === '/'} onClick={() => setOpen(false)}
