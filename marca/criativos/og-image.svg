@@ -5,8 +5,8 @@
       <stop offset="1" stop-color="#161f38"/>
     </linearGradient>
     <linearGradient id="ogmark" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#4E6BFF"/>
-      <stop offset="1" stop-color="#2438C4"/>
+      <stop offset="0" stop-color="#597EF8"/>
+      <stop offset="1" stop-color="#2448BC"/>
     </linearGradient>
   </defs>
   <rect width="1200" height="630" fill="url(#ogbg)"/>
@@ -15,7 +15,7 @@
     <path d="M0 160 H1200 M0 320 H1200 M0 480 H1200 M300 0 V630 M600 0 V630 M900 0 V630"/>
   </g>
   <!-- rota + pins -->
-  <path d="M170 470 C 420 470 360 250 640 210" stroke="#3D5AF1" stroke-width="6" fill="none" stroke-dasharray="3 12" stroke-linecap="round"/>
+  <path d="M170 470 C 420 470 360 250 640 210" stroke="#3E66EA" stroke-width="6" fill="none" stroke-dasharray="3 12" stroke-linecap="round"/>
   <g fill="#FF6A2B">
     <circle cx="170" cy="470" r="12"/><circle cx="410" cy="330" r="12"/><circle cx="640" cy="210" r="15"/>
   </g>
@@ -24,12 +24,12 @@
   <g transform="translate(96 96)">
     <rect width="92" height="92" rx="24" fill="url(#ogmark)"/>
     <path d="M30 67 C 60 67 46 38 71 36" stroke="#fff" stroke-width="9" fill="none" stroke-linecap="round"/>
-    <circle cx="30" cy="67" r="8" fill="#fff"/><circle cx="30" cy="67" r="3.5" fill="#2438C4"/>
+    <circle cx="30" cy="67" r="8" fill="#fff"/><circle cx="30" cy="67" r="3.5" fill="#2448BC"/>
     <path d="M60 30 L73 36 L66 48" stroke="#fff" stroke-width="9" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
     <text x="112" y="66" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="64" font-weight="800" letter-spacing="-3" fill="#ffffff">Rovva</text>
   </g>
   <!-- headline -->
   <text x="96" y="360" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="76" font-weight="800" letter-spacing="-2" fill="#ffffff">Pare de prospectar</text>
-  <text x="96" y="446" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="76" font-weight="800" letter-spacing="-2" fill="#3D5AF1">no escuro.</text>
+  <text x="96" y="446" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="76" font-weight="800" letter-spacing="-2" fill="#3E66EA">no escuro.</text>
   <text x="100" y="520" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="30" font-weight="500" fill="#aab2c5">Quais empresas abordar no seu território — do funil ao pedido pago.</text>
 </svg>

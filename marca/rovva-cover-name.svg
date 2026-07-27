@@ -5,8 +5,8 @@
       <stop offset="1" stop-color="#0D1220"/>
     </radialGradient>
     <linearGradient id="rcTile" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#4E6BFF"/>
-      <stop offset="1" stop-color="#2438C4"/>
+      <stop offset="0" stop-color="#597EF8"/>
+      <stop offset="1" stop-color="#2448BC"/>
     </linearGradient>
   </defs>
   <rect width="1640" height="624" fill="url(#rcBg)"/>
@@ -15,11 +15,11 @@
     <rect width="160" height="160" rx="42" fill="url(#rcTile)"/>
     <path d="M52 116 C 104 116 80 66 124 62" stroke="#ffffff" stroke-width="16" fill="none" stroke-linecap="round"/>
     <circle cx="52" cy="116" r="14" fill="#ffffff"/>
-    <circle cx="52" cy="116" r="6" fill="#2438C4"/>
+    <circle cx="52" cy="116" r="6" fill="#2448BC"/>
     <path d="M104 52 L126 62 L114 82" stroke="#ffffff" stroke-width="16" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
   <!-- nome -->
-  <text x="800" y="372" font-family="'DejaVu Sans','Segoe UI',Arial,sans-serif" font-size="150" font-weight="700" letter-spacing="-4" fill="#ffffff">Ro<tspan fill="#6E86FF">vv</tspan>a</text>
+  <text x="800" y="372" font-family="'DejaVu Sans','Segoe UI',Arial,sans-serif" font-size="150" font-weight="700" letter-spacing="-4" fill="#ffffff">Ro<tspan fill="#7290F3">vv</tspan>a</text>
   <!-- tagline -->
   <text x="600" y="450" font-family="'DejaVu Sans','Segoe UI',Arial,sans-serif" font-size="34" font-weight="400" fill="#8A93A6">Do território ao pedido pago.</text>
 </svg>

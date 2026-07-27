@@ -29,9 +29,9 @@ No wordmark, o duplo-**vv** é destacado na cor primária, amarrando com o símb
 
 | Token | HEX | Uso |
 |---|---|---|
-| **Rovva Blue** (primária) | `#3D5AF1` | marca, CTAs, links, destaque |
-| Blue 700 (escuro) | `#2438C4` | hover, gradiente, texto sobre claro |
-| Blue 50 (tint) | `#EEF1FE` | fundos de destaque, badges |
+| **Rovva Blue** (primária) | `#3E66EA` | marca, CTAs, links, destaque |
+| Blue 700 (escuro) | `#2448BC` | hover, gradiente, texto sobre claro |
+| Blue 50 (tint) | `#ECF0FD` | fundos de destaque, badges |
 | **Signal Orange** (acento) | `#FF6A2B` | pins no mapa, marcadores de ação, detalhe |
 | Ink (texto/dark) | `#0D1220` | títulos, fundo dark |
 | Slate 600 | `#475069` | corpo de texto |
@@ -49,9 +49,9 @@ mantém contraste AA em texto.
 
 ```css
 @theme {
-  --color-brand-50:  #EEF1FE;
-  --color-brand-500: #3D5AF1;
-  --color-brand-700: #2438C4;
+  --color-brand-50:  #ECF0FD;
+  --color-brand-500: #3E66EA;
+  --color-brand-700: #2448BC;
   --color-accent-500:#FF6A2B;
   --color-ink:       #0D1220;
   --color-slate-600: #475069;

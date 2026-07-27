@@ -1,8 +1,8 @@
 <svg width="920" height="240" viewBox="0 0 920 240" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Rovva">
   <defs>
     <linearGradient id="rovvaG" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#4E6BFF"/>
-      <stop offset="1" stop-color="#2438C4"/>
+      <stop offset="0" stop-color="#597EF8"/>
+      <stop offset="1" stop-color="#2448BC"/>
     </linearGradient>
   </defs>
   <!-- simbolo: map tile + rota ascendente (percorrer o territorio) -->
@@ -12,10 +12,10 @@
     <path d="M52 116 C 104 116 80 66 124 62" stroke="#ffffff" stroke-width="16" fill="none" stroke-linecap="round"/>
     <!-- ponto de partida (pin) -->
     <circle cx="52" cy="116" r="14" fill="#ffffff"/>
-    <circle cx="52" cy="116" r="6" fill="#2438C4"/>
+    <circle cx="52" cy="116" r="6" fill="#2448BC"/>
     <!-- seta de chegada -->
     <path d="M104 52 L126 62 L114 82" stroke="#ffffff" stroke-width="16" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
   <!-- wordmark -->
-  <text x="250" y="153" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="120" font-weight="800" letter-spacing="-5" fill="#0D1220">Ro<tspan fill="#3D5AF1">vv</tspan>a</text>
+  <text x="250" y="153" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="120" font-weight="800" letter-spacing="-5" fill="#0D1220">Ro<tspan fill="#3E66EA">vv</tspan>a</text>
 </svg>

@@ -4,7 +4,7 @@
 // nem distorcer — ver marca/IDENTIDADE.md.
 import { useId } from 'react';
 
-const BLUE_700 = '#2438C4';
+const BLUE_700 = '#2448BC';
 
 // Símbolo: tile do território + rota que sai do pin e sobe até a seta.
 export function LogoMark({ size = 32, className = '' }: { size?: number; className?: string }): React.JSX.Element {
@@ -16,7 +16,7 @@ export function LogoMark({ size = 32, className = '' }: { size?: number; classNa
     >
       <defs>
         <linearGradient id={gid} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#4E6BFF" />
+          <stop offset="0" stopColor="#597EF8" />
           <stop offset="1" stopColor={BLUE_700} />
         </linearGradient>
       </defs>

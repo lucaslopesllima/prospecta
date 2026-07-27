@@ -397,7 +397,7 @@ function MobileNavFab(): React.JSX.Element {
         </nav>
       )}
       <button onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-label={open ? 'Fechar menu' : 'Abrir menu'}
-        className="fixed top-[max(env(safe-area-inset-top),1rem)] left-4 z-[1100] grid h-14 w-14 place-items-center rounded-2xl bg-brand-600 text-white shadow-[0_8px_20px_-6px_rgba(47,73,222,0.6)] transition-transform active:scale-95">
+        className="fixed top-[max(env(safe-area-inset-top),1rem)] left-4 z-[1100] grid h-14 w-14 place-items-center rounded-2xl bg-brand-600 text-white shadow-[0_8px_20px_-6px_rgba(44,86,221,0.6)] transition-transform active:scale-95">
         <Icon name={open ? 'x' : 'menu'} size={26} className="transition-transform duration-200" />
       </button>
     </div>

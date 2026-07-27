@@ -381,7 +381,7 @@ function Planner({ vehicles }: { vehicles: Vehicle[] }): React.JSX.Element {
                   </CircleMarker>
                   {result.stops.map((s) => (
                     <CircleMarker key={s.company_id} center={[s.lat, s.lon]} radius={11}
-                      pathOptions={{ color: '#fff', weight: 2, fillColor: '#2438c4', fillOpacity: 1 }}>
+                      pathOptions={{ color: '#fff', weight: 2, fillColor: '#2448bc', fillOpacity: 1 }}>
                       <Tooltip permanent direction="center" className="!bg-transparent !border-0 !shadow-none !p-0 !text-[11px] !font-bold !text-white">{s.seq + 1}</Tooltip>
                       <Popup>
                         <span className="block text-sm font-semibold text-ink-800">{s.seq + 1}. {s.nome_fantasia || s.razao_social}</span>

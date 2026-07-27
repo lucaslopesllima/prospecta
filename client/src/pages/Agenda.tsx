@@ -18,7 +18,7 @@ const proximoHorarioComercial = (): Date => {
 
 /* ── tipo metadata (color + icon per activity kind) ─────── */
 const TIPO: Record<string, { label: string; icon: IconName; dot: string; chip: string }> = {
-  tarefa:  { label: 'Tarefa',   icon: 'check',  dot: '#3d5af1', chip: 'bg-brand-50 text-brand-700' },
+  tarefa:  { label: 'Tarefa',   icon: 'check',  dot: '#3e66ea', chip: 'bg-brand-50 text-brand-700' },
   ligacao: { label: 'Ligação',  icon: 'phone',  dot: '#0284c7', chip: 'bg-sky-50 text-sky-700' },
   visita:  { label: 'Visita',   icon: 'mapPin', dot: '#d97706', chip: 'bg-amber-50 text-amber-700' },
   reuniao: { label: 'Reunião',  icon: 'users',  dot: '#7c3aed', chip: 'bg-violet-50 text-violet-700' },

@@ -5,20 +5,20 @@
       <stop offset="1" stop-color="#0D1220"/>
     </radialGradient>
     <linearGradient id="rpTile" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#4E6BFF"/>
-      <stop offset="1" stop-color="#2438C4"/>
+      <stop offset="0" stop-color="#597EF8"/>
+      <stop offset="1" stop-color="#2448BC"/>
     </linearGradient>
   </defs>
   <!-- fundo full-bleed (crop circular) -->
   <rect width="1080" height="1080" fill="url(#rpBg)"/>
   <!-- anel sutil dentro da area segura -->
-  <circle cx="540" cy="540" r="470" fill="none" stroke="#3D5AF1" stroke-opacity="0.16" stroke-width="2"/>
+  <circle cx="540" cy="540" r="470" fill="none" stroke="#3E66EA" stroke-opacity="0.16" stroke-width="2"/>
   <!-- simbolo centralizado: tile 512 -> centro em (540,540) -->
   <g transform="translate(284 284)">
     <rect width="512" height="512" rx="120" fill="url(#rpTile)"/>
     <path d="M150 360 C 300 360 232 205 366 196" stroke="#ffffff" stroke-width="46" fill="none" stroke-linecap="round"/>
     <circle cx="150" cy="360" r="42" fill="#ffffff"/>
-    <circle cx="150" cy="360" r="18" fill="#2438C4"/>
+    <circle cx="150" cy="360" r="18" fill="#2448BC"/>
     <path d="M312 176 L376 196 L344 258" stroke="#ffffff" stroke-width="46" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
 </svg>
