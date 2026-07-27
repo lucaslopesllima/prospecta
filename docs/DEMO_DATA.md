@@ -334,8 +334,20 @@ timestamps derivam de `current_date` lido do banco. Os horários são gravados c
 offset **fixo `-03:00`**: o container do app pode rodar em UTC, e gravar "09:00"
 cru faria a agenda comercial aparecer às 6h para o usuário.
 
-**Reset agendado** (a demo é pública e o visitante escreve): cron diário às 4h
-rodando `seed-demo.ts --reset`. Sem isso a base degrada em uma semana.
+**Reset agendado — DESLIGADO por decisão (2026-07-27).** O plano previa cron
+diário às 4h rodando `seed-demo.ts --reset`, e nada disso foi instalado na VPS:
+não há crontab do root nem timer systemd. O reset é **manual, sob demanda**:
+
+```bash
+ssh root@82.112.244.77 'cd ~/rovva && \
+  docker compose -f docker-compose.prod.yml exec -T app node scripts/seed-demo.ts --reset'
+```
+
+Consequência assumida: a demo é pública e o visitante entra como admin da própria
+org, então a base **degrada com o uso** — pedido cancelado, cliente apagado,
+conversa suja. Quem for demonstrar deve rodar o reset antes. Se um dia isso virar
+incômodo, o cron está descrito em §10.7 — mas ligá-lo é decisão de quem opera, não
+um conserto pendente.
 
 ### Usuário de login da demo
 
@@ -549,14 +561,18 @@ recompra de mercearia.
 6. ~~Checklist da §6 percorrido tela a tela~~ — **feito** (via API, com a org
    semeada; todos os endpoints das telas respondem 200 com conteúdo). Captura de
    screenshots para `marca/` — **pendente**.
-7. **Pendente — ação em produção.** Cron diário de reset na VPS. Sem isso a base
-   degrada em uma semana, já que o visitante escreve. Comando:
+7. **Deploy em produção — feito** (2026-07-27). `rovva.tech` roda a org de demo
+   (id 35) ao lado das 16 orgs reais. O que o deploy exigiu além do seed:
+   `DEMO_PASSWORD` no `.env` da VPS **e** repassada ao container em
+   `docker-compose.prod.yml` (o `.env` só alimenta a substituição do compose; quem
+   lê a variável é o script rodando dentro do container).
 
-   ```cron
-   0 4 * * * cd ~/rovva && docker compose -f docker-compose.prod.yml exec -T app \
-     node scripts/seed-demo.ts --reset >> /var/log/rovva-demo-reset.log 2>&1
-   ```
+   Cuidados que valem para qualquer redeploy: `subir-vps.sh` **sempre com
+   `--skip-db`** — sem a flag ele restaura o `pgdata` local por cima do de
+   produção; e o `rsync --delete` apaga o que não existe no repo, então backup
+   fora de `~/rovva` (use `/root/backups-rovva/`). Dry-run do rsync **com `-v`**:
+   sem verbose ele não lista as deleções e a checagem passa em falso.
 
-   Antes de rodar em produção pela primeira vez: definir `DEMO_PASSWORD` no
-   `.env` da VPS (o script recusa senha vazia com `NODE_ENV=production`) e
-   conferir que `adm@rovvatech.com.br` não está preso em outra org.
+   Reset diário: **não instalado, por decisão** — ver §7.
+
+
