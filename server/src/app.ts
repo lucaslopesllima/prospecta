@@ -57,7 +57,8 @@ export async function buildApp(opts: { logger?: boolean; authRateLimitMax?: numb
 
   // Security headers (CSP, nosniff, frame-ancestors, HSTS em prod). App e API são
   // same-origin; a CSP libera só os hosts externos realmente usados pelo client:
-  // tiles do OpenStreetMap (Leaflet), Nominatim/BrasilAPI/OSRM (geocode e rotas).
+  // tiles do OpenStreetMap (Leaflet), Nominatim/BrasilAPI/OSRM (geocode e rotas)
+  // e ViaCEP (CEP -> endereço nos formulários de conta e de partida das rotas).
   // 'unsafe-inline' em style: Leaflet e Tailwind injetam estilos inline; blob: em
   // img/worker: avatares/impressão via Blob URL e o service worker do PWA.
   await app.register(helmet, {
@@ -67,7 +68,7 @@ export async function buildApp(opts: { logger?: boolean; authRateLimitMax?: numb
         'script-src': ["'self'"],
         'style-src': ["'self'", "'unsafe-inline'"],
         'img-src': ["'self'", 'data:', 'blob:', 'https://*.tile.openstreetmap.org', 'https://tile.openstreetmap.org'],
-        'connect-src': ["'self'", 'https://nominatim.openstreetmap.org', 'https://brasilapi.com.br', 'https://router.project-osrm.org'],
+        'connect-src': ["'self'", 'https://nominatim.openstreetmap.org', 'https://brasilapi.com.br', 'https://viacep.com.br', 'https://router.project-osrm.org'],
         'worker-src': ["'self'", 'blob:'],
         'object-src': ["'none'"],
         'frame-ancestors': ["'self'"],

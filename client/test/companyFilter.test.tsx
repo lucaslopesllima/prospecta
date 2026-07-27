@@ -89,22 +89,22 @@ describe('useCompanyFilter', () => {
   });
 });
 
-// ── Barra de filtros (UI): funil (avançado), CNAE search, partida, recomendação ──
+// ── Barra de filtros (UI): funil, CNAE search, partida, recomendação ──
 function Bar({ recommend }: { recommend?: boolean }): React.JSX.Element {
   const f = useCompanyFilter('bar');
   return <CompanyFilterBar f={f} recommend={recommend} />;
 }
 
 describe('CompanyFilterBar — funil', () => {
-  it('básico não tem acordeão; só o avançado colapsa', async () => {
+  it('barra não tem acordeão: básico e avançado visíveis juntos', () => {
     render(<Bar />);
     expect(screen.getByPlaceholderText('Razão, fantasia ou CNPJ')).toBeVisible();
-    // o único toggle da barra é o avançado (o básico abre junto com a barra)
+    // nenhum toggle dentro da barra — quem abre/fecha é o botão da página
     expect(screen.queryByRole('button', { name: 'Filtros' })).toBeNull();
-    const avancado = screen.getByRole('button', { name: /Filtros avançados/ });
-    expect(avancado).toHaveAttribute('aria-expanded', 'false');
-    await userEvent.click(avancado);
-    expect(avancado).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.queryByRole('button', { name: /Filtros avançados/ })).toBeNull();
+    // campos antes escondidos no acordeão já aparecem
+    expect(screen.getByPlaceholderText('CEP')).toBeVisible();
+    expect(screen.getByText('Restringir ao território')).toBeVisible();
   });
 
   it('máscara de nome/CNPJ e porte atualizam o filtro', async () => {
@@ -114,10 +114,9 @@ describe('CompanyFilterBar — funil', () => {
     expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('micro');
   });
 
-  it('território (avançado) habilita restrição e limpa', async () => {
+  it('território habilita restrição e limpa', async () => {
     localStorage.setItem('companyFilter:reco', JSON.stringify({ munis: [mun(100), mun(200)], pesos: { cnae: 0.5, proximidade: 0.3, porte: 0.2 }, partida: null }));
     render(<Bar />);
-    await userEvent.click(screen.getByRole('button', { name: /Filtros avançados/ }));
     const chk = await screen.findByRole('checkbox');
     expect(chk).not.toBeDisabled();
     expect(screen.getByText(/2 municípios/)).toBeInTheDocument();
@@ -177,14 +176,11 @@ describe('PartidaInput', () => {
   const origFetch = global.fetch;
   afterEach(() => { global.fetch = origFetch; });
 
-  const openPartida = async (): Promise<void> => {
-    render(<Bar />);
-    await userEvent.click(screen.getByRole('button', { name: /Filtros avançados/ }));
-  };
+  const openPartida = (): void => { render(<Bar />); };
 
   it('CEP preenche endereço e "Definir" geocodifica; remover limpa', async () => {
     global.fetch = vi.fn().mockResolvedValue({ json: async () => ({ logradouro: 'Rua A', bairro: 'Centro', localidade: 'Blumenau', uf: 'SC' }) }) as unknown as typeof fetch;
-    await openPartida();
+    openPartida();
     const cep = screen.getByPlaceholderText('CEP');
     await userEvent.type(cep, '89000000');
     await waitFor(() => expect((screen.getByPlaceholderText(/Rua XV de Novembro/) as HTMLInputElement).value).toContain('Rua A'));
@@ -196,7 +192,7 @@ describe('PartidaInput', () => {
 
   it('CEP não encontrado e falha de rede no CEP', async () => {
     global.fetch = vi.fn().mockResolvedValueOnce({ json: async () => ({ erro: true }) }) as unknown as typeof fetch;
-    await openPartida();
+    openPartida();
     fireEvent.blur(screen.getByPlaceholderText('CEP'), { target: { value: '89000000' } });
     expect(await screen.findByText('CEP não encontrado.')).toBeInTheDocument();
     (global.fetch as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('net'));
@@ -207,7 +203,7 @@ describe('PartidaInput', () => {
   });
 
   it('endereço curto, não encontrado e falha na geocodificação', async () => {
-    await openPartida();
+    openPartida();
     const q = screen.getByPlaceholderText(/Rua XV de Novembro/);
     fireEvent.keyDown(q, { key: 'Enter' }); // vazio/curto
     await userEvent.click(screen.getByRole('button', { name: 'Definir' }));
@@ -227,7 +223,7 @@ describe('PartidaInput', () => {
 describe('RecommendConfig', () => {
   it('território por UF, por cidade, pesos e limpar', async () => {
     render(<Bar recommend />);
-    // avançado já aberto no modo recommend → UFs carregam
+    // território sempre visível no modo recommend → UFs carregam
     const sp = await screen.findByRole('button', { name: /^SP/ });
     await userEvent.click(sp); // não cheio → by-uf adiciona
     expect(await screen.findByText(/SP inteiro/)).toBeInTheDocument();
@@ -249,7 +245,38 @@ describe('RecommendConfig', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Limpar filtros' }));
   });
 
-  it('faixas de capital/idade ficam no filtro simples (sem abrir o avançado)', async () => {
+  it('dropdown de cidade fecha ao selecionar, ao clicar fora e no Esc', async () => {
+    render(<Bar recommend />);
+    const busca = screen.getByPlaceholderText(/Buscar cidade/);
+
+    // selecionar fecha
+    await userEvent.type(busca, 'Blu');
+    await userEvent.click(await screen.findByText('Cidade 200', undefined, { timeout: 2000 }));
+    expect(screen.queryByText('Cidade 100')).not.toBeInTheDocument();
+
+    // clique fora fecha (mousedown no documento)
+    await userEvent.type(busca, 'Blu');
+    expect(await screen.findByText('Cidade 100', undefined, { timeout: 2000 })).toBeInTheDocument();
+    fireEvent.mouseDown(document.body);
+    await waitFor(() => expect(screen.queryByText('Cidade 100')).not.toBeInTheDocument());
+
+    // Esc fecha; foco com texto reabre
+    fireEvent.focus(busca);
+    expect(await screen.findByText('Cidade 100')).toBeInTheDocument();
+    fireEvent.keyDown(busca, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByText('Cidade 100')).not.toBeInTheDocument());
+  });
+
+  it('dropdown de CNAE fecha ao clicar fora', async () => {
+    render(<Bar recommend />);
+    const inp = screen.getByPlaceholderText(/Atividade \(ex.: padaria\)/);
+    await userEvent.type(inp, 'padaria');
+    expect(await screen.findByText('Comércio de vestuário', undefined, { timeout: 2000 })).toBeInTheDocument();
+    fireEvent.mouseDown(document.body);
+    await waitFor(() => expect(screen.queryByText('Comércio de vestuário')).not.toBeInTheDocument());
+  });
+
+  it('faixas de capital/idade só aparecem no modo recommend', async () => {
     render(<Bar recommend />);
     expect(screen.getByLabelText('Capital social mínimo')).toBeVisible();
     // no funil não aparecem (filtro client-side não tem esses dados)

@@ -447,11 +447,14 @@ export function Recommend(): React.JSX.Element {
                   ref={isFocus ? (m) => { m?.openPopup(); } : undefined}
                   pathOptions={{ color: isFocus ? '#dc2626' : MATCH_COLOR[r.reason.cnae_match],
                     weight: isFocus ? 3 : 1, fillOpacity: isFocus ? 0.9 : 0.7 }}>
-                  <Popup>
-                    <div className="space-y-1">
-                      <p className="font-semibold">{r.razao_social}</p>
+                  <Popup minWidth={220} maxWidth={260}>
+                    {/* Sem flex-nowrap: são até 4 ações e em uma linha só elas
+                        estouravam a largura do balão do Leaflet. Cada ação
+                        continua sem quebrar no meio (whitespace-nowrap). */}
+                    <div className="max-w-full space-y-1">
+                      <p className="break-words font-semibold">{r.razao_social}</p>
                       <p className="text-xs">Score {(r.score * 100).toFixed(0)} · {r.reason.distancia_km} km</p>
-                      <div className="flex flex-nowrap items-center gap-3 pt-0.5">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-0.5">
                         <button onClick={() => setViewing(Number(r.id))} className="whitespace-nowrap text-xs font-semibold text-brand-700 underline dark:text-brand-300">Ver dados da empresa</button>
                         {added.has(r.id)
                           ? <span className="whitespace-nowrap text-xs text-emerald-600 dark:text-emerald-300">✓ no funil</span>

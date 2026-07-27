@@ -170,6 +170,19 @@ export function useCompanyFilter(storageKey = 'default'): CompanyFilter {
   };
 }
 
+// Fecha o dropdown ao clicar fora (mesmo padrão do CompanySearch). Vai no
+// mousedown do documento e não no blur do input: o blur dispara ANTES do click
+// no item da lista e engoliria a seleção.
+function useCloseOnOutside(ref: React.RefObject<HTMLElement | null>, setOpen: React.Dispatch<React.SetStateAction<boolean>>): void {
+  useEffect(() => {
+    const onDoc = (e: MouseEvent): void => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [ref, setOpen]);
+}
+
 // Busca de CNAE por TEXTO ou código: digita "padaria" ou "478" e resolve via
 // /api/cnae/search (sinônimos + descrição + trigrama). Guarda só os códigos em
 // fCnae — formato que o filtro client-side e o /api/recommend já consomem.
@@ -181,6 +194,8 @@ function CnaeSearchInput({ value, onChange, label }: { value: string; onChange: 
   const [grupos, setGrupos] = useState<CnaeGrupo[]>([]);
   const [open, setOpen] = useState(false);
   const deb = useRef<number | undefined>(undefined);
+  const boxRef = useRef<HTMLDivElement>(null);
+  useCloseOnOutside(boxRef, setOpen);
 
   const codes = useMemo(() => parseCodes(value), [value]);
 
@@ -205,6 +220,7 @@ function CnaeSearchInput({ value, onChange, label }: { value: string; onChange: 
 
   // Enter com dígitos puros adiciona o código direto, sem depender da busca.
   const onKey = (e: React.KeyboardEvent): void => {
+    if (e.key === 'Escape') { setOpen(false); return; }
     if (e.key !== 'Enter') return;
     e.preventDefault();
     const digits = onlyDigits(q);
@@ -214,11 +230,10 @@ function CnaeSearchInput({ value, onChange, label }: { value: string; onChange: 
   return (
     <label className="block">
       <span className="mb-1 block text-xs font-medium text-ink-500">{label}</span>
-      <div className="relative">
+      <div ref={boxRef} className="relative">
         <input
           value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey}
           onFocus={() => { if (grupos.length) setOpen(true); }}
-          onBlur={() => setTimeout(() => setOpen(false), 150)}
           maxLength={120} placeholder="Atividade (ex.: padaria) ou código" className={inputCls}
         />
         {open && grupos.length > 0 && (
@@ -330,95 +345,61 @@ function PartidaInput({ value, onChange }: { value: Partida | null; onChange: (p
   );
 }
 
-// Seção colapsável (acordeão) — hoje só o bloco "Filtros avançados" a usa (o
-// básico fica sempre visível quando a barra abre). Mesmo padrão
-// grid-rows-[1fr]/[0fr] + overflow-hidden usado no Recommend para animar altura.
-// `nested` deixa o cabeçalho discreto (bloco dentro do card da barra).
-export function FilterSection({ title, open, onToggle, nested = false, children }: {
-  title: string; open: boolean; onToggle: () => void; nested?: boolean; children: React.ReactNode;
-}): React.JSX.Element {
-  return (
-    <div className={cn(nested && 'rounded-xl border border-ink-200/70 bg-ink-50/40')}>
-      <button type="button" onClick={onToggle} aria-expanded={open}
-        className={cn('flex w-full items-center justify-between gap-2 text-left', nested ? 'px-3 py-2' : 'p-3')}>
-        <span className={cn('font-semibold', nested ? 'text-[11px] uppercase tracking-wider text-ink-500' : 'text-sm text-ink-900')}>{title}</span>
-        <Icon name="chevronRight" size={15}
-          className={cn('shrink-0 text-ink-400 transition-transform duration-300 ease-out', open ? 'rotate-90' : 'rotate-0')} />
-      </button>
-      <div className={cn('grid transition-[grid-template-rows] duration-300 ease-in-out', open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
-        <div className="overflow-hidden">
-          <div className={cn(nested ? 'px-3 pb-3' : 'p-3 pt-0')}>{children}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function CompanyFilterBar({ f, recommend = false }: { f: CompanyFilter; recommend?: boolean }): React.JSX.Element {
-  // No modo recommend o território (avançado) é necessário para haver resultado —
-  // começa aberto. No funil é opcional, começa recolhido.
-  const [avancadoOpen, setAvancadoOpen] = useState(recommend);
-
-  // Sem acordeão no básico: o botão "Filtros" da página já abre/fecha a barra
-  // inteira. Só o avançado colapsa aqui dentro.
+  // Sem acordeão nenhum: o botão "Filtros" da página já abre/fecha a barra
+  // inteira, então esconder metade dos campos atrás de um segundo toggle só
+  // adicionava cliques. Os antigos "filtros avançados" (território/pesos no
+  // recommend, partida/território no funil) ficam no topo, e os campos básicos
+  // logo abaixo — tudo visível de uma vez.
   return (
-    <div className="space-y-3">
-      <div className="rounded-2xl border border-ink-200/70 bg-surface p-3 shadow-card">
-        <div>
-          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-ink-500">Nome / CNPJ</span>
-              <input value={f.fq} onChange={(e) => f.setFq(maskSearchCNPJ(e.target.value))} maxLength={120} placeholder="Razão, fantasia ou CNPJ" className={inputCls} />
+    <div className="rounded-2xl border border-ink-200/70 bg-surface p-3 shadow-card">
+      {recommend ? (
+        <RecommendConfig f={f} />
+      ) : (
+        <div className="space-y-2.5">
+          <PartidaInput value={f.partida} onChange={f.setPartida} />
+          <div className="flex flex-wrap items-center gap-3">
+            <label className={cn('inline-flex items-center gap-2 text-xs font-medium text-ink-600', f.territorio.length === 0 && 'opacity-50')}>
+              <input type="checkbox" checked={f.usarAlvo} onChange={(e) => f.setUsarAlvo(e.target.checked)}
+                className="h-4 w-4 rounded border-ink-300 text-brand-600 focus:ring-brand-300" disabled={f.territorio.length === 0} />
+              Restringir ao território
+              {f.territorio.length > 0 && <span className="text-ink-400">({f.territorio.length} municípios)</span>}
             </label>
-            <CnaeSearchInput value={f.fCnae} onChange={f.setFCnae} label={recommend ? 'CNAEs-alvo' : 'CNAE'} />
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-ink-500">Porte</span>
-              <select value={f.fPorte} onChange={(e) => f.setFPorte(e.target.value)} className={inputCls}>
-                <option value="">Todos</option>
-                {PORTE_OPTS.map((p) => <option key={p.v} value={p.v}>{p.l}</option>)}
-              </select>
-            </label>
-            {/* Faixas (só no recommend): corte duro no servidor, antes do ranqueamento.
-                No funil não entram — o filtro do funil é client-side e a lista
-                carregada não traz capital social nem data de abertura. */}
-            {recommend && (
-              <>
-                <FaixaField label="Capital social" unidade="R$" hint={FAIXA_HINT.capital} mask={maskMoney}
-                  min={f.faixas.capMin} max={f.faixas.capMax}
-                  onMin={(v) => f.setFaixas({ ...f.faixas, capMin: v })}
-                  onMax={(v) => f.setFaixas({ ...f.faixas, capMax: v })} />
-                <FaixaField label="Tempo de vida" unidade="anos" hint={FAIXA_HINT.idade} mask={maskAnos}
-                  min={f.faixas.idadeMin} max={f.faixas.idadeMax}
-                  onMin={(v) => f.setFaixas({ ...f.faixas, idadeMin: v })}
-                  onMax={(v) => f.setFaixas({ ...f.faixas, idadeMax: v })} />
-              </>
-            )}
-          </div>
-
-          {/* Único acordeão da barra */}
-          <div className="mt-2.5">
-            <FilterSection title="Filtros avançados" open={avancadoOpen} onToggle={() => setAvancadoOpen((v) => !v)} nested>
-              {recommend ? (
-                <RecommendConfig f={f} />
-              ) : (
-                <div className="space-y-2.5">
-                  <PartidaInput value={f.partida} onChange={f.setPartida} />
-                  <div className="flex flex-wrap items-center gap-3 border-t border-ink-100 pt-2.5">
-                    <label className={cn('inline-flex items-center gap-2 text-xs font-medium text-ink-600', f.territorio.length === 0 && 'opacity-50')}>
-                      <input type="checkbox" checked={f.usarAlvo} onChange={(e) => f.setUsarAlvo(e.target.checked)}
-                        className="h-4 w-4 rounded border-ink-300 text-brand-600 focus:ring-brand-300" disabled={f.territorio.length === 0} />
-                      Restringir ao território
-                      {f.territorio.length > 0 && <span className="text-ink-400">({f.territorio.length} municípios)</span>}
-                    </label>
-                    <div className="ml-auto">
-                      <Btn size="sm" variant="ghost" type="button" onClick={f.limpar}>Limpar</Btn>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </FilterSection>
+            <div className="ml-auto">
+              <Btn size="sm" variant="ghost" type="button" onClick={f.limpar}>Limpar</Btn>
+            </div>
           </div>
         </div>
+      )}
+
+      <div className="mt-3 grid gap-2.5 border-t border-ink-100 pt-3 sm:grid-cols-2 lg:grid-cols-3">
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-ink-500">Nome / CNPJ</span>
+          <input value={f.fq} onChange={(e) => f.setFq(maskSearchCNPJ(e.target.value))} maxLength={120} placeholder="Razão, fantasia ou CNPJ" className={inputCls} />
+        </label>
+        <CnaeSearchInput value={f.fCnae} onChange={f.setFCnae} label={recommend ? 'CNAEs-alvo' : 'CNAE'} />
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-ink-500">Porte</span>
+          <select value={f.fPorte} onChange={(e) => f.setFPorte(e.target.value)} className={inputCls}>
+            <option value="">Todos</option>
+            {PORTE_OPTS.map((p) => <option key={p.v} value={p.v}>{p.l}</option>)}
+          </select>
+        </label>
+        {/* Faixas (só no recommend): corte duro no servidor, antes do ranqueamento.
+            No funil não entram — o filtro do funil é client-side e a lista
+            carregada não traz capital social nem data de abertura. */}
+        {recommend && (
+          <>
+            <FaixaField label="Capital social" unidade="R$" hint={FAIXA_HINT.capital} mask={maskMoney}
+              min={f.faixas.capMin} max={f.faixas.capMax}
+              onMin={(v) => f.setFaixas({ ...f.faixas, capMin: v })}
+              onMax={(v) => f.setFaixas({ ...f.faixas, capMax: v })} />
+            <FaixaField label="Tempo de vida" unidade="anos" hint={FAIXA_HINT.idade} mask={maskAnos}
+              min={f.faixas.idadeMin} max={f.faixas.idadeMax}
+              onMin={(v) => f.setFaixas({ ...f.faixas, idadeMin: v })}
+              onMax={(v) => f.setFaixas({ ...f.faixas, idadeMax: v })} />
+          </>
+        )}
       </div>
     </div>
   );
@@ -473,7 +454,10 @@ function RecommendConfig({ f }: { f: CompanyFilter }): React.JSX.Element {
   const [munQ, setMunQ] = useState('');
   const [munResults, setMunResults] = useState<Municipio[]>([]);
   const [ufs, setUfs] = useState<{ uf: string; total: number }[]>([]);
+  const [munOpen, setMunOpen] = useState(false);
   const munDebounce = useRef<number | undefined>(undefined);
+  const munBoxRef = useRef<HTMLDivElement>(null);
+  useCloseOnOutside(munBoxRef, setMunOpen);
 
   useEffect(() => {
     void api.get<{ ufs: { uf: string; total: number }[] }>('/api/municipios/ufs')
@@ -498,7 +482,7 @@ function RecommendConfig({ f }: { f: CompanyFilter }): React.JSX.Element {
   const sel = f.territorio;
   const addMun = (m: Municipio): void => {
     if (!sel.some((x) => x.id === m.id)) f.setTerritorio([...sel, m]);
-    setMunQ(''); setMunResults([]);
+    setMunQ(''); setMunResults([]); setMunOpen(false);
   };
   const removeMun = (id: number): void => f.setTerritorio(sel.filter((x) => x.id !== id));
   const removeUf = (uf: string): void => f.setTerritorio(sel.filter((x) => x.uf !== uf));
@@ -538,10 +522,13 @@ function RecommendConfig({ f }: { f: CompanyFilter }): React.JSX.Element {
         </div>
 
         <p className="mb-1.5 mt-4 text-[11px] font-semibold uppercase tracking-wider text-ink-400">Por cidade</p>
-        <div className="relative">
+        <div ref={munBoxRef} className="relative">
           <Icon name="search" size={17} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
-          <input value={munQ} onChange={(e) => setMunQ(e.target.value)} maxLength={120} placeholder="Buscar cidade (ex.: Blumenau)…" className={cn(inputCls, 'pl-9')} />
-          {munResults.length > 0 && (
+          <input value={munQ} onChange={(e) => { setMunQ(e.target.value); setMunOpen(true); }}
+            onFocus={() => { if (munQ.trim()) setMunOpen(true); }}
+            onKeyDown={(e) => { if (e.key === 'Escape') setMunOpen(false); }}
+            maxLength={120} placeholder="Buscar cidade (ex.: Blumenau)…" className={cn(inputCls, 'pl-9')} />
+          {munOpen && munResults.length > 0 && (
             <div className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-xl border border-ink-200 bg-surface py-1 shadow-pop">
               {munResults.map((m) => {
                 const on = sel.some((x) => x.id === m.id);
@@ -555,7 +542,7 @@ function RecommendConfig({ f }: { f: CompanyFilter }): React.JSX.Element {
               })}
             </div>
           )}
-          {munQ.trim().length >= 1 && munResults.length === 0 && (
+          {munOpen && munQ.trim().length >= 1 && munResults.length === 0 && (
             <div className="absolute z-20 mt-1 w-full rounded-xl border border-ink-200 bg-surface px-3 py-2.5 text-sm text-ink-400 shadow-pop">
               Nenhuma cidade encontrada para “{munQ.trim()}”.
             </div>
