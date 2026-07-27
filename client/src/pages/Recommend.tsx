@@ -6,7 +6,7 @@ import type { LatLngBoundsExpression } from 'leaflet';
 import { api, ApiError, BUSCA_DEBOUNCE_MS } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import type { Recommendation, GeocodeResult, CompanyDetail } from '../lib/types.ts';
-import { Btn, Badge, Card, EmptyState, PageHeader, SafeButton, ScoreBar, Segmented, Spinner, StatCard, cn, type Tone } from '../lib/ui.tsx';
+import { Btn, Badge, Card, Collapse, EmptyState, PageHeader, SafeButton, ScoreBar, Segmented, Spinner, StatCard, cn, type Tone } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { CompanyFilterBar, useCompanyFilter, faixasParams, faixasInvalidas } from '../lib/companyFilter.tsx';
 import { CompanyModal } from '../lib/companyModal.tsx';
@@ -387,26 +387,18 @@ export function Recommend(): React.JSX.Element {
           )}
         </div>
       )}
-      <div className={cn('grid transition-[grid-template-rows] duration-200 ease-out',
-        filtersOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
-        <div className={cn('overflow-hidden transition-opacity duration-200 ease-out',
-          filtersOpen ? 'opacity-100' : 'opacity-0')}>
-          <CompanyFilterBar f={filter} recommend />
-        </div>
-      </div>
+      <Collapse open={filtersOpen} duration={200}>
+        <CompanyFilterBar f={filter} recommend />
+      </Collapse>
 
-      <div className={cn('grid transition-[grid-template-rows] duration-200 ease-out',
-        kpisOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
-        <div className={cn('overflow-hidden transition-opacity duration-200 ease-out',
-          kpisOpen ? 'opacity-100' : 'opacity-0')}>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <StatCard label={filter.filtroAtivo ? 'Resultados (filtrados)' : 'Recomendações'} value={kpi.n} icon="building" tone="brand" />
-            <StatCard label="Score médio" value={(kpi.avg * 100).toFixed(0)} sub="de 100" icon="trendingUp" tone="success" />
-            <StatCard label="CNAE exato" value={kpi.exact} sub="match de classe" icon="target" tone="info" />
-            <StatCard label="Mais próxima" value={`${kpi.near.toFixed(0)} km`} icon="mapPin" tone="warn" />
-          </div>
+      <Collapse open={kpisOpen} duration={200}>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatCard label={filter.filtroAtivo ? 'Resultados (filtrados)' : 'Recomendações'} value={kpi.n} icon="building" tone="brand" />
+          <StatCard label="Score médio" value={(kpi.avg * 100).toFixed(0)} sub="de 100" icon="trendingUp" tone="success" />
+          <StatCard label="CNAE exato" value={kpi.exact} sub="match de classe" icon="target" tone="info" />
+          <StatCard label="Mais próxima" value={`${kpi.near.toFixed(0)} km`} icon="mapPin" tone="warn" />
         </div>
-      </div>
+      </Collapse>
     </div>
   );
 

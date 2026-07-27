@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import type { Brand, CatalogItem, Contact, KanbanCard, NamedItem, PrivateLabel, RepresentedCompany, Stage } from '../lib/types.ts';
-import { Badge, Btn, PageHeader, SafeButton, Spinner, StatCard, cn, type Tone } from '../lib/ui.tsx';
+import { Badge, Btn, Collapse, PageHeader, Popover, SafeButton, Spinner, StatCard, cn, type Tone } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { CompanyFilterBar, useCompanyFilter } from '../lib/companyFilter.tsx';
 import { useSellers, SellerFilter } from '../lib/sellers.tsx';
@@ -180,26 +180,18 @@ export function Kanban(): React.JSX.Element {
             </div>
           } />
 
-        <div className={cn('grid transition-[grid-template-rows] duration-[1500ms] ease-in-out',
-          filtersOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
-          <div className={cn('overflow-hidden transition-opacity duration-[1500ms] ease-in-out',
-            filtersOpen ? 'opacity-100' : 'opacity-0')}>
-            <CompanyFilterBar f={filter} />
-          </div>
-        </div>
+        <Collapse open={filtersOpen} duration={1500}>
+          <CompanyFilterBar f={filter} />
+        </Collapse>
 
-        <div className={cn('grid transition-[grid-template-rows] duration-[1000ms] ease-in-out',
-          kpisOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
-          <div className={cn('overflow-hidden transition-opacity duration-[1000ms] ease-in-out',
-            kpisOpen ? 'opacity-100' : 'opacity-0')}>
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <StatCard label={oculto > 0 ? 'Negócios (filtrados)' : 'Negócios'} value={visibleCards.length} icon="layers" tone="brand" />
-              <StatCard label="Valor em funil" value={brl(totalValor)} icon="trendingUp" tone="success" />
-              <StatCard label="Clientes" value={clientes} icon="users" tone="info" />
-              <StatCard label="Etapas" value={stages.length} icon="columns" tone="neutral" />
-            </div>
+        <Collapse open={kpisOpen} duration={1000}>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <StatCard label={oculto > 0 ? 'Negócios (filtrados)' : 'Negócios'} value={visibleCards.length} icon="layers" tone="brand" />
+            <StatCard label="Valor em funil" value={brl(totalValor)} icon="trendingUp" tone="success" />
+            <StatCard label="Clientes" value={clientes} icon="users" tone="info" />
+            <StatCard label="Etapas" value={stages.length} icon="columns" tone="neutral" />
           </div>
-        </div>
+        </Collapse>
       </div>
 
       <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto px-4 pb-4 sm:px-6 sm:pb-6">
@@ -286,6 +278,7 @@ const CardItem = memo(function CardItem({ c, stages, dragging, menuOpen, onDragS
   onSample: (c: BoardCard) => void; onSamples: (c: BoardCard) => void;
 }): React.JSX.Element {
   const { can } = useAuth();
+  const menuBtnRef = useRef<HTMLButtonElement>(null);
   // /api/kanban manda só a contagem; o array completo é fallback (compat).
   const nAmostras = c.amostras_count ?? c.amostras?.length ?? 0;
   return (
@@ -304,7 +297,7 @@ const CardItem = memo(function CardItem({ c, stages, dragging, menuOpen, onDragS
           </button>
         )}
         {can('relationships.update') && (
-          <button type="button"
+          <button type="button" ref={menuBtnRef}
             onClick={() => onToggleMenu(c.id)}
             aria-label="Mover para outra etapa" aria-haspopup="menu" aria-expanded={menuOpen}
             title="Mover para…"
@@ -313,22 +306,19 @@ const CardItem = memo(function CardItem({ c, stages, dragging, menuOpen, onDragS
           </button>
         )}
       </div>
-      {menuOpen && (
-        <>
-          <div className="fixed inset-0 z-[40]" onClick={onCloseMenu} />
-          <div role="menu" className="absolute right-2 top-9 z-[50] w-44 overflow-hidden rounded-xl border border-ink-200 bg-surface py-1 shadow-pop">
-            <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-ink-400">Mover para</p>
-            {stages.map((s) => (
-              <SafeButton key={s.id} type="button" role="menuitem" disabled={c.stage_id === s.id}
-                onClick={() => onMove(c.id, s.id)}
-                className={cn('flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors',
-                  c.stage_id === s.id ? 'font-semibold text-brand-600' : 'text-ink-700 hover:bg-ink-50')}>
-                {c.stage_id === s.id && <Icon name="check" size={13} />}{s.nome}
-              </SafeButton>
-            ))}
-          </div>
-        </>
-      )}
+      {/* Menu em portal: a coluna do funil rola (overflow-auto) e cortava o
+          menu dos cards do fim da lista. */}
+      <Popover open={menuOpen} anchorRef={menuBtnRef} onClose={onCloseMenu} width={176}>
+        <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-ink-400">Mover para</p>
+        {stages.map((s) => (
+          <SafeButton key={s.id} type="button" role="menuitem" disabled={c.stage_id === s.id}
+            onClick={() => onMove(c.id, s.id)}
+            className={cn('flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors',
+              c.stage_id === s.id ? 'font-semibold text-brand-600' : 'text-ink-700 hover:bg-ink-50')}>
+            {c.stage_id === s.id && <Icon name="check" size={13} />}{s.nome}
+          </SafeButton>
+        ))}
+      </Popover>
       <div className="pr-12">
         <button type="button" onClick={() => onView(c.company_id)}
           title="Ver dados da empresa"

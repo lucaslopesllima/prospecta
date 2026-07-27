@@ -15,14 +15,10 @@ export function authRoutes(app: FastifyInstance): void {
     rateLimit: { max: app.authRateLimitMax, timeWindow: config.authRateLimitWindow },
   };
 
-  // TEMPORÁRIO: cadastro público bloqueado. A rota inteira está comentada abaixo;
-  // o client também esconde o botão "Criar conta" (client/src/pages/Login.tsx).
-  // Para reabrir, descomentar o bloco e remover este handler 403.
-  app.post('/api/auth/register', { config: authLimit }, async (_req, reply) =>
-    reply.code(403).send({ error: 'cadastro temporariamente indisponível' }));
-
-  /*
   // Register a new tenant (org + admin user + default kanban stages + empty target profile).
+  // Cadastro público é chaveado por config.signupEnabled: em produção sobe
+  // desligado (403 aqui + aba "Criar conta" escondida em client/src/pages/Login.tsx),
+  // em dev/test/e2e fica ligado porque toda a suíte cria seu tenant por aqui.
   app.post('/api/auth/register', {
     config: authLimit,
     schema: {
@@ -38,6 +34,7 @@ export function authRoutes(app: FastifyInstance): void {
       },
     },
   }, async (req, reply) => {
+    if (!config.signupEnabled) return reply.code(403).send({ error: 'cadastro indisponível' });
     const { org_nome, email, senha, tipo_conta } = req.body as {
       org_nome: string; email: string; senha: string; tipo_conta: 'escritorio' | 'individual';
     };
@@ -77,7 +74,6 @@ export function authRoutes(app: FastifyInstance): void {
       client.release();
     }
   });
-  */
 
   app.post('/api/auth/login', {
     config: authLimit,

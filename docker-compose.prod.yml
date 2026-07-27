@@ -90,6 +90,10 @@ services:
       RECOMMEND_WORK_MEM: ${RECOMMEND_WORK_MEM:-64MB}
       AUTH_RATE_LIMIT_MAX: ${AUTH_RATE_LIMIT_MAX:-10}
       AUTH_RATE_LIMIT_WINDOW: ${AUTH_RATE_LIMIT_WINDOW:-1 minute}
+      # Cadastro público (POST /api/auth/register). Produção sobe fechado: só
+      # entra quem já tem conta criada por dentro. Ligue com SIGNUP_ENABLED=true
+      # no .env quando quiser abrir a inscrição.
+      SIGNUP_ENABLED: ${SIGNUP_ENABLED:-false}
       # Pool/timeout do Postgres (db.ts), TTL do JWT (config.ts) e nível de log
       # (app.ts). Passthrough do .env — todos com default no próprio código.
       PG_POOL_MAX: ${PG_POOL_MAX:-20}

@@ -1,6 +1,6 @@
 // Shared UI primitives — the visual vocabulary of the design system.
 // Pages compose these so spacing, radius, color and motion stay consistent.
-import { useCallback, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon, type IconName } from './icons.tsx';
 
@@ -113,6 +113,35 @@ export function StatCard(
   );
 }
 
+/* ── Collapse — barra de filtros / faixa de KPIs ──────────
+   Anima a altura pelo truque do grid (0fr -> 1fr). O overflow-hidden é
+   obrigatório enquanto anima, senão o conteúdo vaza da caixa que está
+   crescendo; mas depois de aberto ele precisa sair, porque dropdowns dos
+   filtros (busca de CNAE, endereço) abrem para fora e ficavam cortados
+   pelo que vem abaixo. */
+export function Collapse(
+  { open, duration = 300, children }: { open: boolean; duration?: number; children: ReactNode },
+): React.JSX.Element {
+  const [animating, setAnimating] = useState(false);
+  const montado = useRef(false);
+  useEffect(() => {
+    if (!montado.current) { montado.current = true; return; }
+    setAnimating(true);
+    const t = window.setTimeout(() => setAnimating(false), duration);
+    return () => clearTimeout(t);
+  }, [open, duration]);
+  const dur = { transitionDuration: `${duration}ms` };
+  return (
+    <div className={cn('grid transition-[grid-template-rows] ease-in-out', open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')} style={dur}>
+      <div className={cn('transition-opacity ease-in-out',
+        open && !animating ? 'overflow-visible' : 'overflow-hidden',
+        open ? 'opacity-100' : 'opacity-0')} style={dur}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 /* ── Segmented control ─────────────────────────────────── */
 export function Segmented<T extends string>(
   { value, onChange, options }: { value: T; onChange: (v: T) => void; options: { value: T; label: string; icon?: IconName }[] },
@@ -200,6 +229,74 @@ export function Hint({ text, className }: { text: string; className?: string }):
         document.body,
       )}
     </span>
+  );
+}
+
+/* ── Popover — menu flutuante ancorado ─────────────────────
+   Sai em portal no body com position:fixed pelo mesmo motivo do Hint: no
+   fluxo normal qualquer scroller/acordeão ancestral corta o menu, e z-index
+   não resolve clipping. Ancora no elemento de referência, vira para cima
+   quando não cabe embaixo e reposiciona no scroll/resize. Traz o próprio
+   backdrop de fechar — clique fora fecha, e como o menu fica ACIMA dele os
+   itens continuam clicáveis (fechar no mousedown do documento mataria o
+   click do item antes de ele disparar). */
+export function Popover(
+  { open, anchorRef, onClose, width, align = 'right', z = 1500, className, children }: {
+    open: boolean;
+    anchorRef: React.RefObject<HTMLElement | null>;
+    onClose: () => void;
+    width: number;
+    align?: 'left' | 'right';
+    z?: number;
+    className?: string;
+    children: ReactNode;
+  },
+): React.JSX.Element | null {
+  const [pos, setPos] = useState<{ top: number; left: number; maxH: number; cima: boolean } | null>(null);
+
+  useEffect(() => {
+    if (!open) { setPos(null); return; }
+    const GAP = 4;
+    const MARGEM = 8;
+    const place = (): void => {
+      const r = anchorRef.current?.getBoundingClientRect();
+      if (!r) return;
+      const abaixo = window.innerHeight - r.bottom - GAP - MARGEM;
+      const acima = r.top - GAP - MARGEM;
+      const cima = abaixo < 180 && acima > abaixo;
+      const bruto = align === 'right' ? r.right - width : r.left;
+      setPos({
+        top: cima ? r.top - GAP : r.bottom + GAP,
+        left: Math.min(Math.max(bruto, MARGEM), Math.max(MARGEM, window.innerWidth - width - MARGEM)),
+        maxH: Math.max(120, cima ? acima : abaixo),
+        cima,
+      });
+    };
+    place();
+    // capture: pega o scroll de qualquer ancestral (coluna do funil, canvas do
+    // chat), não só o da janela.
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open, anchorRef, width, align, onClose]);
+
+  if (!open || pos === null) return null;
+  return createPortal(
+    <>
+      <div className="fixed inset-0" style={{ zIndex: z - 1 }} onClick={onClose} />
+      <div role="menu"
+        style={{ top: pos.top, left: pos.left, width, maxHeight: pos.maxH, zIndex: z, transform: pos.cima ? 'translateY(-100%)' : undefined }}
+        className={cn('fixed overflow-auto rounded-xl border border-ink-200 bg-surface py-1 shadow-pop', className)}>
+        {children}
+      </div>
+    </>,
+    document.body,
   );
 }
 

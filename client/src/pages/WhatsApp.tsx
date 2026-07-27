@@ -3,7 +3,7 @@ import './whatsapp-theme.css';
 import { useSearchParams } from 'react-router-dom';
 import { api, getToken, ApiError } from '../lib/api.ts';
 import { toast } from '../lib/toast.tsx';
-import { Btn, Card, SafeButton, Spinner, cn } from '../lib/ui.tsx';
+import { Btn, Card, Popover, SafeButton, Spinner, cn } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { isEmail, maskPhone } from '../lib/format.ts';
 import { CompanySearch } from '../lib/companySearch.tsx';
@@ -258,29 +258,25 @@ function quoteAutor(m: WaMessage): string {
 // "Criar nota" (pendurada nesta mensagem). Estado de aberto é local ao balão.
 function MsgActions({ m, onNote }: { m: WaMessage; onNote: (m: WaMessage) => void }): React.JSX.Element {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return undefined;
-    const onDoc = (e: MouseEvent): void => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
-  }, [open]);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const close = useCallback(() => setOpen(false), []);
   return (
-    <div ref={ref} className="absolute right-1 top-0.5">
-      <button aria-label="Ações da mensagem" onClick={() => setOpen((v) => !v)}
+    <div className="absolute right-1 top-0.5">
+      <button ref={btnRef} aria-label="Ações da mensagem" aria-haspopup="menu" aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
         className={cn('grid h-5 w-6 place-items-center rounded transition',
           open ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
           'text-[var(--wa-muted)] hover:bg-black/10 dark:hover:bg-white/10')}>
         <Icon name="chevronRight" size={16} className="rotate-90" />
       </button>
-      {open && (
-        <div className="absolute right-0 top-6 z-20 min-w-[160px] overflow-hidden rounded-lg border border-ink-200 bg-surface py-1 text-sm shadow-pop">
-          <button onClick={() => { setOpen(false); onNote(m); }}
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-ink-700 hover:bg-ink-100 dark:text-ink-200">
-            <Icon name="pencil" size={15} /> Criar nota
-          </button>
-        </div>
-      )}
+      {/* Portal: o canvas de mensagens rola (overflow-y-auto) e cortava o menu
+          das últimas mensagens. */}
+      <Popover open={open} anchorRef={btnRef} onClose={close} width={160} className="text-sm">
+        <button role="menuitem" onClick={() => { setOpen(false); onNote(m); }}
+          className="flex w-full items-center gap-2 px-3 py-2 text-left text-ink-700 hover:bg-ink-100 dark:text-ink-200">
+          <Icon name="pencil" size={15} /> Criar nota
+        </button>
+      </Popover>
     </div>
   );
 }

@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
+import { api } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import { Btn, cn } from '../lib/ui.tsx';
 import { Icon, type IconName } from '../lib/icons.tsx';
@@ -13,16 +14,23 @@ const FEATURES: { icon: IconName; title: string; desc: string }[] = [
 
 export function Login(): React.JSX.Element {
   const { user, login, register } = useAuth();
-  // TEMPORÁRIO: cadastro público bloqueado — mode fica travado em 'login' e o
-  // seletor Entrar/Criar conta está comentado abaixo. Para reabrir, restaurar
-  // `const [mode, setMode] = ...` e descomentar o bloco do seletor.
-  const [mode] = useState<'login' | 'register'>('login');
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  // Cadastro público é decidido pelo servidor (SIGNUP_ENABLED). Começa oculto e
+  // só aparece se /api/config confirmar — assim a aba nunca pisca em produção,
+  // onde o registro está fechado, nem se a chamada falhar.
+  const [signupOn, setSignupOn] = useState(false);
   const [tipoConta, setTipoConta] = useState<'individual' | 'escritorio'>('individual');
   const [orgNome, setOrgNome] = useState('');
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    void api.get<{ signup_enabled: boolean }>('/api/config')
+      .then((r) => setSignupOn(r.signup_enabled === true))
+      .catch(() => undefined); // servidor fora do ar: mantém só o login
+  }, []);
 
   if (user) return <Navigate to="/" replace />;
 
@@ -92,16 +100,17 @@ export function Login(): React.JSX.Element {
             {mode === 'login' ? 'Entre para ver suas recomendações.' : 'Comece a prospectar em minutos.'}
           </p>
 
-          {/* TEMPORÁRIO: cadastro público bloqueado (o server também rejeita /api/auth/register).
-          <div className="mt-5 grid grid-cols-2 gap-1 rounded-xl bg-ink-100 p-1 text-sm font-medium">
-            {(['login', 'register'] as const).map((m) => (
-              <button key={m} onClick={() => setMode(m)}
-                className={cn('rounded-lg py-2 transition-colors', mode === m ? 'bg-surface text-brand-700 shadow-sm' : 'text-ink-500 hover:text-ink-700')}>
-                {m === 'login' ? 'Entrar' : 'Criar conta'}
-              </button>
-            ))}
-          </div>
-          */}
+          {/* Sem cadastro aberto no servidor não há o que alternar: só o login. */}
+          {signupOn && (
+            <div className="mt-5 grid grid-cols-2 gap-1 rounded-xl bg-ink-100 p-1 text-sm font-medium">
+              {(['login', 'register'] as const).map((m) => (
+                <button key={m} onClick={() => setMode(m)}
+                  className={cn('rounded-lg py-2 transition-colors', mode === m ? 'bg-surface text-brand-700 shadow-sm' : 'text-ink-500 hover:text-ink-700')}>
+                  {m === 'login' ? 'Entrar' : 'Criar conta'}
+                </button>
+              ))}
+            </div>
+          )}
 
           <form onSubmit={submit} className="mt-5 space-y-3">
             {mode === 'register' && (

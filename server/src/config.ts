@@ -73,4 +73,9 @@ export const config = {
   nominatimUrl: process.env.NOMINATIM_URL ?? 'https://nominatim.openstreetmap.org',
   brasilApiUrl: process.env.BRASILAPI_URL ?? 'https://brasilapi.com.br',
   osrmUrl: process.env.OSRM_URL ?? 'https://router.project-osrm.org',
+  // Cadastro público (POST /api/auth/register). Desligado responde 403 e o client
+  // esconde a aba "Criar conta". Produção sobe com SIGNUP_ENABLED=false (fixado no
+  // docker-compose.prod.yml); dev/test/e2e ficam ligados — toda a suíte cria seu
+  // tenant por essa rota. Só 'false' desliga; qualquer outro valor mantém ligado.
+  signupEnabled: (process.env.SIGNUP_ENABLED ?? 'true') !== 'false',
 };

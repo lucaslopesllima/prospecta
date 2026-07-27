@@ -4,7 +4,7 @@ import { api, BUSCA_DEBOUNCE_MS } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import { useSellers, SellerFilter } from '../lib/sellers.tsx';
 import type { Order, OrderStatus, RepresentedCompany } from '../lib/types.ts';
-import { Badge, Btn, Card, EmptyState, PageHeader, SafeButton, Spinner, StatCard, cn, type Tone } from '../lib/ui.tsx';
+import { Badge, Btn, Card, Collapse, EmptyState, PageHeader, SafeButton, Spinner, StatCard, cn, type Tone } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { brl, csvNum, fmtDate, maskSearchCNPJ } from '../lib/format.ts';
 import { downloadCsv } from '../lib/export.ts';
@@ -235,45 +235,37 @@ export function Orders(): React.JSX.Element {
           </div>
         } />
 
-      <div className={cn('grid transition-[grid-template-rows] duration-500 ease-in-out',
-        showFilters ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
-        <div className={cn('overflow-hidden transition-opacity duration-500 ease-in-out',
-          showFilters ? 'opacity-100' : 'opacity-0')}>
-          <Card className="flex flex-wrap items-center gap-3 p-3">
-            <div className="relative min-w-[220px] flex-1">
-              <Icon name="search" size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-400" />
-              <input value={companyQ} onChange={(e) => setCompanyQ(maskSearchCNPJ(e.target.value))}
-                onKeyDown={(e) => { if (e.key === 'Enter') { const t = companyQ.trim(); setCompanyTerm(t.length >= 2 ? t : ''); } }}
-                aria-label="Filtrar por empresa (nome ou CNPJ)" placeholder="Empresa: nome ou CNPJ"
-                className="w-full rounded-lg border border-ink-200 bg-surface py-1.5 pl-8 pr-2.5 text-xs font-semibold text-ink-600 outline-none focus:border-brand-400" />
-            </div>
-            <select value={status} onChange={(e) => setStatus(e.target.value as typeof status)} aria-label="Filtrar por status"
-              className="rounded-lg border border-ink-200 bg-surface px-2.5 py-1.5 text-xs font-semibold text-ink-600 outline-none focus:border-brand-400">
-              <option value="todos">Todos os status</option>
-              {Object.entries(STATUS_META).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-            </select>
-            <select value={representedId} onChange={(e) => setRepresentedId(e.target.value === 'todos' ? 'todos' : Number(e.target.value))}
-              aria-label="Filtrar por representada"
-              className="rounded-lg border border-ink-200 bg-surface px-2.5 py-1.5 text-xs font-semibold text-ink-600 outline-none focus:border-brand-400">
-              <option value="todos">Todas as representadas</option>
-              {reps.map((r) => <option key={r.id} value={r.id}>{r.nome}</option>)}
-            </select>
-            <SellerFilter value={ownerId} onChange={setOwnerId} sellers={sellers} />
-          </Card>
-        </div>
-      </div>
-
-      <div className={cn('grid transition-[grid-template-rows] duration-500 ease-in-out',
-        showKpis ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
-        <div className={cn('overflow-hidden transition-opacity duration-500 ease-in-out',
-          showKpis ? 'opacity-100' : 'opacity-0')}>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-            <StatCard label="Em aberto" value={brl(kpis.aberto)} icon="trendingUp" tone="info" />
-            <StatCard label="Total faturado" value={brl(kpis.faturado)} icon="check" tone="success" />
-            <StatCard label="Pedidos" value={String(filtered.length)} icon="list" tone="brand" />
+      <Collapse open={showFilters} duration={500}>
+        <Card className="flex flex-wrap items-center gap-3 p-3">
+          <div className="relative min-w-[220px] flex-1">
+            <Icon name="search" size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-400" />
+            <input value={companyQ} onChange={(e) => setCompanyQ(maskSearchCNPJ(e.target.value))}
+              onKeyDown={(e) => { if (e.key === 'Enter') { const t = companyQ.trim(); setCompanyTerm(t.length >= 2 ? t : ''); } }}
+              aria-label="Filtrar por empresa (nome ou CNPJ)" placeholder="Empresa: nome ou CNPJ"
+              className="w-full rounded-lg border border-ink-200 bg-surface py-1.5 pl-8 pr-2.5 text-xs font-semibold text-ink-600 outline-none focus:border-brand-400" />
           </div>
+          <select value={status} onChange={(e) => setStatus(e.target.value as typeof status)} aria-label="Filtrar por status"
+            className="rounded-lg border border-ink-200 bg-surface px-2.5 py-1.5 text-xs font-semibold text-ink-600 outline-none focus:border-brand-400">
+            <option value="todos">Todos os status</option>
+            {Object.entries(STATUS_META).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+          </select>
+          <select value={representedId} onChange={(e) => setRepresentedId(e.target.value === 'todos' ? 'todos' : Number(e.target.value))}
+            aria-label="Filtrar por representada"
+            className="rounded-lg border border-ink-200 bg-surface px-2.5 py-1.5 text-xs font-semibold text-ink-600 outline-none focus:border-brand-400">
+            <option value="todos">Todas as representadas</option>
+            {reps.map((r) => <option key={r.id} value={r.id}>{r.nome}</option>)}
+          </select>
+          <SellerFilter value={ownerId} onChange={setOwnerId} sellers={sellers} />
+        </Card>
+      </Collapse>
+
+      <Collapse open={showKpis} duration={500}>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+          <StatCard label="Em aberto" value={brl(kpis.aberto)} icon="trendingUp" tone="info" />
+          <StatCard label="Total faturado" value={brl(kpis.faturado)} icon="check" tone="success" />
+          <StatCard label="Pedidos" value={String(filtered.length)} icon="list" tone="brand" />
         </div>
-      </div>
+      </Collapse>
 
       {loading ? (
         <Spinner />
