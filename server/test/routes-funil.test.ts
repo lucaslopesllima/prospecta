@@ -160,4 +160,27 @@ describe('DELETE + /api/kanban', () => {
     expect((await inj(b, 'DELETE', `/api/relationships/${rel.id}`)).statusCode).toBe(404);
     expect((await inj(a, 'DELETE', `/api/relationships/${rel.id}`)).statusCode).toBe(200);
   });
+
+  // O card carrega as private labels da EMPRESA (vínculo em private_label_companies)
+  // — é o que alimenta o filtro por private label no funil.
+  it('card traz as private labels da empresa, org-scoped', async () => {
+    const cid = await makeCompany();
+    const rel = await addRel(a, cid, {});
+    const lbl = (await inj(a, 'POST', '/api/private-labels', { nome: 'Label Funil', cor: '#ff0000' }))
+      .json() as { label: { id: number } };
+    expect((await inj(a, 'PUT', `/api/companies/${cid}/private-labels`, { label_ids: [lbl.label.id] })).statusCode).toBe(200);
+
+    const j = (await inj(a, 'GET', '/api/kanban')).json() as {
+      cards: { id: number; private_labels: { id: number | string; nome: string }[] }[];
+    };
+    const card = j.cards.find((c) => c.id === rel.id)!;
+    expect(card.private_labels.map((l) => l.nome)).toEqual(['Label Funil']);
+
+    // outra org não enxerga o vínculo, mesmo sendo a mesma empresa da base global
+    const relB = await addRel(b, cid, {});
+    const jb = (await inj(b, 'GET', '/api/kanban')).json() as {
+      cards: { id: number; private_labels: unknown[] }[];
+    };
+    expect(jb.cards.find((c) => c.id === relB.id)!.private_labels).toEqual([]);
+  });
 });

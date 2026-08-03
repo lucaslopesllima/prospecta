@@ -103,7 +103,6 @@ export interface CompanyFilter {
   fq: string; setFq: (s: string) => void;
   fCnae: string; setFCnae: (s: string) => void;
   fPorte: string; setFPorte: (s: string) => void;
-  usarAlvo: boolean; setUsarAlvo: (b: boolean) => void;
   // config da recomendação (modo recommend)
   territorio: Municipio[]; setTerritorio: (m: Municipio[]) => void;
   pesos: Pesos; setPesos: (p: Pesos) => void;
@@ -114,7 +113,7 @@ export interface CompanyFilter {
   apply: <T extends FilterableCompany>(items: T[]) => T[];
 }
 
-interface Persisted { fq: string; fCnae: string; fPorte: string; usarAlvo: boolean; faixas?: Faixas }
+interface Persisted { fq: string; fCnae: string; fPorte: string; faixas?: Faixas }
 
 function loadSaved(key: string): Persisted | null {
   try {
@@ -132,7 +131,6 @@ export function useCompanyFilter(storageKey = 'default'): CompanyFilter {
   const [fq, setFq] = useState(saved?.fq ?? '');
   const [fCnae, setFCnae] = useState(saved?.fCnae ?? '');
   const [fPorte, setFPorte] = useState(saved?.fPorte ?? '');
-  const [usarAlvo, setUsarAlvo] = useState(saved?.usarAlvo ?? true);
   const [territorio, setTerritorio] = useState<Municipio[]>(reco.munis);
   const [pesos, setPesos] = useState<Pesos>(reco.pesos);
   const [partida, setPartida] = useState<Partida | null>(reco.partida);
@@ -141,9 +139,9 @@ export function useCompanyFilter(storageKey = 'default'): CompanyFilter {
   // Persiste o estado do filtro a cada mudança.
   useEffect(() => {
     try {
-      localStorage.setItem(key, JSON.stringify({ fq, fCnae, fPorte, usarAlvo, faixas }));
+      localStorage.setItem(key, JSON.stringify({ fq, fCnae, fPorte, faixas }));
     } catch { /* storage indisponível */ }
-  }, [key, fq, fCnae, fPorte, usarAlvo, faixas]);
+  }, [key, fq, fCnae, fPorte, faixas]);
 
   // Persiste a config da recomendação (compartilhada).
   useEffect(() => {
@@ -152,11 +150,8 @@ export function useCompanyFilter(storageKey = 'default'): CompanyFilter {
     } catch { /* storage indisponível */ }
   }, [territorio, pesos, partida]);
 
-  const muniIds = useMemo(() => territorio.map((m) => m.id), [territorio]);
-
   const apply = useMemo(() => {
     const cnaes = parseCodes(fCnae);
-    const muniSet = new Set(muniIds);
     const qd = onlyDigits(fq);
     const ql = fq.trim().toLowerCase();
     return <T extends FilterableCompany>(items: T[]): T[] => items.filter((c) => {
@@ -166,22 +161,19 @@ export function useCompanyFilter(storageKey = 'default'): CompanyFilter {
       }
       if (cnaes.length && !cnaes.includes(c.cnae_principal)) return false;
       if (fPorte && c.porte !== fPorte) return false;
-      if (usarAlvo && muniSet.size > 0) {
-        if (c.municipio_id == null || !muniSet.has(c.municipio_id)) return false;
-      }
       return true;
     });
-  }, [fq, fCnae, fPorte, usarAlvo, muniIds]);
+  }, [fq, fCnae, fPorte]);
 
   const faixaAtiva = Object.values(faixas).some((v) => v.trim() !== '');
-  const filtroAtivo = fq.trim() !== '' || fCnae.trim() !== '' || fPorte !== '' || usarAlvo || faixaAtiva;
+  const filtroAtivo = fq.trim() !== '' || fCnae.trim() !== '' || fPorte !== '' || faixaAtiva;
   const limpar = (): void => {
-    setFq(''); setFCnae(''); setFPorte(''); setUsarAlvo(false);
+    setFq(''); setFCnae(''); setFPorte('');
     setFaixas({ ...FAIXAS_VAZIAS });
   };
 
   return {
-    fq, setFq, fCnae, setFCnae, fPorte, setFPorte, usarAlvo, setUsarAlvo,
+    fq, setFq, fCnae, setFCnae, fPorte, setFPorte,
     territorio, setTerritorio, pesos, setPesos, partida, setPartida, faixas, setFaixas,
     filtroAtivo, limpar, apply,
   };
@@ -362,34 +354,28 @@ function PartidaInput({ value, onChange }: { value: Partida | null; onChange: (p
   );
 }
 
-export function CompanyFilterBar({ f, recommend = false }: { f: CompanyFilter; recommend?: boolean }): React.JSX.Element {
+// onBuscar: aplica os filtros na hora (sem esperar o debounce). A busca continua
+// reativa — o botão é o caminho explícito de quem terminou de mexer nos campos;
+// `buscando` desabilita enquanto a consulta roda.
+// extra: campos próprios da tela (ex.: etapa/cenário/ação/private label no funil)
+// entram no MESMO grid — uma barra só, sem um segundo cartão de filtros.
+// onLimpar: substitui o `f.limpar` quando a tela tem filtros próprios para zerar
+// junto — o botão é sempre um só, "Limpar filtros".
+export function CompanyFilterBar({ f, recommend = false, onBuscar, buscando = false, extra, onLimpar }: {
+  f: CompanyFilter; recommend?: boolean; onBuscar?: () => void; buscando?: boolean;
+  extra?: React.ReactNode; onLimpar?: () => void;
+}): React.JSX.Element {
   // Sem acordeão nenhum: o botão "Filtros" da página já abre/fecha a barra
   // inteira, então esconder metade dos campos atrás de um segundo toggle só
-  // adicionava cliques. Os antigos "filtros avançados" (território/pesos no
-  // recommend, partida/território no funil) ficam no topo, e os campos básicos
-  // logo abaixo — tudo visível de uma vez.
+  // adicionava cliques. No recommend, território/pesos ficam no topo e os campos
+  // básicos logo abaixo — tudo visível de uma vez. No funil só vão os campos:
+  // endereço de partida é da prospecção/planejador de rota, não filtra nada lá.
   return (
     <div className="rounded-2xl border border-ink-200/70 bg-surface p-3 shadow-card">
-      {recommend ? (
-        <RecommendConfig f={f} />
-      ) : (
-        <div className="space-y-2.5">
-          <PartidaInput value={f.partida} onChange={f.setPartida} />
-          <div className="flex flex-wrap items-center gap-3">
-            <label className={cn('inline-flex items-center gap-2 text-xs font-medium text-ink-600', f.territorio.length === 0 && 'opacity-50')}>
-              <input type="checkbox" checked={f.usarAlvo} onChange={(e) => f.setUsarAlvo(e.target.checked)}
-                className="h-4 w-4 rounded border-ink-300 text-brand-600 focus:ring-brand-300" disabled={f.territorio.length === 0} />
-              Restringir ao território
-              {f.territorio.length > 0 && <span className="text-ink-400">({f.territorio.length} municípios)</span>}
-            </label>
-            <div className="ml-auto">
-              <Btn size="sm" variant="ghost" type="button" onClick={f.limpar}>Limpar</Btn>
-            </div>
-          </div>
-        </div>
-      )}
+      {recommend && <RecommendConfig f={f} />}
 
-      <div className="mt-3 grid gap-2.5 border-t border-ink-100 pt-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className={cn('grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3',
+        recommend && 'mt-3 border-t border-ink-100 pt-3')}>
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-ink-500">Nome / CNPJ</span>
           <input value={f.fq} onChange={(e) => f.setFq(maskSearchCNPJ(e.target.value))} maxLength={120} placeholder="Razão, fantasia ou CNPJ" className={inputCls} />
@@ -418,6 +404,15 @@ export function CompanyFilterBar({ f, recommend = false }: { f: CompanyFilter; r
               onMin={(v) => f.setFaixas({ ...f.faixas, idadeMin: v })}
               onMax={(v) => f.setFaixas({ ...f.faixas, idadeMax: v })} />
           </>
+        )}
+        {extra}
+      </div>
+      <div className="mt-3 flex items-center justify-end gap-2 border-t border-ink-100 pt-3">
+        <Btn variant="ghost" type="button" onClick={onLimpar ?? f.limpar}>Limpar filtros</Btn>
+        {onBuscar && (
+          <Btn type="button" icon="search" onClick={onBuscar} disabled={buscando}>
+            {buscando ? 'Buscando…' : 'Buscar'}
+          </Btn>
         )}
       </div>
     </div>
@@ -616,9 +611,6 @@ function RecommendConfig({ f }: { f: CompanyFilter }): React.JSX.Element {
               className="mt-1.5 w-full accent-brand-600" />
           </label>
         ))}
-        <div className="mt-4 flex justify-end">
-          <Btn size="sm" variant="ghost" type="button" onClick={f.limpar}>Limpar filtros</Btn>
-        </div>
       </div>
     </div>
   );

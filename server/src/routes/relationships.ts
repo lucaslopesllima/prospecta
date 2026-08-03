@@ -57,7 +57,12 @@ const KANBAN_LABELS = `rc.nome AS representada, mb.nome AS marca,
     FROM relationship_catalog rcc JOIN catalog_items ci ON ci.id = rcc.catalog_item_id
     WHERE rcc.relationship_id = r.id
   ), '[]') AS catalogo,
-  (SELECT count(*)::int FROM sample_requests sr WHERE sr.relationship_id = r.id) AS amostras_count`;
+  (SELECT count(*)::int FROM sample_requests sr WHERE sr.relationship_id = r.id) AS amostras_count,
+  COALESCE((
+    SELECT json_agg(json_build_object('id', pl.id, 'nome', pl.nome, 'cor', pl.cor) ORDER BY pl.nome)
+    FROM private_label_companies plc JOIN private_labels pl ON pl.id = plc.private_label_id
+    WHERE plc.company_id = r.company_id AND plc.org_id = r.org_id
+  ), '[]') AS private_labels`;
 
 // JOINs that resolve the FK labels above. Reused by GET /relationships and /kanban.
 // org no join: rótulo de outra org nunca resolve, mesmo que um id alheio escape.

@@ -48,6 +48,8 @@ export interface KanbanCard {
   amostras: { id: number; produto: string; status: string }[];
   cenario_id: number | null; cenario: string | null;
   acao_id: number | null; acao: string | null;
+  // private labels da EMPRESA do card (só o /api/kanban devolve; ver KANBAN_LABELS)
+  private_labels?: { id: number; nome: string; cor: string | null }[];
   data_contato: string | null; previsao_data: string | null;
   motivo_descarte: string | null;
 }

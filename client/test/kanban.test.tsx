@@ -45,6 +45,13 @@ const kanbanGet = (over: Record<string, unknown> = {}) => async (p: string): Pro
 
 const admin: User = { id: 1, email: 'a@b.c', role: 'admin', org_id: 1, org_nome: 'Org' };
 
+// O nome da etapa aparece no cabeçalho da coluna E nas <option> do filtro de
+// etapa — pega só o cabeçalho (span) e sobe até a div da coluna.
+const coluna = (nome: string): HTMLElement => {
+  const header = screen.getAllByText(nome).find((el) => el.tagName === 'SPAN');
+  return header!.closest('div')!.parentElement!;
+};
+
 const STAGES = [
   { id: 10, nome: 'Prospecção', ordem: 1 },
   { id: 11, nome: 'Negociação', ordem: 2 },
@@ -60,6 +67,7 @@ const card = (over: Record<string, unknown>): Record<string, unknown> => ({
 });
 
 beforeEach(() => {
+  localStorage.clear(); // filtros do funil são persistidos: um teste não pode vazar no outro
   vi.mocked(m.get).mockReset();
   vi.mocked(m.patch).mockReset();
   vi.mocked(m.post).mockReset();
@@ -92,8 +100,8 @@ describe('Kanban', () => {
   it('renderiza colunas, cards e KPIs (valor total, clientes)', async () => {
     render(<Kanban />);
     expect(await screen.findByText('Loja Um')).toBeInTheDocument();
-    expect(screen.getByText('Prospecção')).toBeInTheDocument();
-    expect(screen.getByText('Negociação')).toBeInTheDocument();
+    expect(coluna('Prospecção')).toBeInTheDocument();
+    expect(coluna('Negociação')).toBeInTheDocument();
     expect(screen.getAllByText('Empresa Dois SA').length).toBeGreaterThan(0); // título + razão social
     // valor em funil 5000+2000 sem centavos (brl0)
     expect(screen.getByText(/R\$[\s ]7\.000/)).toBeInTheDocument();
@@ -103,7 +111,7 @@ describe('Kanban', () => {
     m.patch.mockResolvedValueOnce({});
     render(<Kanban />);
     const cardEl = (await screen.findByText('Loja Um')).closest('[draggable]')!;
-    const colNegociacao = screen.getByText('Negociação').closest('div')!.parentElement!;
+    const colNegociacao = coluna('Negociação');
 
     fireEvent.dragStart(cardEl);
     fireEvent.dragOver(colNegociacao);
@@ -116,7 +124,7 @@ describe('Kanban', () => {
     m.patch.mockRejectedValueOnce(new Error('offline'));
     render(<Kanban />);
     const cardEl = (await screen.findByText('Loja Um')).closest('[draggable]')!;
-    const colNegociacao = screen.getByText('Negociação').closest('div')!.parentElement!;
+    const colNegociacao = coluna('Negociação');
 
     const kanbanCalls = (): number => m.get.mock.calls.filter((c) => c[0] === '/api/kanban').length;
     const antes = kanbanCalls();
@@ -128,7 +136,7 @@ describe('Kanban', () => {
   it('soltar na mesma coluna não chama a API', async () => {
     render(<Kanban />);
     const cardEl = (await screen.findByText('Loja Um')).closest('[draggable]')!;
-    const colProspeccao = screen.getByText('Prospecção').closest('div')!.parentElement!;
+    const colProspeccao = coluna('Prospecção');
     fireEvent.dragStart(cardEl);
     fireEvent.drop(colProspeccao);
     expect(m.patch).not.toHaveBeenCalled();
@@ -175,10 +183,94 @@ describe('Kanban', () => {
     expect(localStorage.getItem('funil:kpisOpen')).toBe('0');
   });
 
+  it('clicar no board recolhe os filtros; clicar dentro do painel mantém aberto', async () => {
+    render(<Kanban />);
+    await screen.findByText('Loja Um');
+    await userEvent.click(screen.getByTitle('Expandir filtros'));
+    expect(localStorage.getItem('funil:filtersOpen')).toBe('1');
+
+    // clique dentro do painel (um dos selects do filtro) não fecha
+    await userEvent.click(screen.getByLabelText('Etapa'));
+    expect(localStorage.getItem('funil:filtersOpen')).toBe('1');
+
+    await userEvent.click(coluna('Negociação')); // clique no board = fora do painel
+    await waitFor(() => expect(screen.getByTitle('Expandir filtros')).toBeInTheDocument());
+    expect(localStorage.getItem('funil:filtersOpen')).toBe('0');
+  });
+
+  it('botão Buscar recarrega o board sem fechar os filtros', async () => {
+    render(<Kanban />);
+    await screen.findByText('Loja Um');
+    await userEvent.click(screen.getByTitle('Expandir filtros'));
+    const kanbanCalls = (): number => m.get.mock.calls.filter((c) => c[0] === '/api/kanban').length;
+    const antes = kanbanCalls();
+    await userEvent.click(screen.getByRole('button', { name: /Buscar/ }));
+    await waitFor(() => expect(kanbanCalls()).toBe(antes + 1));
+    expect(localStorage.getItem('funil:filtersOpen')).toBe('1'); // painel segue aberto
+    expect(screen.getByTitle('Recolher filtros')).toBeInTheDocument();
+  });
+
+  it('filtro de etapa deixa só a coluna escolhida no board', async () => {
+    render(<Kanban />);
+    await screen.findByText('Loja Um');
+    await userEvent.click(screen.getByTitle('Expandir filtros'));
+    await userEvent.selectOptions(screen.getByLabelText('Etapa'), '11');
+    await waitFor(() => expect(screen.queryByText('Loja Um')).not.toBeInTheDocument()); // card da etapa 10 sai
+    expect(coluna('Negociação')).toBeInTheDocument();
+    expect(screen.getAllByText('Prospecção').every((el) => el.tagName === 'OPTION')).toBe(true); // coluna some
+    expect(localStorage.getItem('funil:filtros')).toContain('"stage":"11"');
+  });
+
+  it('filtros de status, cenário e ação escondem os cards que não batem', async () => {
+    m.get.mockImplementation(kanbanGet({
+      '/api/kanban': { stages: STAGES, cards: [
+        card({ id: 1, cenario_id: 4, acao_id: 8 }),
+        card({ id: 2, nome_fantasia: 'Loja Dois', status: 'cliente', cenario_id: 5, acao_id: 9 }),
+      ] },
+      '/api/scenarios': { items: [{ id: 4, nome: 'Cenário A' }, { id: 5, nome: 'Cenário B' }] },
+      '/api/actions': { items: [{ id: 8, nome: 'Ação A' }, { id: 9, nome: 'Ação B' }] },
+    }));
+    render(<Kanban />);
+    await screen.findByText('Loja Um');
+    await userEvent.click(screen.getByTitle('Expandir filtros'));
+
+    await userEvent.selectOptions(screen.getByLabelText('Status'), 'cliente');
+    await waitFor(() => expect(screen.queryByText('Loja Um')).not.toBeInTheDocument());
+    expect(screen.getByText('Loja Dois')).toBeInTheDocument();
+
+    await userEvent.selectOptions(screen.getByLabelText('Cenário'), '4'); // cenário do card 1
+    await waitFor(() => expect(screen.queryByText('Loja Dois')).not.toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole('button', { name: /Limpar filtros/ }));
+    await screen.findByText('Loja Um');
+    await userEvent.selectOptions(screen.getByLabelText('Ação (próximo nível)'), '9');
+    await waitFor(() => expect(screen.queryByText('Loja Um')).not.toBeInTheDocument());
+    expect(screen.getByText('Loja Dois')).toBeInTheDocument();
+  });
+
+  it('filtro por private label usa os vínculos da empresa do card', async () => {
+    m.get.mockImplementation(kanbanGet({
+      '/api/kanban': { stages: STAGES, cards: [
+        card({ id: 1, private_labels: [{ id: 5, nome: 'Label X', cor: '#ff0000' }] }),
+        card({ id: 2, nome_fantasia: 'Loja Dois', private_labels: [] }),
+      ] },
+      // ids das labels vêm string do pg (bigint) — o filtro coage os dois lados
+      '/api/private-labels': { labels: [{ id: '5', nome: 'Label X', cor: '#ff0000' }] },
+    }));
+    render(<Kanban />);
+    await screen.findByText('Loja Um');
+    // aparece como chip no card (span) e como <option> do filtro
+    expect(screen.getAllByText('Label X').some((el) => el.tagName === 'SPAN')).toBe(true);
+    await userEvent.click(screen.getByTitle('Expandir filtros'));
+    await userEvent.selectOptions(screen.getByLabelText('Private label'), '5');
+    await waitFor(() => expect(screen.queryByText('Loja Dois')).not.toBeInTheDocument());
+    expect(screen.getByText('Loja Um')).toBeInTheDocument();
+  });
+
   it('dragLeave limpa o destaque da coluna sob o card', async () => {
     render(<Kanban />);
     await screen.findByText('Loja Um');
-    const col = screen.getByText('Negociação').closest('div')!.parentElement!;
+    const col = coluna('Negociação');
     fireEvent.dragOver(col);
     fireEvent.dragLeave(col);
     expect(screen.getByText('Loja Um')).toBeInTheDocument();

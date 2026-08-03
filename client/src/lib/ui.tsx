@@ -142,6 +142,33 @@ export function Collapse(
   );
 }
 
+/* ── Recolher acordeão ao clicar fora ──────────────────────
+   Usado pela barra de filtros: clicar no conteúdo da tela (board do funil,
+   lista de empresas) fecha o painel sem precisar voltar no botão. Vai no
+   mousedown do documento, como o resto dos dropdowns.
+   `ignoreSelector` marca o próprio botão de abrir/fechar — sem ele, o mousedown
+   fecharia e o click logo em seguida reabriria. */
+export function useCollapseOnOutside(
+  open: boolean, close: () => void,
+  boxRef: React.RefObject<HTMLElement | null>, ignoreSelector?: string,
+): void {
+  const closeRef = useRef(close);
+  closeRef.current = close;
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent): void => {
+      const t = e.target as Node | null;
+      // nó já desmontado (item de lista que sumiu) não conta como "fora"
+      if (!t || !t.isConnected) return;
+      if (boxRef.current?.contains(t)) return;
+      if (ignoreSelector && t instanceof Element && t.closest(ignoreSelector)) return;
+      closeRef.current();
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open, boxRef, ignoreSelector]);
+}
+
 /* ── Segmented control ─────────────────────────────────── */
 export function Segmented<T extends string>(
   { value, onChange, options }: { value: T; onChange: (v: T) => void; options: { value: T; label: string; icon?: IconName }[] },

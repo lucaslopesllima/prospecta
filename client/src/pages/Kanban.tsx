@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import type { Brand, CatalogItem, Contact, KanbanCard, NamedItem, PrivateLabel, RepresentedCompany, Stage } from '../lib/types.ts';
-import { Badge, Btn, Collapse, PageHeader, Popover, SafeButton, Spinner, StatCard, cn, type Tone } from '../lib/ui.tsx';
+import { Badge, Btn, Collapse, PageHeader, Popover, SafeButton, Spinner, StatCard, cn, useCollapseOnOutside, type Tone } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { CompanyFilterBar, useCompanyFilter } from '../lib/companyFilter.tsx';
 import { useSellers, SellerFilter } from '../lib/sellers.tsx';
@@ -23,6 +23,20 @@ const STATUS_OPTS = ['prospect', 'cliente', 'descartado'] as const;
 const inputCls = 'w-full rounded-xl border border-ink-200 bg-surface px-3 py-2.5 text-sm text-ink-800 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-200';
 const FILTERS_OPEN_KEY = 'funil:filtersOpen';
 const KPIS_OPEN_KEY = 'funil:kpisOpen';
+const FILTROS_KEY = 'funil:filtros';
+
+// Filtros próprios do funil (o CompanyFilterBar só cobre atributos da empresa).
+// Tudo string porque os valores vêm direto do <select>; '' = sem filtro.
+// stage aceita 'none' (cards sem etapa) além do id da etapa.
+interface FunilFiltros { stage: string; status: string; cenario: string; acao: string; label: string }
+const FILTROS_VAZIOS: FunilFiltros = { stage: '', status: '', cenario: '', acao: '', label: '' };
+const filtrosAtivos = (f: FunilFiltros): boolean => Object.values(f).some((v) => v !== '');
+function loadFiltros(): FunilFiltros {
+  try {
+    const raw = localStorage.getItem(FILTROS_KEY);
+    return raw ? { ...FILTROS_VAZIOS, ...(JSON.parse(raw) as Partial<FunilFiltros>) } : { ...FILTROS_VAZIOS };
+  } catch { return { ...FILTROS_VAZIOS }; }
+}
 
 // Card do board: /api/kanban devolve a contagem de amostras (amostras_count)
 // em vez do array completo — a lista é carregada sob demanda no modal de amostras.
@@ -44,6 +58,9 @@ export function Kanban(): React.JSX.Element {
   const [scenarios, setScenarios] = useState<NamedItem[]>([]);
   const [actions, setActions] = useState<NamedItem[]>([]);
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
+  const [labels, setLabels] = useState<PrivateLabel[]>([]);
+  const [ff, setFf] = useState<FunilFiltros>(loadFiltros);
+  const { can } = useAuth();
 
   const [filtersOpen, setFiltersOpen] = useState(() => {
     try { return localStorage.getItem(FILTERS_OPEN_KEY) === '1'; } catch { return false; }
@@ -71,6 +88,16 @@ export function Kanban(): React.JSX.Element {
       api.get<{ items: CatalogItem[] }>('/api/catalog').then((r) => setCatalog(r.items)),
     ]).catch(() => undefined);
   }, []);
+  useEffect(() => {
+    if (!can('private_labels.list')) return;
+    void api.get<{ labels: PrivateLabel[] }>('/api/private-labels')
+      .then((r) => setLabels(r.labels ?? [])).catch(() => undefined);
+  }, [can]);
+
+  // Persiste os filtros do funil (etapa/status/cenário/ação/private label).
+  useEffect(() => {
+    try { localStorage.setItem(FILTROS_KEY, JSON.stringify(ff)); } catch { /* storage indisponível */ }
+  }, [ff]);
 
   // Persiste se a barra de filtros está aberta.
   useEffect(() => {
@@ -81,6 +108,29 @@ export function Kanban(): React.JSX.Element {
   useEffect(() => {
     try { localStorage.setItem(KPIS_OPEN_KEY, kpisOpen ? '1' : '0'); } catch { /* storage indisponível */ }
   }, [kpisOpen]);
+
+  // Botão "Buscar" da barra: os filtros do funil são client-side (já aplicam a
+  // cada mudança), então aqui ele só recarrega o board do servidor. O painel
+  // fica aberto — quem fecha é o botão "Filtros" ou o clique fora.
+  const [buscando, setBuscando] = useState(false);
+  const buscar = useCallback((): void => {
+    setFiltersOpen(true); // explícito: buscar nunca recolhe o painel
+    setBuscando(true);
+    void load()
+      .catch(() => toast.error('Não foi possível atualizar o funil.'))
+      .finally(() => setBuscando(false));
+  }, [load]);
+
+  // Um botão de limpar só: zera os campos da empresa e os filtros do funil.
+  const limparTudo = useCallback((): void => {
+    filter.limpar();
+    setFf({ ...FILTROS_VAZIOS });
+  }, [filter.limpar]);
+
+  // Clicar no board (ou em qualquer lugar fora do painel) recolhe os filtros.
+  const filtrosRef = useRef<HTMLDivElement>(null);
+  const fecharFiltros = useCallback(() => setFiltersOpen(false), []);
+  useCollapseOnOutside(filtersOpen, fecharFiltros, filtrosRef, '[data-filtros-toggle]');
 
   // Espelho dos cards em ref: `move` fica estável (useCallback sem depender de
   // `cards`) e os handlers do CardItem (React.memo) não recriam a cada render.
@@ -129,8 +179,17 @@ export function Kanban(): React.JSX.Element {
   };
 
   const visibleCards = useMemo(
-    () => filter.apply(cards).filter((c) => ownerId === 'todos' || c.owner_user_id === ownerId),
-    [filter.apply, cards, ownerId],
+    () => filter.apply(cards).filter((c) => {
+      if (ownerId !== 'todos' && c.owner_user_id !== ownerId) return false;
+      if (ff.stage !== '' && String(c.stage_id ?? 'none') !== ff.stage) return false;
+      if (ff.status !== '' && c.status !== ff.status) return false;
+      if (ff.cenario !== '' && String(c.cenario_id ?? '') !== ff.cenario) return false;
+      if (ff.acao !== '' && String(c.acao_id ?? '') !== ff.acao) return false;
+      // ids das labels: number no card (json_agg) vs string em /api/private-labels.
+      if (ff.label !== '' && !(c.private_labels ?? []).some((l) => String(nid(l.id)) === ff.label)) return false;
+      return true;
+    }),
+    [filter.apply, cards, ownerId, ff],
   );
 
   // Agrupa os cards por etapa uma única vez (em vez de um .filter por coluna).
@@ -146,11 +205,13 @@ export function Kanban(): React.JSX.Element {
 
   if (loading) return <div className="p-6"><Spinner /></div>;
 
-  const columns: { key: number | 'none'; nome: string }[] = [
+  const todasColunas: { key: number | 'none'; nome: string }[] = [
     ...stages.map((s) => ({ key: s.id as number | 'none', nome: s.nome })),
   ];
   const hasOrphans = (cardsByColumn.get('none')?.length ?? 0) > 0;
-  if (hasOrphans) columns.unshift({ key: 'none', nome: 'Sem etapa' });
+  if (hasOrphans || ff.stage === 'none') todasColunas.unshift({ key: 'none', nome: 'Sem etapa' });
+  // Etapa escolhida no filtro: o board mostra só aquela coluna.
+  const columns = ff.stage === '' ? todasColunas : todasColunas.filter((c) => String(c.key) === ff.stage);
 
   const totalValor = visibleCards.reduce((s, c) => s + Number(c.valor_estimado ?? 0), 0);
   const clientes = visibleCards.filter((c) => c.status === 'cliente').length;
@@ -162,7 +223,8 @@ export function Kanban(): React.JSX.Element {
         <PageHeader title="Funil de vendas" subtitle="Arraste os cards ou use o botão → para mover entre etapas."
           actions={
             <div className="flex items-center gap-2">
-              <Btn variant={filter.filtroAtivo ? 'primary' : 'soft'} icon="search"
+              <Btn variant={filter.filtroAtivo || filtrosAtivos(ff) ? 'primary' : 'soft'} icon="search"
+                data-filtros-toggle
                 aria-expanded={filtersOpen} title={filtersOpen ? 'Recolher filtros' : 'Expandir filtros'}
                 onClick={() => setFiltersOpen((v) => !v)}>
                 Filtros{oculto > 0 ? ` · ${oculto} ocultos` : ''}
@@ -181,7 +243,12 @@ export function Kanban(): React.JSX.Element {
           } />
 
         <Collapse open={filtersOpen} duration={1500}>
-          <CompanyFilterBar f={filter} />
+          <div ref={filtrosRef}>
+            <CompanyFilterBar f={filter} onBuscar={buscar} buscando={buscando}
+              onLimpar={limparTudo}
+              extra={<FunilFiltroCampos v={ff} onChange={setFf} stages={stages}
+                scenarios={scenarios} actions={actions} labels={labels} />} />
+          </div>
         </Collapse>
 
         <Collapse open={kpisOpen} duration={1000}>
@@ -266,6 +333,54 @@ export function Kanban(): React.JSX.Element {
   );
 }
 
+// Campos de filtro próprios do funil — etapa (que também esconde as demais
+// colunas do board), status, cenário atual, ação para próximo nível e private
+// label da empresa. Entram no grid do CompanyFilterBar via prop `extra`: uma
+// barra de filtros só, em vez de dois cartões empilhados.
+function FunilFiltroCampos({ v, onChange, stages, scenarios, actions, labels }: {
+  v: FunilFiltros; onChange: (f: FunilFiltros) => void;
+  stages: Stage[]; scenarios: NamedItem[]; actions: NamedItem[]; labels: PrivateLabel[];
+}): React.JSX.Element {
+  const set = (patch: Partial<FunilFiltros>): void => onChange({ ...v, ...patch });
+  return (
+    <>
+      <Field label="Etapa">
+        <select value={v.stage} onChange={(e) => set({ stage: e.target.value })} className={inputCls}>
+          <option value="">Todas as etapas</option>
+          {stages.map((s) => <option key={s.id} value={String(s.id)}>{s.nome}</option>)}
+          <option value="none">Sem etapa</option>
+        </select>
+      </Field>
+      <Field label="Status">
+        <select value={v.status} onChange={(e) => set({ status: e.target.value })} className={inputCls}>
+          <option value="">Todos</option>
+          {STATUS_OPTS.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+        </select>
+      </Field>
+      <Field label="Cenário">
+        <select value={v.cenario} onChange={(e) => set({ cenario: e.target.value })} className={inputCls}>
+          <option value="">Todos</option>
+          {scenarios.map((s) => <option key={s.id} value={String(s.id)}>{s.nome}</option>)}
+        </select>
+      </Field>
+      <Field label="Ação (próximo nível)">
+        <select value={v.acao} onChange={(e) => set({ acao: e.target.value })} className={inputCls}>
+          <option value="">Todas</option>
+          {actions.map((a) => <option key={a.id} value={String(a.id)}>{a.nome}</option>)}
+        </select>
+      </Field>
+      {labels.length > 0 && (
+        <Field label="Private label">
+          <select value={v.label} onChange={(e) => set({ label: e.target.value })} className={inputCls}>
+            <option value="">Todas</option>
+            {labels.map((l) => <option key={l.id} value={String(nid(l.id))}>{l.nome}</option>)}
+          </select>
+        </Field>
+      )}
+    </>
+  );
+}
+
 // Card do board extraído em React.memo com props/handlers estáveis: arrastar
 // sobre uma coluna (over) ou abrir o menu de um card não re-renderiza os demais.
 const CardItem = memo(function CardItem({ c, stages, dragging, menuOpen, onDragStartCard, onDragEndCard, onMove, onEdit, onToggleMenu, onCloseMenu, onView, onSample, onSamples }: {
@@ -331,6 +446,17 @@ const CardItem = memo(function CardItem({ c, stages, dragging, menuOpen, onDragS
         <p className="mt-1 truncate text-xs text-ink-500">
           {[c.marca, (c.contatos ?? []).map((x) => x.nome).join(', ')].filter(Boolean).join(' · ')}
         </p>
+      )}
+      {(c.private_labels?.length ?? 0) > 0 && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {(c.private_labels ?? []).map((l) => (
+            <span key={l.id} title="Private label"
+              className="inline-flex max-w-full items-center gap-1 truncate rounded-full bg-ink-100 px-1.5 py-0.5 text-[11px] font-medium text-ink-600">
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: l.cor || '#94a3b8' }} />
+              <span className="truncate">{l.nome}</span>
+            </span>
+          ))}
+        </div>
       )}
       {(c.catalogo?.length ?? 0) > 0 && (
         <p className="mt-1 inline-flex max-w-full items-center gap-1 truncate text-xs text-ink-400">

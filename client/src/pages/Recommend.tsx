@@ -6,7 +6,7 @@ import type { LatLngBoundsExpression } from 'leaflet';
 import { api, ApiError, BUSCA_DEBOUNCE_MS } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import type { Recommendation, GeocodeResult, CompanyDetail } from '../lib/types.ts';
-import { Btn, Badge, Card, Collapse, EmptyState, PageHeader, SafeButton, ScoreBar, Segmented, Spinner, StatCard, cn, type Tone } from '../lib/ui.tsx';
+import { Btn, Badge, Card, Collapse, EmptyState, PageHeader, SafeButton, ScoreBar, Segmented, Spinner, StatCard, cn, useCollapseOnOutside, type Tone } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { CompanyFilterBar, useCompanyFilter, faixasParams, faixasInvalidas } from '../lib/companyFilter.tsx';
 import { CompanyModal } from '../lib/companyModal.tsx';
@@ -137,6 +137,10 @@ export function Recommend(): React.JSX.Element {
   const filter = useCompanyFilter('prospeccao');
   const LIMIT = 20;
 
+  // Clicar na lista/mapa (ou em qualquer lugar fora do painel) recolhe os filtros.
+  const filtrosRef = useRef<HTMLDivElement>(null);
+  useCollapseOnOutside(filtersOpen, () => setFiltersOpen(false), filtrosRef, '[data-filtros-toggle]');
+
   // Geocode sob demanda do endereço (lat/lon exato), cacheado no banco e em memória.
   // Fallback: a própria coord da recomendação (centroide do município).
   const geocodeRec = async (rec: Recommendation): Promise<{ lat: number; lon: number; precisao: string }> => {
@@ -261,6 +265,15 @@ export function Recommend(): React.JSX.Element {
     filter.pesos.capital, filter.pesos.idade,
     filter.faixas.capMin, filter.faixas.capMax, filter.faixas.idadeMin, filter.faixas.idadeMax,
     filter.partida?.lat, filter.partida?.lon]);
+
+  // Botão "Buscar" da barra: dispara a consulta na hora (sem debounce). Não
+  // recolhe o painel — quem fecha é o botão "Filtros" ou o clique fora.
+  // Sem território (ou com faixa invertida) não há o que buscar.
+  const buscar = (): void => {
+    if (semTerritorio || faixaRuim) return;
+    setFiltersOpen(true); // explícito: buscar nunca recolhe o painel
+    void load(0);
+  };
 
   // No mapa, plota só o que já está carregado na lista — sem auto-paginar.
 
@@ -388,7 +401,9 @@ export function Recommend(): React.JSX.Element {
         </div>
       )}
       <Collapse open={filtersOpen} duration={200}>
-        <CompanyFilterBar f={filter} recommend />
+        <div ref={filtrosRef}>
+          <CompanyFilterBar f={filter} recommend buscando={loading} onBuscar={buscar} />
+        </div>
       </Collapse>
 
       <Collapse open={kpisOpen} duration={200}>
@@ -412,6 +427,7 @@ export function Recommend(): React.JSX.Element {
             <div className="flex items-center gap-2">
               {view === 'lista' && (
                 <Btn variant={filter.filtroAtivo ? 'primary' : 'soft'} icon="search"
+                  data-filtros-toggle
                   aria-expanded={filtersOpen} title={filtersOpen ? 'Recolher filtros' : 'Expandir filtros'}
                   onClick={() => setFiltersOpen((v) => !v)}>
                   Filtros

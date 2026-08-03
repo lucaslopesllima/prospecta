@@ -31,18 +31,18 @@ beforeEach(() => {
 });
 
 describe('useCompanyFilter', () => {
-  it('restringe ao território (municipio_id) com usarAlvo ligado por padrão', () => {
+  // O território é critério da prospecção (vai no /api/recommend). O funil, que é
+  // quem usa o apply(), não corta mais por município.
+  it('território não restringe o apply()', () => {
     const { result } = renderHook(() => useCompanyFilter('t1'));
-    expect(result.current.usarAlvo).toBe(true);
     act(() => result.current.setTerritorio([mun(100)]));
     const dentro = co({});
     const fora = co({ municipio_id: 999 });
-    expect(result.current.apply([dentro, fora])).toEqual([dentro]);
+    expect(result.current.apply([dentro, fora])).toEqual([dentro, fora]);
   });
 
   it('filtra por texto (razão/fantasia/cnpj), cnae e porte', () => {
     const { result } = renderHook(() => useCompanyFilter('t2'));
-    act(() => result.current.setUsarAlvo(false));
 
     act(() => result.current.setFq('padaria'));
     const padaria = co({ razao_social: 'Padaria Pão Quente' });
@@ -58,13 +58,13 @@ describe('useCompanyFilter', () => {
     expect(result.current.apply([co({ porte: 'micro' }), co({})])).toHaveLength(1);
   });
 
-  it('limpar zera os filtros e desliga o território', () => {
+  it('limpar zera os filtros', () => {
     const { result } = renderHook(() => useCompanyFilter('t4'));
+    expect(result.current.filtroAtivo).toBe(false);
     act(() => { result.current.setFq('x'); result.current.setTerritorio([mun(100)]); });
     expect(result.current.filtroAtivo).toBe(true);
     act(() => result.current.limpar());
     expect(result.current.fq).toBe('');
-    expect(result.current.usarAlvo).toBe(false);
     expect(result.current.filtroAtivo).toBe(false);
   });
 
@@ -81,11 +81,11 @@ describe('useCompanyFilter', () => {
 
   it('estado salvo tem precedência sobre o default', () => {
     localStorage.setItem('companyFilter:t6',
-      JSON.stringify({ fq: 'salvo', fCnae: '999', fPorte: '', usarAlvo: false }));
+      JSON.stringify({ fq: 'salvo', fCnae: '999', fPorte: 'micro' }));
     const { result } = renderHook(() => useCompanyFilter('t6'));
     expect(result.current.fq).toBe('salvo');
     expect(result.current.fCnae).toBe('999');
-    expect(result.current.usarAlvo).toBe(false);
+    expect(result.current.fPorte).toBe('micro');
   });
 });
 
@@ -103,8 +103,10 @@ describe('CompanyFilterBar — funil', () => {
     expect(screen.queryByRole('button', { name: 'Filtros' })).toBeNull();
     expect(screen.queryByRole('button', { name: /Filtros avançados/ })).toBeNull();
     // campos antes escondidos no acordeão já aparecem
-    expect(screen.getByPlaceholderText('CEP')).toBeVisible();
-    expect(screen.getByText('Restringir ao território')).toBeVisible();
+    // endereço de partida é da prospecção — não aparece no funil
+    expect(screen.queryByPlaceholderText('CEP')).toBeNull();
+    // um único botão de limpar, no rodapé da barra
+    expect(screen.getAllByRole('button', { name: 'Limpar filtros' })).toHaveLength(1);
   });
 
   it('máscara de nome/CNPJ e porte atualizam o filtro', async () => {
@@ -114,14 +116,12 @@ describe('CompanyFilterBar — funil', () => {
     expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('micro');
   });
 
-  it('território habilita restrição e limpa', async () => {
-    localStorage.setItem('companyFilter:reco', JSON.stringify({ munis: [mun(100), mun(200)], pesos: { cnae: 0.5, proximidade: 0.3, porte: 0.2 }, partida: null }));
+  it('limpar zera os campos da barra', async () => {
     render(<Bar />);
-    const chk = await screen.findByRole('checkbox');
-    expect(chk).not.toBeDisabled();
-    expect(screen.getByText(/2 municípios/)).toBeInTheDocument();
-    await userEvent.click(chk);
-    await userEvent.click(screen.getByRole('button', { name: 'Limpar' }));
+    const nome = screen.getByPlaceholderText('Razão, fantasia ou CNPJ');
+    await userEvent.type(nome, 'padaria');
+    await userEvent.click(screen.getByRole('button', { name: 'Limpar filtros' }));
+    await waitFor(() => expect((nome as HTMLInputElement).value).toBe(''));
   });
 });
 
@@ -176,7 +176,7 @@ describe('PartidaInput', () => {
   const origFetch = global.fetch;
   afterEach(() => { global.fetch = origFetch; });
 
-  const openPartida = (): void => { render(<Bar />); };
+  const openPartida = (): void => { render(<Bar recommend />); };
 
   it('CEP preenche endereço e "Definir" geocodifica; remover limpa', async () => {
     global.fetch = vi.fn().mockResolvedValue({ json: async () => ({ logradouro: 'Rua A', bairro: 'Centro', localidade: 'Blumenau', uf: 'SC' }) }) as unknown as typeof fetch;

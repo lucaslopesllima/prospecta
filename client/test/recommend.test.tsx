@@ -96,7 +96,7 @@ describe('Recommend', () => {
     comTerritorio();
     // filtro persistido da tela com a faixa invertida (min 1.000.000 > max 500.000)
     localStorage.setItem('companyFilter:prospeccao', JSON.stringify({
-      fq: '', fCnae: '', fPorte: '', usarAlvo: true,
+      fq: '', fCnae: '', fPorte: '',
       faixas: { capMin: '1.000.000', capMax: '500.000', idadeMin: '', idadeMax: '' },
     }));
     mount();
@@ -319,6 +319,36 @@ describe('Recommend — mapa, rota e interações', () => {
     await userEvent.click(screen.getAllByRole('button', { name: /Filtros/ })[0]);
     await userEvent.click(screen.getByRole('button', { name: /Indicadores/ }));
     await waitFor(() => expect(['0', '1']).toContain(localStorage.getItem('prospeccao:kpisOpen')));
+  });
+
+  it('botão Buscar consulta a base na hora sem fechar os filtros', async () => {
+    localStorage.setItem('prospeccao:filtersOpen', '1');
+    comTerritorio();
+    mount();
+    await screen.findByText('Loja Alvo', undefined, { timeout: 2000 });
+    const buscas = (): number => m.get.mock.calls.filter((c) => String(c[0]).startsWith('/api/recommend')).length;
+    const antes = buscas();
+    await userEvent.click(screen.getByRole('button', { name: /Buscar/ }));
+    await waitFor(() => expect(buscas()).toBe(antes + 1));
+    expect(localStorage.getItem('prospeccao:filtersOpen')).toBe('1'); // painel segue aberto
+  });
+
+  it('sem território o botão Buscar não consulta nem fecha os filtros', async () => {
+    localStorage.setItem('prospeccao:filtersOpen', '1');
+    mount();
+    await screen.findByText('Defina o território');
+    await userEvent.click(screen.getByRole('button', { name: /Buscar/ }));
+    expect(m.get.mock.calls.some((c) => String(c[0]).startsWith('/api/recommend'))).toBe(false);
+    expect(localStorage.getItem('prospeccao:filtersOpen')).toBe('1');
+  });
+
+  it('clicar na lista recolhe os filtros abertos', async () => {
+    localStorage.setItem('prospeccao:filtersOpen', '1');
+    comTerritorio();
+    mount();
+    await screen.findByText('Loja Alvo', undefined, { timeout: 2000 });
+    await userEvent.click(screen.getByText('Loja Alvo')); // fora do painel de filtros
+    await waitFor(() => expect(localStorage.getItem('prospeccao:filtersOpen')).toBe('0'));
   });
 
   it('cards mostram faixas de score, fallback de nome e escondem mapa sem coordenada', async () => {
