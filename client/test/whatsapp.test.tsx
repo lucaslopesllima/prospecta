@@ -232,7 +232,12 @@ describe('WhatsApp — estados de topo', () => {
 });
 
 describe('WhatsApp — ConnectPanel', () => {
-  beforeEach(() => { statusResp = { enabled: true, status: 'desconectado' }; });
+  // A tela confirma o estado real em /connection e ignora o cache do /status —
+  // desconectar só pelo statusResp deixaria a página achando que está conectada.
+  beforeEach(() => {
+    statusResp = { enabled: true, status: 'desconectado' };
+    connectionStatus = 'desconectado';
+  });
 
   it('gera QR e faz polling até conectar', async () => {
     vi.useFakeTimers();
@@ -784,7 +789,8 @@ describe('WhatsApp — ScheduleModal', () => {
     await waitFor(() => expect(m.post).toHaveBeenCalledWith('/api/whatsapp/chats/1/schedule', expect.objectContaining({ text: 'futuro' })));
     // cancelar o pendente ativo
     fireEvent.click(screen.getByText('Cancelar'));
-    await waitFor(() => expect(m.del).toHaveBeenCalledWith('/api/whatsapp/schedules/24'));
+    // scope=one: cancela só esta ocorrência (a série usa scope=serie e confirma antes).
+    await waitFor(() => expect(m.del).toHaveBeenCalledWith('/api/whatsapp/schedules/24?scope=one'));
   });
 
   it('erro ao agendar e ao cancelar', async () => {

@@ -81,14 +81,28 @@ function SociosBloco({ socios }: { socios: Socio[] }): React.JSX.Element {
   );
 }
 
+// Veredito da conferência no WhatsApp por telefone. null = indeterminado
+// (Evolution fora do ar, desligada ou org demo) — nesse caso o atalho de
+// conversa continua como sempre foi; só `false` tira o link.
+type WaCheck = { telefone1: boolean | null; telefone2: boolean | null };
+
 export function CompanyModal({ companyId, onClose }: { companyId: number; onClose: () => void }): React.JSX.Element {
   const [data, setData] = useState<CompanyDetail | null>(null);
   const [socios, setSocios] = useState<Socio[]>([]);
   const [geo, setGeo] = useState<{ lat: number; lon: number; precisao: string } | null>(null);
+  const [wa, setWa] = useState<WaCheck | null>(null);
+  const [waPend, setWaPend] = useState(true);
   const [err, setErr] = useState(false);
 
   useEffect(() => {
     setData(null); setSocios([]); setGeo(null); setErr(false);
+    // Conferência dispara junto com o carregamento (não depende dos dados na
+    // tela: o servidor lê os telefones da empresa). Falha vira indeterminado.
+    setWa(null); setWaPend(true);
+    void api.get<{ whatsapp: WaCheck }>(`/api/companies/${companyId}/whatsapp`)
+      .then((r) => setWa(r.whatsapp))
+      .catch(() => undefined)
+      .finally(() => setWaPend(false));
     void api.get<{ company: CompanyDetail; socios: Socio[] }>(`/api/companies/${companyId}`)
       .then((r) => {
         setData(r.company); setSocios(r.socios ?? []);
@@ -107,10 +121,30 @@ export function CompanyModal({ companyId, onClose }: { companyId: number; onClos
 
   // Telefone formatado que abre a conversa direto na tela do WhatsApp (cria/vincula
   // o chat pela empresa), mesmo comportamento do funil — não usa mais o wa.me externo.
-  const telWa = (s: string | null): React.ReactNode => {
+  //
+  // O atalho só some quando a conferência afirma que o número NÃO está no
+  // WhatsApp. Enquanto ela roda, o telefone aparece sem link (com o indicador);
+  // se ela não conseguir responder, o link fica como sempre foi.
+  const telWa = (s: string | null, campo: keyof WaCheck): React.ReactNode => {
     const fmt = fmtTel(s);
     if (!fmt) return null;
     if (!waLink(s)) return fmt;
+    if (waPend) {
+      return (
+        <span className="inline-flex items-center gap-1.5 text-ink-700">
+          {fmt}
+          <span className="h-3 w-3 animate-spin rounded-full border-2 border-ink-200 border-t-brand-500" />
+          <span className="text-xs text-ink-400">conferindo WhatsApp…</span>
+        </span>
+      );
+    }
+    if (wa?.[campo] === false) {
+      return (
+        <span className="inline-flex items-center gap-1.5 text-ink-700">
+          {fmt}<span className="text-xs text-ink-300">sem WhatsApp</span>
+        </span>
+      );
+    }
     return (
       <SafeButton type="button" title="Abrir conversa no WhatsApp"
         onClick={() =>
@@ -175,8 +209,8 @@ export function CompanyModal({ companyId, onClose }: { companyId: number; onClos
               </Section>
 
               <Section title="Contato">
-                <InfoRow label="Telefone 1" value={telWa(data.telefone1)} />
-                <InfoRow label="Telefone 2" value={telWa(data.telefone2)} />
+                <InfoRow label="Telefone 1" value={telWa(data.telefone1, 'telefone1')} />
+                <InfoRow label="Telefone 2" value={telWa(data.telefone2, 'telefone2')} />
                 <InfoRow label="Fax" value={fmtTel(data.fax)} />
                 <InfoRow label="E-mail" value={data.email} />
               </Section>

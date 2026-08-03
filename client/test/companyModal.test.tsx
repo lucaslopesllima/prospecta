@@ -137,6 +137,49 @@ describe('CompanyModal', () => {
     expect(screen.queryByTitle('Abrir conversa no WhatsApp')).not.toBeInTheDocument();
   });
 
+  // Conferência no WhatsApp (GET /api/companies/:id/whatsapp), disparada ao abrir.
+  // Só o veredito `false` tira o atalho de conversa — pendente segura o link e
+  // indeterminado (falha/Evolution fora) o mantém como sempre foi.
+  it('enquanto confere mostra loading e não oferece o atalho', async () => {
+    let liberar!: (v: unknown) => void;
+    m.get.mockImplementation(async (p: string) => {
+      if (p === '/api/companies/1') return { company: company({ telefone2: null }), socios: [] };
+      if (p === '/api/companies/1/whatsapp') return new Promise((res) => { liberar = res; });
+      return {};
+    });
+    render(<CompanyModal companyId={1} onClose={vi.fn()} />);
+    expect(await screen.findByText('conferindo WhatsApp…')).toBeInTheDocument();
+    expect(screen.queryByTitle('Abrir conversa no WhatsApp')).not.toBeInTheDocument();
+
+    liberar({ whatsapp: { telefone1: true, telefone2: null } });
+    expect(await screen.findByTitle('Abrir conversa no WhatsApp')).toBeInTheDocument();
+    expect(screen.queryByText('conferindo WhatsApp…')).not.toBeInTheDocument();
+  });
+
+  it('número que não está no WhatsApp perde o link', async () => {
+    m.get.mockImplementation(async (p: string) => {
+      if (p === '/api/companies/1') return { company: company({ telefone2: null, fax: null }), socios: [] };
+      if (p === '/api/companies/1/whatsapp') return { whatsapp: { telefone1: false, telefone2: null } };
+      return {};
+    });
+    render(<CompanyModal companyId={1} onClose={vi.fn()} />);
+    expect(await screen.findByText('sem WhatsApp')).toBeInTheDocument();
+    expect(screen.getByText('(11) 33334444')).toBeInTheDocument(); // o número continua visível
+    expect(screen.queryByTitle('Abrir conversa no WhatsApp')).not.toBeInTheDocument();
+  });
+
+  it('conferência indeterminada (ou que falha) mantém o atalho', async () => {
+    m.get.mockImplementation(async (p: string) => {
+      if (p === '/api/companies/1') return { company: company({ telefone2: null, fax: null }), socios: [] };
+      if (p === '/api/companies/1/whatsapp') throw new Error('rede caiu');
+      return {};
+    });
+    render(<CompanyModal companyId={1} onClose={vi.fn()} />);
+    await screen.findByText('Alvo Comercio LTDA');
+    await waitFor(() => expect(screen.getByTitle('Abrir conversa no WhatsApp')).toBeInTheDocument());
+    expect(screen.queryByText('sem WhatsApp')).not.toBeInTheDocument();
+  });
+
   it('fecha no backdrop, no X e não fecha ao clicar no corpo', async () => {
     const onClose = vi.fn();
     m.get.mockImplementation(async (p: string) => {

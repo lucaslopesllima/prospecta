@@ -124,11 +124,12 @@ describe('EmailAgendado — SchedulesTab', () => {
     await screen.findByText('Oi', { selector: 'p.truncate' });
 
     await userEvent.click(screen.getByTitle('Cancelar envio'));
-    await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/email-schedules/1', { status: 'cancelado' }));
+    // scope: agendamento avulso cancela só a ocorrência ('one'); série usa 'serie'.
+    await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/email-schedules/1', { status: 'cancelado', scope: 'one' }));
     expect(toastMock.success).toHaveBeenCalledWith('Envio cancelado.');
 
     await userEvent.click(screen.getByLabelText('Remover agendamento'));
-    await waitFor(() => expect(m.del).toHaveBeenCalledWith('/api/email-schedules/1'));
+    await waitFor(() => expect(m.del).toHaveBeenCalledWith('/api/email-schedules/1?scope=one'));
     expect(toastMock.success).toHaveBeenCalledWith('Agendamento removido.');
   });
 

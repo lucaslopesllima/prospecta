@@ -113,8 +113,10 @@ export function OrderModal({ order = null, prefill = null, onClose, onSaved }: {
   // Contatos da empresa cliente — populam o select "Contato" do pedido.
   useEffect(() => {
     if (companyId == null) { setContacts([]); return; }
+    // `?? []`: resposta sem a chave derrubava o modal inteiro no render do
+    // <select> de contato (contacts.map em cima de undefined).
     void api.get<{ contacts: Contact[] }>(`/api/contacts?company_id=${companyId}`)
-      .then((r) => setContacts(r.contacts)).catch(() => undefined);
+      .then((r) => setContacts(r.contacts ?? [])).catch(() => undefined);
   }, [companyId]);
 
   // Troca o contato do pedido. Em pedido já salvo grava na hora (endpoint próprio,

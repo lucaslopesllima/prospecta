@@ -211,13 +211,15 @@ describe('App shell: sino, offline, sidebar', () => {
     expect(await screen.findByText(/Offline — 1 ação/)).toBeInTheDocument();
   });
 
-  it('folha "Mais" no mobile abre e fecha ao navegar', async () => {
+  // A navegação mobile deixou de ser barra inferior + folha "Mais": hoje é um FAB
+  // que abre o menu inteiro (MobileNavFab), e ele fecha ao trocar de rota.
+  it('menu mobile (FAB) abre e fecha ao navegar', async () => {
     mount('/');
     await screen.findByText('PAGE-DASHBOARD');
-    await userEvent.click(screen.getByText('Mais'));
-    const dialog = await screen.findByRole('dialog', { name: 'Mais opções' });
-    await userEvent.click(within(dialog).getByText('Config'));
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Mais opções' })).not.toBeInTheDocument());
+    await userEvent.click(screen.getByLabelText('Abrir menu'));
+    const nav = await screen.findByRole('navigation', { name: 'Navegação' });
+    await userEvent.click(within(nav).getByText('Config'));
+    await waitFor(() => expect(screen.queryByRole('navigation', { name: 'Navegação' })).not.toBeInTheDocument());
   });
 
   it('sidebar recolhida mostra avatar/logout compactos e expande', async () => {

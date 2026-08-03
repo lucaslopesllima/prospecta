@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { one, query } from '../db.ts';
 import { requireAuth, requirePermission } from '../auth.ts';
 import { geocodeAddr } from '../geocode.ts';
+import { checkWhatsappNumbers } from '../whatsapp.ts';
 
 // Read-only lookup into the global companies pool (mesma fonte do recommend/funil).
 // Retorna TODOS os campos da empresa (com códigos RFB decodificados) + quadro societário.
@@ -98,6 +99,30 @@ export function companyRoutes(app: FastifyInstance): void {
       [company.cnpj],
     );
     return { company, socios };
+  });
+
+  // Confere na Evolution se os telefones da empresa existem no WhatsApp.
+  // Disparado pelo modal de detalhes ao abrir; resultado cacheado por número
+  // (whatsapp_number_check, TTL 90d), então a segunda abertura não sai do banco.
+  //
+  // true = existe · false = não existe · null = indeterminado (Evolution fora,
+  // desligada ou org demo). O client só remove o atalho de conversa no `false`.
+  app.get('/api/companies/:id/whatsapp', {
+    preHandler: [requireAuth, requirePermission('prospeccao.view')],
+    schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'integer' } } } },
+  }, async (req, reply) => {
+    const { id } = req.params as { id: number };
+    const c = await one<{ telefone1: string | null; telefone2: string | null }>(
+      'SELECT telefone1, telefone2 FROM companies WHERE id = $1', [id],
+    );
+    if (!c) return reply.code(404).send({ error: 'empresa não encontrada' });
+    const veredito = await checkWhatsappNumbers(req.auth!.orgId, [c.telefone1, c.telefone2]);
+    return {
+      whatsapp: {
+        telefone1: c.telefone1 ? veredito.get(c.telefone1) ?? null : null,
+        telefone2: c.telefone2 ? veredito.get(c.telefone2) ?? null : null,
+      },
+    };
   });
 
   // Geocodifica o endereço da empresa sob demanda (lat/lon exato) e cacheia.

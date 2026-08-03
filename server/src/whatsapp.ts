@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { one, query, withClient } from './db.ts';
 import * as evo from './evolution.ts';
+import { isDemoOrg } from './demo.ts';
 import { broadcast } from './ws.ts';
 
 // Instância por org. Determinística → o webhook reverte instance_name → org.
@@ -168,6 +169,83 @@ export function numeroKey(raw: string): string {
   const d = normalizeNumero(raw);
   if (d.startsWith('55') && (d.length === 12 || d.length === 13)) return `55${d.slice(2, 4)}${d.slice(-8)}`;
   return d;
+}
+
+// ---------------------------------------------------------------------------
+// Conferência "este número existe no WhatsApp?" (Evolution /chat/whatsappNumbers)
+//
+// O telefone que a RFB publica é o do estabelecimento e, em boa parte da base,
+// é o da contabilidade — número que ninguém da empresa atende. Conferir se ele
+// ao menos existe no WhatsApp é o filtro mais barato que temos (não custa nada
+// além da chamada à instância já conectada da org).
+//
+// Semântica de três estados, e ela importa:
+//   true  -> existe        (mantém o atalho de conversa)
+//   false -> não existe    (o número vira texto puro na UI)
+//   null  -> indeterminado (Evolution fora, desligada ou org demo) -> NÃO nega
+// Indeterminado nunca pode virar "não existe": a integração cair não pode tirar
+// do representante um atalho que funcionava.
+const CHECK_TTL_DIAS = 90;
+
+// Cacheado por número (não por empresa) de propósito: o mesmo telefone se repete
+// em milhares de CNPJs na base RFB, então o hit rate é alto e a Evolution é
+// poupada. Ver comentário da migração 074.
+export async function checkWhatsappNumbers(
+  orgId: number, raws: Array<string | null | undefined>,
+): Promise<Map<string, boolean | null>> {
+  const out = new Map<string, boolean | null>();
+  // raw -> número normalizado. Fora de 12/13 dígitos (DDI+DDD+8/9) não é
+  // telefone conferível: fica indeterminado, sem gastar chamada.
+  const alvo = new Map<string, string>();
+  for (const raw of raws) {
+    if (!raw) continue;
+    out.set(raw, null);
+    const num = normalizeNumero(raw);
+    if (num.length === 12 || num.length === 13) alvo.set(raw, num);
+  }
+  const nums = [...new Set(alvo.values())];
+  if (!nums.length) return out;
+
+  const cached = await query<{ numero: string; existe: boolean }>(
+    `SELECT numero, existe FROM whatsapp_number_check
+      WHERE numero = ANY($1::text[])
+        AND verificado_em > now() - ($2 || ' days')::interval`,
+    [nums, String(CHECK_TTL_DIAS)],
+  );
+  const veredito = new Map<string, boolean>(cached.map((c) => [c.numero, c.existe]));
+
+  const faltando = nums.filter((n) => !veredito.has(n));
+  // Org demo não tem instância real na Evolution; integração desligada idem.
+  // Os dois casos caem em indeterminado (nada é consultado nem gravado).
+  if (faltando.length && evo.evolutionEnabled() && !(await isDemoOrg(orgId))) {
+    try {
+      const res = await evo.whatsappNumbers(instanceName(orgId), faltando);
+      // Casa pela chave tolerante ao nono dígito: a Evolution devolve o jid
+      // canônico, que pode ter/não ter o 9 que mandamos.
+      const porChave = new Map(res.map((r) => [numeroKey(r.number || jidToNumero(r.jid)), r]));
+      for (const n of faltando) {
+        const hit = porChave.get(numeroKey(n));
+        if (!hit) continue; // não respondeu sobre esse número -> indeterminado
+        veredito.set(n, hit.exists);
+        await query(
+          `INSERT INTO whatsapp_number_check (numero, existe, jid, verificado_em)
+             VALUES ($1, $2, $3, now())
+           ON CONFLICT (numero) DO UPDATE
+             SET existe = EXCLUDED.existe, jid = EXCLUDED.jid, verificado_em = now()`,
+          [n, hit.exists, hit.jid || null],
+        );
+      }
+    } catch {
+      // Evolution instável/desconectada: segue tudo indeterminado. Sem cache —
+      // a próxima abertura do modal tenta de novo.
+    }
+  }
+
+  for (const [raw, num] of alvo) {
+    const v = veredito.get(num);
+    if (v !== undefined) out.set(raw, v);
+  }
+  return out;
 }
 
 // Relationship (funil) existente da org para a empresa, se houver.
