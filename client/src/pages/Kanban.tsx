@@ -777,7 +777,7 @@ function EditModal({ card, stages, reps, brands, scenarios, actions, catalog, on
                 </div>
               )}
               <div className="sm:col-span-2">
-                <span className="mb-1 block text-xs font-medium text-ink-500">Catálogo</span>
+                <span className="mb-1 block text-xs font-medium text-ink-500">Mostruário</span>
                 {catSel.length > 0 && (
                   <div className="mb-2 flex flex-wrap gap-1.5">
                     {catSel.map((c) => (
@@ -794,7 +794,7 @@ function EditModal({ card, stages, reps, brands, scenarios, actions, catalog, on
                 <div className="flex gap-2">
                   <select value="" onChange={(e) => { const id = numOrNull(e.target.value); if (id != null) setCatalogoIds((ids) => [...ids, id]); }}
                     className={cn(inputCls, 'flex-1')} disabled={catDisp.length === 0}>
-                    <option value="">{catalog.length === 0 ? 'Nenhum item no catálogo' : catDisp.length === 0 ? 'Todos adicionados' : 'Adicionar item do catálogo…'}</option>
+                    <option value="">{catalog.length === 0 ? 'Nenhum item no mostruário' : catDisp.length === 0 ? 'Todos adicionados' : 'Adicionar item do mostruário…'}</option>
                     {catDisp.map((c) => <option key={c.id} value={c.id}>{c.nome}{c.codigo ? ` (${c.codigo})` : ''}</option>)}
                   </select>
                   <Btn size="sm" variant="soft" type="button" icon="plus" onClick={() => setCreatingProd(true)} title="Criar novo produto" />

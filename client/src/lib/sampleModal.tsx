@@ -139,10 +139,10 @@ export function SampleRequestModal({ card, catalog, sample, onClose, onSaved }: 
               </div>
             ) : (
               <label className="block">
-                <span className="mb-1 block text-xs font-medium text-ink-500">Produto do catálogo *</span>
+                <span className="mb-1 block text-xs font-medium text-ink-500">Produto do mostruário *</span>
                 <select value={catalogId ?? ''} onChange={(e) => setCatalogId(e.target.value === '' ? null : Number(e.target.value))}
                   className={inputCls} disabled={produtos.length === 0}>
-                  <option value="">{produtos.length === 0 ? 'Nenhum produto no catálogo' : 'Selecione…'}</option>
+                  <option value="">{produtos.length === 0 ? 'Nenhum produto no mostruário' : 'Selecione…'}</option>
                   {produtos.map((c) => <option key={c.id} value={c.id}>{c.nome}{c.codigo ? ` (${c.codigo})` : ''}</option>)}
                 </select>
               </label>

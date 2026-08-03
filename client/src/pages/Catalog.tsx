@@ -90,7 +90,7 @@ export function Catalog(): React.JSX.Element {
     catch { setList(before); toast.error('Não foi possível atualizar o item.'); }
   };
   const remove = async (id: number): Promise<void> => {
-    if (!(await confirmDialog('Excluir este item do catálogo?'))) return;
+    if (!(await confirmDialog('Excluir este item do mostruário?'))) return;
     const before = list;
     setList((xs) => xs.filter((x) => x.id !== id));
     try { await api.del(`/api/catalog/${id}`); toast.success('Item excluído.'); }
@@ -109,7 +109,7 @@ export function Catalog(): React.JSX.Element {
 
   return (
     <div className="space-y-4 p-4 sm:p-6">
-      <PageHeader title="Catálogo" subtitle="Produtos e serviços que você oferece. Vincule na prospecção."
+      <PageHeader title="Mostruário" subtitle="Produtos e serviços que você oferece. Vincule na prospecção."
         actions={tab === 'itens'
           ? (editing !== 'new' && can('catalog.create') && <Btn icon="plus" onClick={() => setEditing('new')}>Novo item</Btn>)
           : (!addingTable && can('price_tables.create') && <Btn icon="plus" onClick={() => setAddingTable(true)}>Nova tabela</Btn>)} />
@@ -138,7 +138,7 @@ export function Catalog(): React.JSX.Element {
 
           <div className="space-y-2">
             {list.length === 0 && editing !== 'new' && (
-              <EmptyState icon="box" title="Catálogo vazio" hint="Cadastre os produtos/serviços que você representa." />
+              <EmptyState icon="box" title="Mostruário vazio" hint="Cadastre os produtos/serviços que você representa." />
             )}
             {list.length > 0 && display.length === 0 && (
               <p className="py-6 text-center text-sm text-ink-400">Nenhum item para “{q.trim()}”.</p>

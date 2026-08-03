@@ -76,10 +76,10 @@ export const PERMISSIONS: Permission[] = [
   { code: 'vehicles.update', label: 'Veículos: editar', module: 'Logística' },
   { code: 'vehicles.delete', label: 'Veículos: excluir', module: 'Logística' },
 
-  { code: 'catalog.list', label: 'Catálogo: listar', module: 'Logística' },
-  { code: 'catalog.create', label: 'Catálogo: criar', module: 'Logística' },
-  { code: 'catalog.update', label: 'Catálogo: editar', module: 'Logística' },
-  { code: 'catalog.delete', label: 'Catálogo: excluir', module: 'Logística' },
+  { code: 'catalog.list', label: 'Mostruário: listar', module: 'Logística' },
+  { code: 'catalog.create', label: 'Mostruário: criar', module: 'Logística' },
+  { code: 'catalog.update', label: 'Mostruário: editar', module: 'Logística' },
+  { code: 'catalog.delete', label: 'Mostruário: excluir', module: 'Logística' },
 
   { code: 'price_tables.list', label: 'Tabelas de preço: listar', module: 'Logística' },
   { code: 'price_tables.read', label: 'Tabelas de preço: ver detalhe', module: 'Logística' },

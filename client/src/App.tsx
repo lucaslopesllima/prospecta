@@ -92,7 +92,7 @@ const NAV_GROUPS_RAW: NavGroup[] = [
     { to: '/contatos', label: 'Contatos', icon: 'idCard', requires: 'contacts.list' },
     { to: '/private-labels', label: 'Private Labels', icon: 'sparkles', requires: 'private_labels.list' },
     { to: '/carteiras', label: 'Carteiras', icon: 'layers', requires: 'carteiras.view', officeOnly: true },
-    { to: '/catalogo', label: 'Catálogo', icon: 'box', requires: 'catalog.list' },
+    { to: '/catalogo', label: 'Mostruário', icon: 'box', requires: 'catalog.list' },
     { to: '/representadas', label: 'Representadas', icon: 'building', requires: 'represented.list' },
   ] },
   { label: 'Logística', items: [

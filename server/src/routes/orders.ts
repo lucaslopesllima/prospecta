@@ -170,7 +170,7 @@ async function resolveItems(
     if (it.catalog_item_id != null && !cat) return 'catalog_item_id inválido';
     const fromTable = it.catalog_item_id != null ? tablePrices.get(it.catalog_item_id) : undefined;
     const preco = it.preco_unit ?? fromTable?.preco ?? cat?.preco ?? null;
-    if (preco == null) return 'item sem preço (informe preco_unit ou use item de catálogo/tabela com preço)';
+    if (preco == null) return 'item sem preço (informe preco_unit ou use item do mostruário/tabela com preço)';
     const descricao = it.descricao ?? cat?.nome ?? null;
     if (descricao == null) return 'item sem descrição (informe descricao ou catalog_item_id)';
     const desconto = it.desconto_pct ?? 0;

@@ -189,7 +189,7 @@ function TableForm({ reps, catalog, table, onClose, onSaved }: {
           {disponiveis.length > 0 && (
             <select value="" aria-label="Adicionar produto"
               onChange={(e) => { if (e.target.value !== '') addItem(Number(e.target.value)); }} className={inputCls}>
-              <option value="">+ Adicionar produto do catálogo…</option>
+              <option value="">+ Adicionar produto do mostruário…</option>
               {disponiveis.map((c) => (
                 <option key={c.id} value={c.id}>{c.nome}{c.preco != null ? ` (${brl(Number(c.preco))})` : ''}</option>
               ))}

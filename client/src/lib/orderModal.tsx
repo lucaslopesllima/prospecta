@@ -282,7 +282,7 @@ export function OrderModal({ order = null, prefill = null, onClose, onSaved }: {
             </div>
             {representedId != null && (
               <p className="text-xs text-ink-400">
-                {table ? <>Tabela de preço vigente: <span className="font-semibold text-ink-600">{table.nome}</span></> : 'Sem tabela de preço vigente — preços do catálogo.'}
+                {table ? <>Tabela de preço vigente: <span className="font-semibold text-ink-600">{table.nome}</span></> : 'Sem tabela de preço vigente — preços do mostruário.'}
               </p>
             )}
 
@@ -327,9 +327,9 @@ export function OrderModal({ order = null, prefill = null, onClose, onSaved }: {
               })}
               {!readOnly && (
                 <div className="grid gap-1.5 sm:grid-cols-2">
-                  <select value="" aria-label="Adicionar item do catálogo"
+                  <select value="" aria-label="Adicionar item do mostruário"
                     onChange={(e) => { if (e.target.value !== '') addCatalogItem(Number(e.target.value)); }} className={inputCls}>
-                    <option value="">+ Item do catálogo…</option>
+                    <option value="">+ Item do mostruário…</option>
                     {catalog.map((c) => {
                       const p = tablePrice(c.id) ?? (c.preco || null);
                       return <option key={c.id} value={c.id}>{c.nome}{p != null ? ` (${brl(Number(p))})` : ' — sem preço'}</option>;
