@@ -164,7 +164,7 @@ describe('CompanyModal', () => {
     });
     render(<CompanyModal companyId={1} onClose={vi.fn()} />);
     expect(await screen.findByText('sem WhatsApp')).toBeInTheDocument();
-    expect(screen.getByText('(11) 33334444')).toBeInTheDocument(); // o número continua visível
+    expect(screen.getByText('(11) 3333-4444')).toBeInTheDocument(); // o número continua visível
     expect(screen.queryByTitle('Abrir conversa no WhatsApp')).not.toBeInTheDocument();
   });
 
@@ -178,6 +178,45 @@ describe('CompanyModal', () => {
     await screen.findByText('Alvo Comercio LTDA');
     await waitFor(() => expect(screen.getByTitle('Abrir conversa no WhatsApp')).toBeInTheDocument());
     expect(screen.queryByText('sem WhatsApp')).not.toBeInTheDocument();
+  });
+
+  // Aviso de contabilidade: o servidor manda em quantas empresas o contato se
+  // repete; sem o dado (script de carga ainda não rodou) nada é sinalizado.
+  it('contato repetido em outras empresas ganha o aviso de contabilidade', async () => {
+    m.get.mockImplementation(async (p: string) => {
+      if (p === '/api/companies/1') return {
+        company: company({ telefone2: null, fax: null }), socios: [],
+        compartilhado: { telefone1: 37, telefone2: null, email: 52 },
+      };
+      return {};
+    });
+    render(<CompanyModal companyId={1} onClose={vi.fn()} />);
+    await screen.findByText('Alvo Comercio LTDA');
+    expect(screen.getAllByText('provável contabilidade')).toHaveLength(2); // telefone1 + e-mail
+    expect(screen.getAllByTitle(/aparece em 37 empresas diferentes/)[0]).toBeInTheDocument();
+  });
+
+  it('sem dado de contato compartilhado não mostra aviso', async () => {
+    m.get.mockImplementation(async (p: string) => {
+      if (p === '/api/companies/1') return { company: company(), socios: [] }; // sem `compartilhado`
+      return {};
+    });
+    render(<CompanyModal companyId={1} onClose={vi.fn()} />);
+    await screen.findByText('Alvo Comercio LTDA');
+    expect(screen.queryByText('provável contabilidade')).not.toBeInTheDocument();
+  });
+
+  it('telefone sai mascarado no padrão BR', async () => {
+    m.get.mockImplementation(async (p: string) => {
+      if (p === '/api/companies/1') return {
+        company: company({ telefone1: '11933334444', telefone2: '1133334444', fax: null }), socios: [],
+      };
+      return {};
+    });
+    render(<CompanyModal companyId={1} onClose={vi.fn()} />);
+    await screen.findByText('Alvo Comercio LTDA');
+    expect(screen.getByText('(11) 93333-4444')).toBeInTheDocument(); // celular
+    expect(screen.getByText('(11) 3333-4444')).toBeInTheDocument();  // fixo
   });
 
   it('fecha no backdrop, no X e não fecha ao clicar no corpo', async () => {

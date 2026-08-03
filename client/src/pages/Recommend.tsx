@@ -119,6 +119,8 @@ export function Recommend(): React.JSX.Element {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [offset, setOffset] = useState(0);
+  // total de empresas do perfil (capado no servidor — ver total_capped)
+  const [total, setTotal] = useState<{ n: number; capped: boolean } | null>(null);
   const [done, setDone] = useState(false);
   const [added, setAdded] = useState<Set<string>>(new Set());
   const [view, setView] = useState<'lista' | 'mapa'>('lista');
@@ -202,6 +204,11 @@ export function Recommend(): React.JSX.Element {
   const semTerritorio = territorioIds.length === 0;
   // faixa mín > máx: a busca fica parada até o usuário ajustar (ver load()).
   const faixaRuim = faixasInvalidas(filter.faixas);
+  // total de empresas que batem com o perfil. O servidor para de contar no teto
+  // (10.000), então acima disso o número vira "10.000+" em vez de um valor exato.
+  const totalLabel = total === null
+    ? `${recs.length} empresa(s)`
+    : `${total.n.toLocaleString('pt-BR')}${total.capped ? '+' : ''} empresa(s)`;
 
   // Aborta a busca anterior antes de disparar a próxima — sem isso uma resposta
   // lenta de filtro antigo pode sobrescrever a da busca atual (race).
@@ -226,9 +233,12 @@ export function Recommend(): React.JSX.Element {
       if (filter.fCnae.trim()) qs.set('cnae', filter.fCnae.trim());
       if (filter.fPorte) qs.set('porte', filter.fPorte);
       if (filter.partida) { qs.set('partida_lat', String(filter.partida.lat)); qs.set('partida_lon', String(filter.partida.lon)); }
-      const r = await api.get<{ results: Recommendation[]; page: { count: number } }>(
-        `/api/recommend?${qs.toString()}`, { signal: ac.signal },
-      );
+      const r = await api.get<{
+        results: Recommendation[]; page: { count: number; total: number; total_capped: boolean };
+      }>(`/api/recommend?${qs.toString()}`, { signal: ac.signal });
+      // total ausente (resposta antiga/parcial): cai no fallback do totalLabel.
+      setTotal(typeof r.page?.total === 'number'
+        ? { n: r.page.total, capped: !!r.page.total_capped } : null);
       setRecs((prev) => (off === 0 ? r.results : [...prev, ...r.results]));
       setDone(r.results.length < LIMIT);
       setOffset(off + r.results.length);
@@ -245,7 +255,7 @@ export function Recommend(): React.JSX.Element {
   // com debounce p/ não disparar a cada tecla. Roda também no mount.
   useEffect(() => {
     if (semTerritorio) {  // sem território -> tela vazia, sem consultar
-      setRecs([]); setDone(true); setOffset(0); setErr('');
+      setRecs([]); setDone(true); setOffset(0); setErr(''); setTotal(null);
       setLoading(false); // sem isso o spinner inicial nunca dá lugar ao empty state
       return;
     }
@@ -422,7 +432,9 @@ export function Recommend(): React.JSX.Element {
       <div className="p-4 pb-0 sm:p-6 sm:pb-0">
         <PageHeader
           title="Empresas recomendadas"
-          subtitle={semTerritorio ? 'Defina o território nos filtros para buscar empresas' : `${recs.length} resultado(s) · ranqueados por fit`}
+          subtitle={semTerritorio
+            ? 'Defina o território nos filtros para buscar empresas'
+            : `${recs.length} de ${totalLabel} · ranqueados por fit`}
           actions={
             <div className="flex items-center gap-2">
               {view === 'lista' && (

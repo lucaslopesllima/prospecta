@@ -2,7 +2,10 @@ import type { FastifyInstance } from 'fastify';
 import { query, withClient } from '../db.ts';
 import { requireAuth, requirePermission } from '../auth.ts';
 import { config } from '../config.ts';
-import { buildRecommendQuery, type RecommendProfile, type RecommendFilters } from '../sql/recommend.ts';
+import {
+  buildRecommendQuery, buildRecommendCountQuery, RECOMMEND_COUNT_CAP,
+  type RecommendProfile, type RecommendFilters,
+} from '../sql/recommend.ts';
 
 const PORTES = new Set(['nao_informado', 'micro', 'pequeno', 'demais']);
 const PROX_NORM_M = 150_000; // normalização da proximidade (~150km) — casa com o SQL
@@ -171,20 +174,25 @@ export function recommendRoutes(app: FastifyInstance): void {
       muniProximity(municipios, pesos.proximidade ?? 0.3, partida),
     ]);
 
-    const { text, params } = buildRecommendQuery({
+    const args = {
       orgId, profile, limit, offset, filters, ...tiers,
       regioesUf: regions.ufs, regioesRegiao: regions.regioes,
       muniProx: prox.muniProx, origin: prox.origin,
-    });
+    };
+    const { text, params } = buildRecommendQuery(args);
+    // Total de empresas do perfil, capado (ver RECOMMEND_COUNT_CAP): vai na mesma
+    // conexão/transação da recomendação — é uma varredura que o LIMIT corta cedo.
+    const count = buildRecommendCountQuery(args);
 
     // Run in a tx on a single connection so SET LOCAL work_mem applies to the recommendation sort.
-    const result = await withClient(async (client) => {
+    const { rows, total } = await withClient(async (client) => {
       await client.query('BEGIN');
       try {
         await client.query(`SET LOCAL work_mem = '${config.recommendWorkMem}'`);
         const r = await client.query(text, params);
+        const t = await client.query<{ total: number }>(count.text, count.params);
         await client.query('COMMIT');
-        return r.rows;
+        return { rows: r.rows, total: Number(t.rows[0]?.total ?? 0) };
       } catch (e) {
         // sem ROLLBACK a conexão volta ao pool em transação abortada e envenena
         // as próximas requisições que a reusarem.
@@ -193,6 +201,14 @@ export function recommendRoutes(app: FastifyInstance): void {
       }
     });
 
-    return { results: result, page: { limit, offset, count: result.length } };
+    return {
+      results: rows,
+      page: {
+        limit, offset, count: rows.length,
+        // total > CAP: a contagem parou no teto, o número exibido é "CAP+".
+        total: Math.min(total, RECOMMEND_COUNT_CAP),
+        total_capped: total > RECOMMEND_COUNT_CAP,
+      },
+    };
   });
 }

@@ -4,7 +4,10 @@ import { describe, it, expect, vi, afterAll } from 'vitest';
 import { SignJWT } from 'jose';
 import type { FastifyRequest } from 'fastify';
 import { fuelEstimate } from '../src/fuel.ts';
-import { buildRecommendQuery, type RecommendArgs } from '../src/sql/recommend.ts';
+import {
+  buildRecommendQuery, buildRecommendCountQuery, RECOMMEND_COUNT_CAP,
+  type RecommendArgs,
+} from '../src/sql/recommend.ts';
 import {
   hashPassword, verifyPassword, verifyAgainstDummy, signToken, verifyToken,
 } from '../src/auth.ts';
@@ -110,6 +113,43 @@ describe('buildRecommendQuery', () => {
     });
     expect(params[0]).toEqual([]); // municipios
     expect(params[4]).toEqual([]); // cnaes
+  });
+});
+
+describe('buildRecommendCountQuery', () => {
+  const base: RecommendArgs = {
+    orgId: 1,
+    profile: { cnaes_alvo: [4781400], territorio_municipios: [3550308], pesos: {} },
+    limit: 20, offset: 0,
+    divisoesAlvo: [47], secoesAlvo: ['G'], pruneDivisoes: [45, 46, 47],
+    regioesUf: ['SP'], regioesRegiao: ['SE'],
+    muniProx: [{ id: 3550308, pc: 0.12 }],
+    origin: { lat: -23.55, lon: -46.63 },
+  };
+
+  it('conta capado no teto+1, sem score nem sort', () => {
+    const { text, params } = buildRecommendCountQuery(base);
+    expect(text).toContain(`LIMIT ${RECOMMEND_COUNT_CAP + 1}`);
+    expect(text).not.toContain('ORDER BY');
+    expect(text).not.toContain('score');
+    expect(text).not.toContain('cnae_divisao_secao'); // fit não é calculado
+    expect(params[0]).toEqual([3550308]); // municipios
+    expect(params[1]).toBe(1);            // orgId
+    for (let i = 1; i <= params.length; i++) expect(text).toContain(`$${i}`);
+  });
+
+  it('aplica os mesmos filtros da recomendação (porte, faixas, q)', () => {
+    const { text, params } = buildRecommendCountQuery({
+      ...base, filters: { porte: 'micro', capMin: 1000, idadeMax: 5, q: 'padaria 12' },
+    });
+    expect(text).toContain('::porte_emp');
+    expect(text).toContain('c.capital_social >= ');
+    expect(text).toContain('c.data_inicio_atividade >= ');
+    expect(text).toContain('c.cnpj LIKE');
+    expect(params).toContain('%padaria 12%');
+    // poda e gate de região continuam valendo na contagem
+    expect(text).toContain('c.cnae_divisao = ANY($4::smallint[])');
+    expect(text).toContain('c.regiao = ANY($6::regiao_br[])');
   });
 });
 

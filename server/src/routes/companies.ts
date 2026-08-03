@@ -98,7 +98,28 @@ export function companyRoutes(app: FastifyInstance): void {
        ORDER BY s.nome`,
       [company.cnpj],
     );
-    return { company, socios };
+    // Contatos que se repetem em outras empresas (migração 075) — a tela usa
+    // para avisar "provável contato de contabilidade". Só existe linha quando o
+    // contato passou do limite, então presença = compartilhado. Tabela vazia
+    // (script ainda não rodou) simplesmente não sinaliza nada.
+    // `one()` devolve as colunas como unknown — estreita só o que é lido aqui.
+    const ct = company as { telefone1: string | null; telefone2: string | null; email: string | null };
+    const tels = [ct.telefone1, ct.telefone2].filter(Boolean) as string[];
+    const shared = await query<{ tipo: string; valor: string; empresas: number }>(
+      `SELECT tipo, valor, empresas FROM contato_compartilhado
+        WHERE (tipo = 'telefone' AND valor = ANY($1::text[]))
+           OR (tipo = 'email'    AND valor = $2)`,
+      [tels, ct.email ? ct.email.toLowerCase() : null],
+    );
+    const nTel = (v: string | null): number | null =>
+      (v ? shared.find((s) => s.tipo === 'telefone' && s.valor === v)?.empresas ?? null : null);
+    const compartilhado = {
+      telefone1: nTel(ct.telefone1),
+      telefone2: nTel(ct.telefone2),
+      email: ct.email ? shared.find((s) => s.tipo === 'email')?.empresas ?? null : null,
+    };
+
+    return { company, socios, compartilhado };
   });
 
   // Confere na Evolution se os telefones da empresa existem no WhatsApp.

@@ -76,6 +76,35 @@ describe('companies', () => {
     expect((await inj(a, 'GET', '/api/companies/999999999')).statusCode).toBe(404);
   });
 
+  // Aviso "provável contabilidade": o contato só é sinalizado quando está em
+  // contato_compartilhado (telefone/e-mail que se repete em 4+ CNPJs raiz).
+  it('GET :id marca contato compartilhado (contabilidade) e ignora o exclusivo', async () => {
+    const tel = `11${Date.now() % 1_000_000_000}`.slice(0, 11);
+    const email = `contab.${Date.now()}@escritorio.com.br`;
+    const cid = await makeCompany({ municipioId: SP });
+    await query('UPDATE companies SET telefone1 = $2, telefone2 = $3, email = $4 WHERE id = $1',
+      [cid, tel, '1140028922', email]);
+    await query(
+      `INSERT INTO contato_compartilhado (tipo, valor, empresas) VALUES ('telefone',$1,37), ('email',$2,52)
+       ON CONFLICT (tipo, valor) DO UPDATE SET empresas = EXCLUDED.empresas`,
+      [tel, email],
+    );
+
+    const r = await inj(a, 'GET', `/api/companies/${cid}`);
+    const j = r.json() as { compartilhado: { telefone1: number | null; telefone2: number | null; email: number | null } };
+    expect(j.compartilhado.telefone1).toBe(37);
+    expect(j.compartilhado.email).toBe(52);
+    expect(j.compartilhado.telefone2).toBeNull(); // não está na tabela -> exclusivo
+  });
+
+  it('GET :id sem telefone/e-mail não sinaliza nada', async () => {
+    const cid = await makeCompany({ municipioId: SP });
+    await query('UPDATE companies SET telefone1 = NULL, telefone2 = NULL, email = NULL WHERE id = $1', [cid]);
+    const r = await inj(a, 'GET', `/api/companies/${cid}`);
+    const j = r.json() as { compartilhado: Record<string, number | null> };
+    expect(j.compartilhado).toEqual({ telefone1: null, telefone2: null, email: null });
+  });
+
   it('geocode: cache -> geocodificação -> fallback centroide; 404', async () => {
     const cid = await makeCompany({ municipioId: SP, lat: -23.55, lon: -46.63 });
 
@@ -261,10 +290,17 @@ describe('recommend', () => {
     expect(mine).toBeDefined();
     expect(mine.reason.cnae_match).toBe('classe');
 
+    // total de empresas do perfil (capado): acompanha o funil.
+    interface Page { results: Rec[]; page: { total: number; total_capped: boolean } }
+    const antes = (r.json() as Page).page;
+    expect(antes.total).toBe(results.length);
+    expect(antes.total_capped).toBe(false);
+
     // entrou no funil -> some da recomendação
     await inj(solo, 'POST', '/api/relationships', { company_id: cid });
     const after = await inj(solo, 'GET', url);
     expect((after.json() as { results: Rec[] }).results.some((x) => Number(x.id) === cid)).toBe(false);
+    expect((after.json() as Page).page.total).toBe(antes.total - 1);
   });
 
   it('filtros server-side (q, cnae-alvo, uf, porte)', async () => {

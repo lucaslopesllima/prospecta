@@ -4,7 +4,7 @@ import type { CompanyDetail, Socio } from './types.ts';
 import { SafeButton, Spinner } from './ui.tsx';
 import { Icon } from './icons.tsx';
 import { Cnae, seedCnae } from './cnae.tsx';
-import { waLink } from './format.ts';
+import { waLink, maskPhone } from './format.ts';
 import { toast } from './toast.tsx';
 import { EntityLabels } from './privateLabelPicker.tsx';
 
@@ -28,10 +28,12 @@ const fmtCep = (s: string): string => (s.length === 8 ? s.replace(/^(\d{5})(\d{3
 const fmtData = (s: string | null): string | null =>
   s ? (/^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10).split('-').reverse().join('/') : s) : null;
 const fmtSimNao = (s: string | null): string | null => (s === 'S' ? 'Sim' : s === 'N' ? 'Não' : null);
+// Máscara padrão do app (format.ts): (11) 3333-4444 / (11) 93333-4444, com DDI
+// 55 removido. Abaixo de 10 dígitos não é telefone — mostra como veio da RFB em
+// vez de inventar um formato.
 const fmtTel = (s: string | null): string | null => {
   if (!s) return null;
-  const d = s.replace(/\D/g, '');
-  return d.length >= 10 ? `(${d.slice(0, 2)}) ${d.slice(2)}` : s;
+  return s.replace(/\D/g, '').length >= 10 ? maskPhone(s) : s;
 };
 function fmtEndereco(c: CompanyDetail): string {
   const linha1 = [c.logradouro, c.numero].filter(Boolean).join(', ');
@@ -86,16 +88,33 @@ function SociosBloco({ socios }: { socios: Socio[] }): React.JSX.Element {
 // conversa continua como sempre foi; só `false` tira o link.
 type WaCheck = { telefone1: boolean | null; telefone2: boolean | null };
 
+// Quantas empresas (CNPJ raiz distinto) usam o mesmo contato. Só vem preenchido
+// acima do limite do servidor; null = contato exclusivo desta empresa.
+type Compartilhado = { telefone1: number | null; telefone2: number | null; email: number | null };
+
+// "i" ao lado do contato que se repete em várias empresas: quase sempre é o
+// telefone/e-mail do escritório de contabilidade, não de quem decide a compra.
+function AvisoContabilidade({ empresas }: { empresas: number }): React.JSX.Element {
+  return (
+    <span title={`Provável contato de contabilidade — aparece em ${empresas} empresas diferentes.`}
+      className="inline-flex items-center gap-1 text-amber-600">
+      <Icon name="info" size={13} />
+      <span className="text-xs">provável contabilidade</span>
+    </span>
+  );
+}
+
 export function CompanyModal({ companyId, onClose }: { companyId: number; onClose: () => void }): React.JSX.Element {
   const [data, setData] = useState<CompanyDetail | null>(null);
   const [socios, setSocios] = useState<Socio[]>([]);
   const [geo, setGeo] = useState<{ lat: number; lon: number; precisao: string } | null>(null);
   const [wa, setWa] = useState<WaCheck | null>(null);
   const [waPend, setWaPend] = useState(true);
+  const [shared, setShared] = useState<Compartilhado | null>(null);
   const [err, setErr] = useState(false);
 
   useEffect(() => {
-    setData(null); setSocios([]); setGeo(null); setErr(false);
+    setData(null); setSocios([]); setGeo(null); setShared(null); setErr(false);
     // Conferência dispara junto com o carregamento (não depende dos dados na
     // tela: o servidor lê os telefones da empresa). Falha vira indeterminado.
     setWa(null); setWaPend(true);
@@ -103,9 +122,9 @@ export function CompanyModal({ companyId, onClose }: { companyId: number; onClos
       .then((r) => setWa(r.whatsapp))
       .catch(() => undefined)
       .finally(() => setWaPend(false));
-    void api.get<{ company: CompanyDetail; socios: Socio[] }>(`/api/companies/${companyId}`)
+    void api.get<{ company: CompanyDetail; socios: Socio[]; compartilhado?: Compartilhado }>(`/api/companies/${companyId}`)
       .then((r) => {
-        setData(r.company); setSocios(r.socios ?? []);
+        setData(r.company); setSocios(r.socios ?? []); setShared(r.compartilhado ?? null);
         seedCnae(r.company.cnae_principal, r.company.cnae_descricao); // já temos a descrição
         if (r.company.geo_lat != null && r.company.geo_lon != null) {
           setGeo({ lat: r.company.geo_lat, lon: r.company.geo_lon, precisao: r.company.geo_precisao ?? 'rua' });
@@ -155,6 +174,18 @@ export function CompanyModal({ companyId, onClose }: { companyId: number; onClos
         className="inline-flex items-center gap-1 text-emerald-600 hover:underline">
         {fmt}<Icon name="whatsapp" size={13} />
       </SafeButton>
+    );
+  };
+
+  // Contato + o aviso de contabilidade, quando o valor se repete em outras
+  // empresas. Sem o dado (script ainda não rodou) a linha fica como antes.
+  const comAviso = (node: React.ReactNode, empresas: number | null | undefined): React.ReactNode => {
+    if (!node) return node;
+    if (empresas == null) return node;
+    return (
+      <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5">
+        {node}<AvisoContabilidade empresas={empresas} />
+      </span>
     );
   };
 
@@ -209,10 +240,10 @@ export function CompanyModal({ companyId, onClose }: { companyId: number; onClos
               </Section>
 
               <Section title="Contato">
-                <InfoRow label="Telefone 1" value={telWa(data.telefone1, 'telefone1')} />
-                <InfoRow label="Telefone 2" value={telWa(data.telefone2, 'telefone2')} />
+                <InfoRow label="Telefone 1" value={comAviso(telWa(data.telefone1, 'telefone1'), shared?.telefone1)} />
+                <InfoRow label="Telefone 2" value={comAviso(telWa(data.telefone2, 'telefone2'), shared?.telefone2)} />
                 <InfoRow label="Fax" value={fmtTel(data.fax)} />
-                <InfoRow label="E-mail" value={data.email} />
+                <InfoRow label="E-mail" value={comAviso(data.email, shared?.email)} />
               </Section>
 
               {/* EntityLabels se auto-oculta se a API negar (sem permissão) —

@@ -71,6 +71,85 @@ export interface RecommendArgs {
 
 // Monta o termo de proximidade: CASE sobre municipio_id com o pc de cada
 // município (paralelo-safe, sem JOIN). Território muito amplo -> constante média.
+// Teto do total de empresas do perfil. Contar exato o território todo (SP capital
+// = 2,4M candidatos) custa ~0,5s por request; parar em CAP+1 custa ~5ms e responde
+// a única pergunta que interessa na tela ("tem muita empresa aqui?").
+export const RECOMMEND_COUNT_CAP = 10_000;
+
+// Predicados de candidato — mesma poda usada pelo ranking e pela contagem. Os
+// índices dos parâmetros vêm de fora porque as duas queries têm layouts distintos.
+function candidatePredicates(idx: {
+  munis: number; org: number; cnaes: number; prune: number; uf: number; regiao: number;
+}): string {
+  return `c.situacao_cadastral = 'ativa'
+      -- empresas da base de demonstração (migração 073) são fictícias e vivem no
+      -- mesmo pool global: nunca podem ser sugeridas para nenhum tenant.
+      AND c.source <> 'demo'
+      AND c.municipio_id = ANY($${idx.munis}::int[])
+      AND (cardinality($${idx.cnaes}::int[]) = 0 OR c.cnae_divisao = ANY($${idx.prune}::smallint[]))
+      AND (c.uf = ANY($${idx.uf}::bpchar[]) OR c.regiao = ANY($${idx.regiao}::regiao_br[]))
+      AND NOT EXISTS (
+        SELECT 1 FROM company_relationships r WHERE r.org_id = $${idx.org} AND r.company_id = c.id
+      )`;
+}
+
+// Filtros server-side (WHERE sobre toda a base dentro do território/alvo).
+// Empurra os parâmetros em `params` a partir do fim e devolve o trecho de WHERE.
+function filterPredicates(f: RecommendFilters, params: unknown[]): string {
+  let p = params.length;
+  const extra: string[] = [];
+  if (f.porte) { params.push(f.porte); extra.push(`c.porte = $${++p}::porte_emp`); }
+  // Faixas de capital social e tempo de vida. Ambas as colunas estão no INCLUDE
+  // do índice de cobertura (migração 068), então o filtro não custa heap.
+  if (f.capMin != null) { params.push(f.capMin); extra.push(`c.capital_social >= $${++p}::numeric`); }
+  if (f.capMax != null) { params.push(f.capMax); extra.push(`c.capital_social <= $${++p}::numeric`); }
+  // idade em anos -> data limite. Empresa sem data_inicio_atividade (nulo na base
+  // RFB) sai do resultado quando a faixa é usada — não dá p/ afirmar a idade dela.
+  if (f.idadeMin != null) {
+    params.push(f.idadeMin);
+    extra.push(`c.data_inicio_atividade <= CURRENT_DATE - ($${++p}::float8 * 365.25)::int`);
+  }
+  if (f.idadeMax != null) {
+    params.push(f.idadeMax);
+    extra.push(`c.data_inicio_atividade >= CURRENT_DATE - ($${++p}::float8 * 365.25)::int`);
+  }
+  if (f.q) {
+    const digits = f.q.replace(/\D/g, '');
+    params.push(`%${f.q}%`); const a = ++p;
+    if (digits.length >= 2) {
+      params.push(`${digits}%`); const b = ++p;
+      extra.push(`(c.razao_social ILIKE $${a} OR c.nome_fantasia ILIKE $${a} OR c.cnpj LIKE $${b})`);
+    } else {
+      extra.push(`(c.razao_social ILIKE $${a} OR c.nome_fantasia ILIKE $${a})`);
+    }
+  }
+  return extra.length ? `\n    AND ${extra.join('\n    AND ')}` : '';
+}
+
+// Total de empresas do perfil, capado em RECOMMEND_COUNT_CAP+1 (o +1 distingue
+// "exatamente 10.000" de "10.000+"). Sem score, sem sort e sem o join de seção:
+// só o Index Scan do território, que o LIMIT interrompe assim que enche a cota.
+export function buildRecommendCountQuery(args: RecommendArgs): { text: string; params: unknown[] } {
+  const params: unknown[] = [
+    args.profile.territorio_municipios ?? [], // $1 municipios
+    args.orgId,                               // $2 orgId
+    args.profile.cnaes_alvo ?? [],            // $3 cnaes
+    args.pruneDivisoes,                       // $4 pruneDivisoes
+    args.regioesUf,                           // $5 regioesUf
+    args.regioesRegiao,                       // $6 regioesRegiao
+  ];
+  const where = candidatePredicates({ munis: 1, org: 2, cnaes: 3, prune: 4, uf: 5, regiao: 6 });
+  const extraPredicates = filterPredicates(args.filters ?? {}, params);
+  const text = `
+SELECT count(*)::int AS total FROM (
+  SELECT 1
+  FROM companies c
+  WHERE ${where}${extraPredicates}
+  LIMIT ${RECOMMEND_COUNT_CAP + 1}
+) t`;
+  return { text, params };
+}
+
 function proximityExpr(muniProx: { id: number; pc: number }[]): string {
   if (muniProx.length === 0) return '0::float8';
   if (muniProx.length > MAX_PROX_CASE) {
@@ -105,7 +184,6 @@ export function buildRecommendQuery(args: RecommendArgs): { text: string; params
     args.origin.lat, args.origin.lon,
     wCapital, wIdade,
   ];
-  let p = params.length; // último índice usado (=16)
 
   const prox = proximityExpr(args.muniProx);
 
@@ -119,7 +197,7 @@ export function buildRecommendQuery(args: RecommendArgs): { text: string; params
   const cdsJoin = 'LEFT JOIN cnae_divisao_secao cds ON cds.divisao = c.cnae_divisao';
   // Poda por divisão (só varre as divisões das seções-alvo). Sem CNAE-alvo
   // (cardinality 0) o filtro é TRUE e varre o território todo.
-  const cnaePredicate = `(cardinality($5::int[]) = 0 OR c.cnae_divisao = ANY($8::smallint[]))`;
+  const where = candidatePredicates({ munis: 1, org: 2, cnaes: 5, prune: 8, uf: 9, regiao: 10 });
 
   // porte, capital social e tempo de vida são componentes independentes (cada um
   // com o seu peso) — antes capital estava embutido no componente porte.
@@ -129,35 +207,7 @@ export function buildRecommendQuery(args: RecommendArgs): { text: string; params
   // início (base RFB tem nulos) o componente é 0, não penaliza nem premia.
   const idadeS = `LEAST(GREATEST((CURRENT_DATE - COALESCE(c.data_inicio_atividade, CURRENT_DATE))::float8 / 365.25, 0) / ${IDADE_REF_ANOS}::float8, 1.0)`;
 
-  // Filtros server-side (WHERE sobre toda a base dentro do território/alvo).
-  const f = args.filters ?? {};
-  const extra: string[] = [];
-  if (f.porte) { params.push(f.porte); extra.push(`c.porte = $${++p}::porte_emp`); }
-  // Faixas de capital social e tempo de vida. Ambas as colunas estão no INCLUDE
-  // do índice de cobertura (migração 068), então o filtro não custa heap.
-  if (f.capMin != null) { params.push(f.capMin); extra.push(`c.capital_social >= $${++p}::numeric`); }
-  if (f.capMax != null) { params.push(f.capMax); extra.push(`c.capital_social <= $${++p}::numeric`); }
-  // idade em anos -> data limite. Empresa sem data_inicio_atividade (nulo na base
-  // RFB) sai do resultado quando a faixa é usada — não dá p/ afirmar a idade dela.
-  if (f.idadeMin != null) {
-    params.push(f.idadeMin);
-    extra.push(`c.data_inicio_atividade <= CURRENT_DATE - ($${++p}::float8 * 365.25)::int`);
-  }
-  if (f.idadeMax != null) {
-    params.push(f.idadeMax);
-    extra.push(`c.data_inicio_atividade >= CURRENT_DATE - ($${++p}::float8 * 365.25)::int`);
-  }
-  if (f.q) {
-    const digits = f.q.replace(/\D/g, '');
-    params.push(`%${f.q}%`); const a = ++p;
-    if (digits.length >= 2) {
-      params.push(`${digits}%`); const b = ++p;
-      extra.push(`(c.razao_social ILIKE $${a} OR c.nome_fantasia ILIKE $${a} OR c.cnpj LIKE $${b})`);
-    } else {
-      extra.push(`(c.razao_social ILIKE $${a} OR c.nome_fantasia ILIKE $${a})`);
-    }
-  }
-  const extraPredicates = extra.length ? `\n    AND ${extra.join('\n    AND ')}` : '';
+  const extraPredicates = filterPredicates(args.filters ?? {}, params);
 
   const text = `
 WITH cand AS (
@@ -174,16 +224,7 @@ WITH cand AS (
       ($16::float8 * ${idadeS}) AS idade_comp
     FROM companies c
     ${cdsJoin}
-    WHERE c.situacao_cadastral = 'ativa'
-      -- empresas da base de demonstração (migração 073) são fictícias e vivem no
-      -- mesmo pool global: nunca podem ser sugeridas para nenhum tenant.
-      AND c.source <> 'demo'
-      AND c.municipio_id = ANY($1::int[])
-      AND ${cnaePredicate}
-      AND (c.uf = ANY($9::bpchar[]) OR c.regiao = ANY($10::regiao_br[]))
-      AND NOT EXISTS (
-        SELECT 1 FROM company_relationships r WHERE r.org_id = $2 AND r.company_id = c.id
-      )${extraPredicates}
+    WHERE ${where}${extraPredicates}
   ) raw
   ORDER BY score DESC
   LIMIT $11 OFFSET $12
