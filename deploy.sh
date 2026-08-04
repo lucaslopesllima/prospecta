@@ -226,6 +226,49 @@ else
   "${COMPOSE[@]}" logs --tail=20 nginx >&2 || true
 fi
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 3. Busca de empresas (idempotente): índices de prefixo + prewarm.
+#    Fora do migrate.ts de propósito: o runner embrulha cada migration em
+#    BEGIN/COMMIT e CREATE INDEX CONCURRENTLY não roda em transação — e sem
+#    CONCURRENTLY o build (~minutos em 30M linhas) travaria escrita no boot.
+#    1ª execução constrói os índices; nas seguintes vira no-op + prewarm.
+# ─────────────────────────────────────────────────────────────────────────────
+echo "==> índices de busca + prewarm (idempotente; 1ª vez demora alguns minutos)"
+"${COMPOSE[@]}" exec -T db psql -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-rs}" -v ON_ERROR_STOP=1 <<'SQL'
+-- Build CONCURRENTLY interrompido deixa índice INVALID, e o IF NOT EXISTS
+-- abaixo pularia o índice quebrado pra sempre — dropa antes.
+DO $$
+DECLARE i text;
+BEGIN
+  FOR i IN SELECT c.relname FROM pg_index x JOIN pg_class c ON c.oid = x.indexrelid
+           WHERE NOT x.indisvalid
+             AND c.relname IN ('companies_razao_prefix_idx', 'companies_fantasia_prefix_idx')
+  LOOP
+    EXECUTE format('DROP INDEX %I', i);
+  END LOOP;
+END $$;
+-- COLLATE "C": banco é en_US.utf8; sem isso o planner não converte o LIKE 'X%'
+-- da busca por prefixo em range scan. Casa com o COLLATE "C" da query em
+-- server/src/routes/companies.ts (busca por nome).
+CREATE INDEX CONCURRENTLY IF NOT EXISTS companies_razao_prefix_idx
+  ON companies (razao_social COLLATE "C");
+CREATE INDEX CONCURRENTLY IF NOT EXISTS companies_fantasia_prefix_idx
+  ON companies (nome_fantasia COLLATE "C") WHERE nome_fantasia IS NOT NULL;
+CREATE EXTENSION IF NOT EXISTS pg_prewarm;
+-- Caminho quente da busca (btrees de prefixo/CNPJ) direto no shared_buffers;
+-- GIN trigram (2,3GB, só fallback de substring) apenas no page cache do SO
+-- ('read') pra não despejar o resto do shared_buffers. O autoprewarm
+-- (docker-compose.prod.yml) preserva o cache entre restarts, mas não protege
+-- contra eviction com o working set maior que o shared_buffers — daí reaquecer
+-- a cada deploy.
+SELECT pg_prewarm('companies_razao_prefix_idx'),
+       pg_prewarm('companies_fantasia_prefix_idx'),
+       pg_prewarm('companies_cnpj_prefix_idx');
+SELECT pg_prewarm('companies_razao_trgm_idx', 'read'),
+       pg_prewarm('companies_fantasia_trgm_idx', 'read');
+SQL
+echo "    busca ✓"
+
 echo "==> limpando imagens antigas"
 docker image prune -f >/dev/null || true
 

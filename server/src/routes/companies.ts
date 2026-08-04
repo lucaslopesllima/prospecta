@@ -3,13 +3,15 @@ import { one, query } from '../db.ts';
 import { requireAuth, requirePermission } from '../auth.ts';
 import { geocodeAddr } from '../geocode.ts';
 import { checkWhatsappNumbers } from '../whatsapp.ts';
+import { descobrirDominio } from '../enriquecimento.ts';
 
 // Read-only lookup into the global companies pool (mesma fonte do recommend/funil).
 // Retorna TODOS os campos da empresa (com códigos RFB decodificados) + quadro societário.
 export function companyRoutes(app: FastifyInstance): void {
   // Busca rápida na base global (CNPJ ou razão/fantasia) para autopreencher
   // cadastros (transportadoras, representadas, etc.). q só com dígitos vira
-  // prefixo de CNPJ (índice pattern_ops); senão ILIKE trigram em razão/fantasia.
+  // prefixo de CNPJ (índice pattern_ops); senão prefixo de razão/fantasia
+  // (btree COLLATE "C") com fallback ILIKE trigram pra completar os 10.
   // minLength 3: <3 chars o GIN trgm não indexa o padrão -> ILIKE '%x%' vira
   // seq scan na base inteira (mesma regra do recommend).
   app.get('/api/companies/search', {
@@ -39,13 +41,36 @@ export function companyRoutes(app: FastifyInstance): void {
       );
       return { companies };
     }
-    const companies = await query(
-      `${SELECT}
-       AND (c.razao_social ILIKE '%' || $1 || '%' OR c.nome_fantasia ILIKE '%' || $1 || '%')
-       ORDER BY c.razao_social LIMIT 10`,
-      [q.trim(), orgId],
+    // Nome em dois estágios. 1º prefixo (btree COLLATE "C", criado pelo
+    // deploy.sh — a base é ~toda uppercase): resolve o caso dominante (usuário
+    // digitando o nome do início) em poucos ms. O COLLATE "C" nos dois lados é
+    // o que permite ao planner derivar range scan do LIKE 'X%' num banco
+    // en_US.utf8. Escapa %_\ para o termo não virar wildcard (e um '%' inicial
+    // não degenerar em seq scan de 30M linhas).
+    const prefixo = q.trim().toUpperCase().replace(/[\\%_]/g, (m) => `\\${m}`) + '%';
+    const prefixHits = await query<{ id: number; razao_social: string }>(
+      `(${SELECT} AND c.razao_social COLLATE "C" LIKE $1
+        ORDER BY c.razao_social COLLATE "C" LIMIT 10)
+       UNION
+       (${SELECT} AND c.nome_fantasia COLLATE "C" LIKE $1
+        ORDER BY c.nome_fantasia COLLATE "C" LIMIT 10)
+       ORDER BY razao_social LIMIT 10`,
+      [prefixo, orgId],
     );
-    return { companies };
+    if (prefixHits.length >= 10) return { companies: prefixHits };
+    // 2º substring (GIN trigram) só para completar os 10. LIMIT numa subquery,
+    // ORDER BY só nos que sobraram: ordenar o match set inteiro de um termo
+    // curto ("pad" casa 86k empresas) visitava 80k páginas de heap antes do
+    // corte — era isso que deixava a busca em centenas de ms.
+    const resto = await query(
+      `SELECT * FROM (
+         ${SELECT} AND c.id <> ALL($3::bigint[])
+          AND (c.razao_social ILIKE '%' || $1 || '%' OR c.nome_fantasia ILIKE '%' || $1 || '%')
+         LIMIT $4
+       ) s ORDER BY s.razao_social`,
+      [q.trim(), orgId, prefixHits.map((c) => c.id), 10 - prefixHits.length],
+    );
+    return { companies: [...prefixHits, ...resto] };
   });
 
   app.get('/api/companies/:id', {
@@ -183,5 +208,25 @@ export function companyRoutes(app: FastifyInstance): void {
     }
     // sem geocode -> centroide do município
     return { geocode: { lat: c.lat, lon: c.lon, precisao: 'municipio', fonte: 'rfb', cached: false } };
+  });
+
+  // Descobre o site próprio da empresa no registro.br, sob demanda (o usuário
+  // clica "buscar site" na ficha). Não é instantâneo: pode gastar até 8 consultas
+  // com throttle de 350ms, então o client precisa exibir carregando.
+  //
+  // dominio null = varreu e não encontrou. confianca 100 = o CNPJ raiz do titular
+  // do domínio bate com o da empresa; não existe meio-termo nesta fonte.
+  app.get('/api/companies/:id/dominio', {
+    preHandler: [requireAuth, requirePermission('prospeccao.view')],
+    schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'integer' } } } },
+  }, async (req, reply) => {
+    const { id } = req.params as { id: number };
+    const c = await one<{
+      id: number; cnpj: string; razao_social: string; nome_fantasia: string | null; email: string | null;
+    }>(
+      'SELECT id, cnpj, razao_social, nome_fantasia, email FROM companies WHERE id = $1', [id],
+    );
+    if (!c) return reply.code(404).send({ error: 'empresa não encontrada' });
+    return { dominio: await descobrirDominio(c) };
   });
 }

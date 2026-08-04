@@ -91,6 +91,25 @@ type WaCheck = { telefone1: boolean | null; telefone2: boolean | null };
 // Quantas empresas (CNPJ raiz distinto) usam o mesmo contato. Só vem preenchido
 // acima do limite do servidor; null = contato exclusivo desta empresa.
 type Compartilhado = { telefone1: number | null; telefone2: number | null; email: number | null };
+// Resposta de /api/companies/:id/dominio. 'indeterminado' = o registro.br não
+// respondeu o titular (cota por IP); não é o mesmo que "a empresa não tem site".
+type SiteBusca = {
+  dominio: string | null;
+  status: 'achou' | 'nao_encontrado' | 'indeterminado';
+  // site_url é a URL que o domínio serve de fato (www/http certos, pós-redirect).
+  // Domínio confirmado sem site_url = registrado só para e-mail ou fora do ar.
+  site_url: string | null;
+  site_status: 'vivo' | 'bloqueado' | 'sem_pagina' | 'sem_dns' | null;
+  // 100 = CNPJ do titular confirmado no registro.br. 70 = domínio do e-mail que
+  // a empresa declarou à Receita, fora do .br, que o registro.br não verifica.
+  confianca: number;
+  fonte: string;
+};
+
+const SEM_SITE: Record<string, string> = {
+  sem_dns: 'domínio registrado, sem site publicado',
+  sem_pagina: 'domínio registrado, site fora do ar',
+};
 
 // "i" ao lado do contato que se repete em várias empresas: quase sempre é o
 // telefone/e-mail do escritório de contabilidade, não de quem decide a compra.
@@ -112,9 +131,15 @@ export function CompanyModal({ companyId, onClose }: { companyId: number; onClos
   const [waPend, setWaPend] = useState(true);
   const [shared, setShared] = useState<Compartilhado | null>(null);
   const [err, setErr] = useState(false);
+  // Site: diferente do WhatsApp e do geocode, NÃO dispara ao abrir o modal. A
+  // busca no registro.br leva alguns segundos e consome uma cota por IP que é
+  // compartilhada por todos os usuários — só sai com clique explícito.
+  const [site, setSite] = useState<SiteBusca | null>(null);
+  const [sitePend, setSitePend] = useState(false);
 
   useEffect(() => {
     setData(null); setSocios([]); setGeo(null); setShared(null); setErr(false);
+    setSite(null); setSitePend(false);
     // Conferência dispara junto com o carregamento (não depende dos dados na
     // tela: o servidor lê os telefones da empresa). Falha vira indeterminado.
     setWa(null); setWaPend(true);
@@ -174,6 +199,72 @@ export function CompanyModal({ companyId, onClose }: { companyId: number; onClos
         className="inline-flex items-center gap-1 text-emerald-600 hover:underline">
         {fmt}<Icon name="whatsapp" size={13} />
       </SafeButton>
+    );
+  };
+
+  const buscarSite = (): void => {
+    setSitePend(true);
+    void api.get<{ dominio: SiteBusca }>(`/api/companies/${companyId}/dominio`)
+      .then((r) => setSite(r.dominio))
+      .catch((e) => toast.error(e instanceof ApiError ? e.message : 'Falha ao buscar o site'))
+      .finally(() => setSitePend(false));
+  };
+
+  // 4 estados: não buscado / buscando / achou / não deu. 'indeterminado' é o
+  // registro.br tendo censurado a consulta por cota — é diferente de "não tem
+  // site" e por isso oferece tentar de novo em vez de afirmar a ausência.
+  const linhaSite = (): React.ReactNode => {
+    if (sitePend) {
+      return (
+        <span className="inline-flex items-center gap-1.5 text-ink-400">
+          <span className="h-3 w-3 animate-spin rounded-full border-2 border-ink-200 border-t-brand-500" />
+          <span className="text-xs">procurando no registro.br…</span>
+        </span>
+      );
+    }
+    // Domínio confirmado e servindo página: é o site, abre direto. 'bloqueado'
+    // (WAF barrou nossa sondagem) também abre — no navegador do usuário funciona.
+    if (site?.site_url) {
+      return (
+        <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <a href={site.site_url} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-brand-600 hover:underline">
+            {site.dominio}
+          </a>
+          {/* Sem confirmação de titularidade: veio do e-mail do cadastro. */}
+          {site.confianca < 100 && (
+            <span className="text-xs text-ink-400" title="Domínio do e-mail declarado na Receita; o registro.br não confirma titularidade fora do .br">
+              não confirmado
+            </span>
+          )}
+        </span>
+      );
+    }
+    // Domínio confirmado mas sem site: mostra o domínio (serve de pista para o
+    // e-mail: contato@dominio) e explica por que não há link.
+    if (site?.dominio) {
+      return (
+        <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <span className="text-ink-700">{site.dominio}</span>
+          <span className="text-xs text-ink-400">
+            {SEM_SITE[site.site_status ?? ''] ?? 'sem site confirmado'}
+          </span>
+        </span>
+      );
+    }
+    const rotulo = site === null ? 'buscar site'
+      : site.status === 'indeterminado' ? 'tentar de novo' : 'buscar de novo';
+    return (
+      <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5">
+        {site?.status === 'nao_encontrado' && <span className="text-xs text-ink-300">nenhum site encontrado</span>}
+        {site?.status === 'indeterminado' && (
+          <span className="text-xs text-amber-600">o registro.br não confirmou agora</span>
+        )}
+        <SafeButton type="button" onClick={buscarSite}
+          className="inline-flex items-center gap-1 text-xs text-brand-600 hover:underline">
+          <Icon name="search" size={12} />{rotulo}
+        </SafeButton>
+      </span>
     );
   };
 
@@ -244,6 +335,7 @@ export function CompanyModal({ companyId, onClose }: { companyId: number; onClos
                 <InfoRow label="Telefone 2" value={comAviso(telWa(data.telefone2, 'telefone2'), shared?.telefone2)} />
                 <InfoRow label="Fax" value={fmtTel(data.fax)} />
                 <InfoRow label="E-mail" value={comAviso(data.email, shared?.email)} />
+                <InfoRow label="Site" value={linhaSite()} />
               </Section>
 
               {/* EntityLabels se auto-oculta se a API negar (sem permissão) —
