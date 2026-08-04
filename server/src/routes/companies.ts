@@ -4,6 +4,7 @@ import { requireAuth, requirePermission } from '../auth.ts';
 import { geocodeAddr } from '../geocode.ts';
 import { checkWhatsappNumbers } from '../whatsapp.ts';
 import { descobrirDominio } from '../enriquecimento.ts';
+import { buscarContatosNoSite } from '../contatos_site.ts';
 
 // Read-only lookup into the global companies pool (mesma fonte do recommend/funil).
 // Retorna TODOS os campos da empresa (com códigos RFB decodificados) + quadro societário.
@@ -228,5 +229,27 @@ export function companyRoutes(app: FastifyInstance): void {
     );
     if (!c) return reply.code(404).send({ error: 'empresa não encontrada' });
     return { dominio: await descobrirDominio(c) };
+  });
+
+  // Raspa os contatos publicados no site da empresa. Depende do site já
+  // descoberto (rota acima) — é o único dado que a descoberta persiste.
+  //
+  // O resultado NÃO é gravado: vai para a tela e o representante escolhe o que
+  // vira contato, pelo POST /api/contacts de sempre. Contato de site é dado de
+  // pessoa em boa parte dos casos (nome + celular do gerente), e guardar só o
+  // que foi escolhido mantém a coleta na medida do uso, como já vale para o
+  // contato administrativo do RDAP (ver migração 076).
+  app.get('/api/companies/:id/contatos-site', {
+    preHandler: [requireAuth, requirePermission('prospeccao.view')],
+    schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'integer' } } } },
+  }, async (req, reply) => {
+    const { id } = req.params as { id: number };
+    const c = await one<{ site_url: string | null }>(
+      'SELECT site_url FROM company_dominio WHERE company_id = $1', [id],
+    );
+    // 409 e não 404: a empresa existe, o que falta é a busca do site. O client
+    // só mostra o botão depois de achar o site, então isto é rede de segurança.
+    if (!c?.site_url) return reply.code(409).send({ error: 'busque o site da empresa primeiro' });
+    return buscarContatosNoSite(c.site_url);
   });
 }

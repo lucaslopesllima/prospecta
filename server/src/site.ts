@@ -58,10 +58,28 @@ const TIMEOUT_MS = 6000;
 const MAX_REDIRECTS = 3;
 // Página real tem mais que isso. Corta placeholder de registrar e resposta vazia.
 const MIN_BYTES = 300;
+// Teto do corpo decodificado. Serve à raspagem de contatos, não à sondagem:
+// nenhuma página de contato precisa de mais que isso, e o limite impede que um
+// site com um dump gigante segure memória do processo.
+const MAX_HTML_BYTES = 1_000_000;
+
+// Muito site de PME brasileira ainda serve ISO-8859-1. Decodificar tudo como
+// UTF-8 estraga os rótulos ("Endereço" vira "EndereÃ§o") e a extração de contato
+// depende deles para dizer de quem é o telefone. Charset inválido cai em UTF-8.
+function decodificar(buf: ArrayBuffer, contentType: string | null): string {
+  const rotulo = /charset=["']?([\w-]+)/i.exec(contentType ?? '')?.[1];
+  const bytes = buf.byteLength > MAX_HTML_BYTES ? buf.slice(0, MAX_HTML_BYTES) : buf;
+  for (const label of [rotulo, 'utf-8']) {
+    if (!label) continue;
+    // TextDecoder lança RangeError em label desconhecido — daí o try por rótulo.
+    try { return new TextDecoder(label).decode(bytes); } catch { /* tenta o próximo */ }
+  }
+  return '';
+}
 
 // Segue redirect à mão para validar o host de CADA salto — com redirect:'follow'
 // o destino final não passaria pela checagem de IP privado.
-async function buscar(url: string): Promise<{ status: number; url: string; bytes: number } | null> {
+async function buscar(url: string): Promise<{ status: number; url: string; bytes: number; html: string } | null> {
   // Entra como URL já parseada e segue assim: cada salto substitui o objeto, sem
   // reparsear string. Quem constrói o valor inicial é resolverSite, a partir de
   // um domínio que o gerador de candidatos garante ser [a-z0-9.] apenas.
@@ -81,18 +99,19 @@ async function buscar(url: string): Promise<{ status: number; url: string; bytes
 
     if (res.status >= 300 && res.status < 400) {
       const destino = res.headers.get('location');
-      if (!destino) return { status: res.status, url: u.toString(), bytes: 0 };
+      if (!destino) return { status: res.status, url: u.toString(), bytes: 0, html: '' };
       // Location malformado lança aqui, e sem o try a exceção sobe até a rota.
       try { u = new URL(destino, u); } catch { return null; }
       continue;
     }
-    // Só o começo do corpo interessa (existe página?), não o HTML inteiro.
     let bytes = 0;
+    let html = '';
     try {
       const buf = await res.arrayBuffer();
       bytes = buf.byteLength;
+      html = decodificar(buf, res.headers.get('content-type'));
     } catch { /* corpo ilegível não invalida o status */ }
-    return { status: res.status, url: u.toString(), bytes };
+    return { status: res.status, url: u.toString(), bytes, html };
   }
   return null; // excesso de redirects
 }
@@ -115,4 +134,22 @@ export async function resolverSite(dominio: string): Promise<Site> {
   // WAF barrou em todas as tentativas: tem servidor de pé, então tem site.
   if (bloqueado) return { url: bloqueado, status: 'bloqueado' };
   return { url: null, status: 'sem_pagina' };
+}
+
+// Baixa UMA página já resolvida, com o mesmo pipeline de segurança da sondagem
+// (esquema, IP público em cada salto, timeout, teto de corpo). É a porta de
+// entrada da raspagem de contatos: fora daqui ninguém faz fetch em host de
+// terceiro. `url` final acompanha o retorno porque a página pode ter redirecionado
+// e é ela que vira a origem do contato mostrada ao usuário.
+//
+// null = não houve resposta utilizável (rede, timeout, host interno, redirect
+// inválido). Com resposta, o `status` vem junto e é o chamador que decide: a
+// colcci.com.br devolve 403 com uma página de WAF de 14 KB, e ler aquilo como
+// "site sem contato" seria mentir para o representante.
+export async function buscarPagina(
+  url: string,
+): Promise<{ url: string; html: string; status: number } | null> {
+  const r = await buscar(url);
+  if (!r) return null;
+  return { url: r.url, html: r.html, status: r.status };
 }

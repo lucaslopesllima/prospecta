@@ -1,7 +1,7 @@
 // CompanyModal: modal só-leitura com todos os dados da empresa (RFB) + sócios,
 // geolocalização (do banco ou sob demanda), telefone WhatsApp e dados brutos.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CompanyModal } from '../src/lib/companyModal.tsx';
 import { api, ApiError } from '../src/lib/api.ts';
@@ -217,6 +217,133 @@ describe('CompanyModal', () => {
     await screen.findByText('Alvo Comercio LTDA');
     expect(screen.getByText('(11) 93333-4444')).toBeInTheDocument(); // celular
     expect(screen.getByText('(11) 3333-4444')).toBeInTheDocument();  // fixo
+  });
+
+  // Raspagem dos contatos publicados no site. Depende do site já descoberto, e
+  // nada do que ela devolve é gravado: só o que o usuário mandar adicionar.
+  describe('contatos no site', () => {
+    const SITE = {
+      dominio: 'alvo.com.br', status: 'achou', site_url: 'https://www.alvo.com.br/',
+      site_status: 'vivo', confianca: 100, fonte: 'registrobr', titular: null,
+    };
+    const CONTATOS = {
+      contatos: [
+        {
+          nome: 'Silvio Zanon', cargo: 'Gerente', rotulo: 'Departamento Técnico',
+          email: 'silvio@alvo.com.br', telefone: '4935417021', whatsapp: '49988321048',
+          origem: 'https://www.alvo.com.br/contato',
+        },
+        {
+          nome: null, cargo: null, rotulo: 'Departamento Vendas',
+          email: 'vendas@alvo.com.br', telefone: null, whatsapp: null,
+          origem: 'https://www.alvo.com.br/contato',
+        },
+      ],
+      paginas: ['https://www.alvo.com.br/', 'https://www.alvo.com.br/contato'],
+      bloqueado: false,
+    };
+
+    const abrirComSite = async (contatos: unknown = CONTATOS, site: unknown = SITE): Promise<void> => {
+      m.get.mockImplementation(async (p: string) => {
+        if (p === '/api/companies/1') return { company: company(), socios: [] };
+        if (p === '/api/companies/1/dominio') return { dominio: site };
+        if (p === '/api/companies/1/contatos-site') {
+          if (contatos instanceof Error) throw contatos;
+          return contatos;
+        }
+        return {};
+      });
+      render(<CompanyModal companyId={1} onClose={vi.fn()} />);
+      await screen.findByText('Alvo Comercio LTDA');
+      await userEvent.click(screen.getByText('buscar site'));
+      await screen.findByText((site as { dominio: string }).dominio);
+    };
+
+    it('o botão só existe depois de achar o site', async () => {
+      m.get.mockImplementation(async (p: string) =>
+        (p === '/api/companies/1' ? { company: company(), socios: [] } : {}));
+      render(<CompanyModal companyId={1} onClose={vi.fn()} />);
+      await screen.findByText('Alvo Comercio LTDA');
+      expect(screen.queryByText('buscar contatos no site')).not.toBeInTheDocument();
+    });
+
+    it('lista os contatos raspados, com pessoa e setor', async () => {
+      await abrirComSite();
+      await userEvent.click(screen.getByText('buscar contatos no site'));
+      expect(await screen.findByText('Silvio Zanon')).toBeInTheDocument();
+      expect(screen.getByText(/Gerente · silvio@alvo\.com\.br/)).toBeInTheDocument();
+      // telefone e WhatsApp saem mascarados, e o WhatsApp identificado
+      expect(screen.getByText(/\(49\) 3541-7021 · \(49\) 98832-1048 \(WhatsApp\)/)).toBeInTheDocument();
+      // contato institucional entra pelo rótulo do setor
+      expect(screen.getByText('Departamento Vendas')).toBeInTheDocument();
+      expect(screen.getAllByText('adicionar')).toHaveLength(2);
+    });
+
+    it('adicionar abre o cadastro já com a empresa e os canais preenchidos', async () => {
+      await abrirComSite();
+      await userEvent.click(screen.getByText('buscar contatos no site'));
+      await screen.findByText('Silvio Zanon');
+      await userEvent.click(screen.getAllByText('adicionar')[0]!);
+
+      expect(await screen.findByText('Novo contato')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('Nome *')).toHaveValue('Silvio Zanon');
+      expect(screen.getByPlaceholderText('Cargo (ex.: Comprador)')).toHaveValue('Gerente');
+      expect(screen.getByPlaceholderText('E-mail')).toHaveValue('silvio@alvo.com.br');
+      // WhatsApp na frente do fixo: é por onde o representante fala
+      expect(screen.getByPlaceholderText('Telefone')).toHaveValue('(49) 98832-1048');
+      // empresa já selecionada, sem passar pela busca ("Loja Alvo" também está
+      // na ficha atrás, então a checagem é dentro do chip do formulário)
+      const chip = screen.getByLabelText('Remover empresa').parentElement!;
+      expect(within(chip).getByText('Loja Alvo')).toBeInTheDocument();
+      expect(screen.queryByPlaceholderText(/Empresa-prospect/)).not.toBeInTheDocument();
+    });
+
+    it('contato sem nome próprio entra com o setor no nome', async () => {
+      await abrirComSite();
+      await userEvent.click(screen.getByText('buscar contatos no site'));
+      await screen.findByText('Departamento Vendas');
+      await userEvent.click(screen.getAllByText('adicionar')[1]!);
+      expect(await screen.findByText('Novo contato')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('Nome *')).toHaveValue('Departamento Vendas');
+      expect(screen.getByPlaceholderText('E-mail')).toHaveValue('vendas@alvo.com.br');
+    });
+
+    it('site sem contato publicado diz quantas páginas leu e oferece repetir', async () => {
+      await abrirComSite({ contatos: [], paginas: ['https://www.alvo.com.br/'], bloqueado: false });
+      await userEvent.click(screen.getByText('buscar contatos no site'));
+      expect(await screen.findByText(/nada publicado nas 1 página\(s\) lidas/)).toBeInTheDocument();
+      expect(screen.getByText('buscar de novo')).toBeInTheDocument();
+    });
+
+    // colcci.com.br: 403 com página de WAF. Dizer "nada publicado" mandaria o
+    // representante embora de um site que tem os contatos todos lá.
+    it('site que barra robô não é anunciado como "sem contato"', async () => {
+      await abrirComSite({ contatos: [], paginas: [], bloqueado: true });
+      await userEvent.click(screen.getByText('buscar contatos no site'));
+      expect(await screen.findByText(/bloqueia leitura automática/)).toBeInTheDocument();
+      expect(screen.queryByText(/nada publicado/)).not.toBeInTheDocument();
+    });
+
+    // Loja franqueada COLCCI: colcci.com.br é da AMC TEXTIL. A ficha mostra o
+    // site, mas dizendo de quem é — senão o representante liga para a fábrica
+    // achando que fala com a loja.
+    it('site da marca é rotulado, com o titular', async () => {
+      await abrirComSite(CONTATOS, {
+        ...SITE, dominio: 'colcci.com.br', site_url: 'https://colcci.com.br/',
+        fonte: 'marca', confianca: 40, titular: 'AMC TEXTIL LTDA',
+      });
+      expect(screen.getByText(/site da marca · AMC TEXTIL LTDA/)).toBeInTheDocument();
+      expect(screen.queryByText('não confirmado')).not.toBeInTheDocument();
+      // e o aviso acompanha a lista de contatos
+      expect(screen.getByText(/contatos de AMC TEXTIL LTDA, dona da marca/i)).toBeInTheDocument();
+    });
+
+    it('falha na raspagem vira toast, sem quebrar o modal', async () => {
+      await abrirComSite(new Error('site fora do ar'));
+      await userEvent.click(screen.getByText('buscar contatos no site'));
+      await waitFor(() => expect(toast.error).toHaveBeenCalled());
+      expect(screen.getByText('buscar contatos no site')).toBeInTheDocument();
+    });
   });
 
   it('fecha no backdrop, no X e não fecha ao clicar no corpo', async () => {

@@ -7,6 +7,7 @@ import { Cnae, seedCnae } from './cnae.tsx';
 import { waLink, maskPhone } from './format.ts';
 import { toast } from './toast.tsx';
 import { EntityLabels } from './privateLabelPicker.tsx';
+import { NewContactModal, EMPTY_CONTACT, type ContactForm } from './contactForm.tsx';
 
 // Modal só-leitura com TODOS os dados da empresa no banco (RFB) + quadro societário.
 const PORTE_LABEL: Record<string, string> = {
@@ -102,14 +103,34 @@ type SiteBusca = {
   site_status: 'vivo' | 'bloqueado' | 'sem_pagina' | 'sem_dns' | null;
   // 100 = CNPJ do titular confirmado no registro.br. 70 = domínio do e-mail que
   // a empresa declarou à Receita, fora do .br, que o registro.br não verifica.
+  // 40 = site da MARCA que a empresa opera, registrado por outro CNPJ.
   confianca: number;
   fonte: string;
+  // Preenchido só quando fonte === 'marca': o nome de quem registrou o domínio.
+  titular: string | null;
 };
 
 const SEM_SITE: Record<string, string> = {
   sem_dns: 'domínio registrado, sem site publicado',
   sem_pagina: 'domínio registrado, site fora do ar',
 };
+
+// Contato publicado no site da empresa. NÃO está no banco: vem da raspagem e só
+// vira registro se o representante clicar "adicionar aos contatos". Por isso a
+// lista não tem id — a identidade dela é o próprio valor.
+type ContatoSite = {
+  nome: string | null;
+  cargo: string | null;
+  rotulo: string | null;   // setor/unidade a que o contato pertence
+  email: string | null;
+  telefone: string | null; // dígitos com DDD, sem o 55
+  whatsapp: string | null;
+  origem: string;          // página onde apareceu
+};
+// bloqueado = o site respondeu barrando robô (WAF). Lista vazia aí NÃO é
+// "empresa sem contato publicado" — é "não deu para ler", e a tela tem que
+// dizer a diferença. colcci.com.br devolve 403 com página de desafio.
+type BuscaContatosSite = { contatos: ContatoSite[]; paginas: string[]; bloqueado: boolean };
 
 // "i" ao lado do contato que se repete em várias empresas: quase sempre é o
 // telefone/e-mail do escritório de contabilidade, não de quem decide a compra.
@@ -136,10 +157,16 @@ export function CompanyModal({ companyId, onClose }: { companyId: number; onClos
   // compartilhada por todos os usuários — só sai com clique explícito.
   const [site, setSite] = useState<SiteBusca | null>(null);
   const [sitePend, setSitePend] = useState(false);
+  // Contatos raspados do site. Também só com clique: são vários fetchs no
+  // servidor da empresa. Nada disso é gravado — quem grava é o "adicionar".
+  const [contatos, setContatos] = useState<BuscaContatosSite | null>(null);
+  const [contatosPend, setContatosPend] = useState(false);
+  const [novoContato, setNovoContato] = useState<ContactForm | null>(null);
 
   useEffect(() => {
     setData(null); setSocios([]); setGeo(null); setShared(null); setErr(false);
     setSite(null); setSitePend(false);
+    setContatos(null); setContatosPend(false); setNovoContato(null);
     // Conferência dispara junto com o carregamento (não depende dos dados na
     // tela: o servidor lê os telefones da empresa). Falha vira indeterminado.
     setWa(null); setWaPend(true);
@@ -210,6 +237,32 @@ export function CompanyModal({ companyId, onClose }: { companyId: number; onClos
       .finally(() => setSitePend(false));
   };
 
+  const buscarContatos = (): void => {
+    setContatosPend(true);
+    void api.get<BuscaContatosSite>(`/api/companies/${companyId}/contatos-site`)
+      .then(setContatos)
+      .catch((e) => toast.error(e instanceof ApiError ? e.message : 'Falha ao ler o site'))
+      .finally(() => setContatosPend(false));
+  };
+
+  // Pré-preenche o cadastro de contato padrão, com a empresa já selecionada.
+  // Contato institucional (sem nome próprio) entra com o rótulo do setor no
+  // nome — "Departamento Vendas" é o que o representante reconhece na lista
+  // depois; deixar em branco travaria o formulário, que exige nome.
+  const paraForm = (c: ContatoSite): ContactForm => {
+    const empresa = data ? data.nome_fantasia || data.razao_social : null;
+    const tel = c.whatsapp ?? c.telefone;
+    return {
+      ...EMPTY_CONTACT,
+      nome: c.nome ?? c.rotulo ?? empresa ?? '',
+      cargo: (c.nome ? c.cargo ?? c.rotulo : c.cargo) ?? '',
+      email: c.email ?? '',
+      telefone: tel ? maskPhone(tel) : '',
+      company_id: companyId,
+      company_name: empresa,
+    };
+  };
+
   // 4 estados: não buscado / buscando / achou / não deu. 'indeterminado' é o
   // registro.br tendo censurado a consulta por cota — é diferente de "não tem
   // site" e por isso oferece tentar de novo em vez de afirmar a ausência.
@@ -231,8 +284,15 @@ export function CompanyModal({ companyId, onClose }: { companyId: number; onClos
             className="inline-flex items-center gap-1 text-brand-600 hover:underline">
             {site.dominio}
           </a>
-          {/* Sem confirmação de titularidade: veio do e-mail do cadastro. */}
-          {site.confianca < 100 && (
+          {/* O domínio é de OUTRO CNPJ: é o site da marca que a empresa opera,
+              não o dela. Dizer de quem é evita que o representante ache que
+              está falando com a loja quando abrir os contatos de lá. */}
+          {site.fonte === 'marca' ? (
+            <span className="text-xs text-amber-600"
+              title={`Domínio registrado por ${site.titular ?? 'outra empresa'}, confirmado no registro.br. A empresa opera a marca; o site não é dela.`}>
+              site da marca{site.titular ? ` · ${site.titular}` : ''}
+            </span>
+          ) : site.confianca < 100 && (
             <span className="text-xs text-ink-400" title="Domínio do e-mail declarado na Receita; o registro.br não confirma titularidade fora do .br">
               não confirmado
             </span>
@@ -280,7 +340,74 @@ export function CompanyModal({ companyId, onClose }: { companyId: number; onClos
     );
   };
 
+  // Lista raspada do site. Cada linha vira contato só se o usuário mandar; o
+  // botão abre o cadastro de sempre, já com a empresa e os canais preenchidos.
+  const blocoContatosSite = (): React.ReactNode => {
+    if (contatosPend) {
+      return (
+        <span className="inline-flex items-center gap-1.5 text-ink-400">
+          <span className="h-3 w-3 animate-spin rounded-full border-2 border-ink-200 border-t-brand-500" />
+          <span className="text-xs">lendo as páginas de contato do site…</span>
+        </span>
+      );
+    }
+    if (!contatos) {
+      return (
+        <SafeButton type="button" onClick={buscarContatos}
+          className="inline-flex items-center gap-1 text-xs text-brand-600 hover:underline">
+          <Icon name="search" size={12} />buscar contatos no site
+        </SafeButton>
+      );
+    }
+    if (contatos.contatos.length === 0) {
+      return (
+        <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          {/* Distinguir "não tem" de "não deixou ler" é o ponto: o site pode
+              estar cheio de contatos e só bloquear robô. Aí o caminho é abrir. */}
+          {contatos.bloqueado ? (
+            <span className="text-xs text-amber-600">
+              o site bloqueia leitura automática — abra o site para ver os contatos
+            </span>
+          ) : (
+            <span className="text-xs text-ink-300">
+              nada publicado nas {contatos.paginas.length} página(s) lidas
+            </span>
+          )}
+          <SafeButton type="button" onClick={buscarContatos}
+            className="inline-flex items-center gap-1 text-xs text-brand-600 hover:underline">
+            <Icon name="search" size={12} />buscar de novo
+          </SafeButton>
+        </span>
+      );
+    }
+    return (
+      <div className="divide-y divide-ink-100">
+        {contatos.contatos.map((c, i) => (
+          <div key={`${c.email ?? ''}|${c.telefone ?? ''}|${c.whatsapp ?? ''}|${i}`}
+            className="flex items-start gap-3 py-2">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-ink-700">{c.nome ?? c.rotulo ?? 'Contato'}</p>
+              <p className="text-xs text-ink-400">
+                {[
+                  c.nome ? c.cargo ?? c.rotulo : c.cargo,
+                  c.email,
+                  c.telefone ? maskPhone(c.telefone) : null,
+                  c.whatsapp ? `${maskPhone(c.whatsapp)} (WhatsApp)` : null,
+                ].filter(Boolean).join(' · ')}
+              </p>
+            </div>
+            <SafeButton type="button" title="Adicionar aos contatos" onClick={() => setNovoContato(paraForm(c))}
+              className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-ink-200 px-2 py-1 text-xs text-brand-600 transition hover:bg-ink-50">
+              <Icon name="plus" size={12} />adicionar
+            </SafeButton>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   return (
+    <>
     <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/45 p-4" onClick={onClose}>
       <div className="flex max-h-[90vh] w-full max-w-xl flex-col rounded-2xl border border-ink-200 bg-surface shadow-pop"
         onClick={(e) => e.stopPropagation()}>
@@ -338,6 +465,21 @@ export function CompanyModal({ companyId, onClose }: { companyId: number; onClos
                 <InfoRow label="Site" value={linhaSite()} />
               </Section>
 
+              {/* Só faz sentido com site no ar: a raspagem lê páginas dele. */}
+              {site?.site_url && (
+                <Section title="Contatos no site">
+                  {/* Site da marca: quem atende ali é o dono da marca, não esta
+                      empresa. Sem este aviso o representante ligaria para a
+                      fábrica achando que fala com a loja. */}
+                  {site.fonte === 'marca' && (
+                    <p className="mb-1.5 text-xs text-amber-600">
+                      São contatos de {site.titular ?? 'quem registrou o domínio'}, dona da marca — não da empresa aberta.
+                    </p>
+                  )}
+                  {blocoContatosSite()}
+                </Section>
+              )}
+
               {/* EntityLabels se auto-oculta se a API negar (sem permissão) —
                   por isso este bloco não consulta o contexto de auth: o modal é
                   reaproveitado em telas/testes montados fora do AuthProvider. */}
@@ -382,5 +524,9 @@ export function CompanyModal({ companyId, onClose }: { companyId: number; onClos
         </div>
       </div>
     </div>
+    {/* Irmão, não filho: dentro do overlay da empresa o clique no cadastro
+        subiria até ele e fecharia os dois modais de uma vez. */}
+    {novoContato && <NewContactModal initial={novoContato} onClose={() => setNovoContato(null)} />}
+    </>
   );
 }

@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 const { lookup } = vi.hoisted(() => ({ lookup: vi.fn() }));
 vi.mock('node:dns/promises', () => ({ lookup }));
 
-const { resolverSite } = await import('../src/site.ts');
+const { resolverSite, buscarPagina } = await import('../src/site.ts');
 
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
@@ -182,5 +182,64 @@ describe('resolverSite', () => {
       arrayBuffer: async () => { throw new Error('stream'); },
     } as unknown as Response);
     expect((await resolverSite('acme.com.br')).status).toBe('sem_pagina');
+  });
+});
+
+// buscarPagina é a porta de entrada da raspagem de contatos: mesma cadeia de
+// segurança da sondagem, mas devolvendo o HTML já decodificado.
+describe('buscarPagina', () => {
+  const corpo = (html: string, contentType = 'text/html; charset=utf-8', status = 200): Response => ({
+    status,
+    headers: new Headers({ 'content-type': contentType }),
+    arrayBuffer: async () => {
+      const b = Buffer.from(html, /iso-8859-1|latin1/i.test(contentType) ? 'latin1' : 'utf8');
+      return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+    },
+  } as unknown as Response);
+
+  it('devolve o HTML, a URL final e o status', async () => {
+    fetchMock.mockResolvedValueOnce(corpo('<p>contato@acme.com.br</p>'));
+    expect(await buscarPagina('https://acme.com.br/contato'))
+      .toEqual({ url: 'https://acme.com.br/contato', html: '<p>contato@acme.com.br</p>', status: 200 });
+  });
+
+  // Muito site de PME ainda serve latin-1. Decodificar como UTF-8 estragaria os
+  // rótulos, e é do rótulo que sai "de quem é este telefone".
+  it('decodifica ISO-8859-1 pelo charset do content-type', async () => {
+    fetchMock.mockResolvedValueOnce(corpo('<p>Endereço e Comunicação</p>', 'text/html; charset=ISO-8859-1'));
+    expect((await buscarPagina('https://acme.com.br/'))!.html).toBe('<p>Endereço e Comunicação</p>');
+  });
+
+  it('charset desconhecido cai em UTF-8 em vez de falhar', async () => {
+    fetchMock.mockResolvedValueOnce(corpo('<p>ok</p>', 'text/html; charset=xpto-9'));
+    expect((await buscarPagina('https://acme.com.br/'))!.html).toBe('<p>ok</p>');
+  });
+
+  it('segue redirect antes de entregar o corpo', async () => {
+    fetchMock.mockResolvedValueOnce(redireciona('https://www.acme.com.br/contato'))
+      .mockResolvedValueOnce(corpo('<p>x</p>'));
+    expect(await buscarPagina('https://acme.com.br/contato'))
+      .toEqual({ url: 'https://www.acme.com.br/contato', html: '<p>x</p>', status: 200 });
+  });
+
+  // Status volta cru: quem chama precisa distinguir "não tem" de "não deixou
+  // ler". A colcci.com.br responde 403 com uma página de WAF de 14 KB.
+  it.each([
+    ['404', corpo('<p>sumiu</p>', 'text/html', 404), 404],
+    ['403 do WAF', corpo('<p>challenge</p>', 'text/html', 403), 403],
+  ])('%s devolve o status para o chamador decidir', async (_rotulo, res, status) => {
+    fetchMock.mockResolvedValueOnce(res);
+    expect(await buscarPagina('https://acme.com.br/')).toMatchObject({ status });
+  });
+
+  it('sem resposta nenhuma (rede) -> null', async () => {
+    fetchMock.mockRejectedValueOnce(new Error('conn'));
+    expect(await buscarPagina('https://acme.com.br/')).toBeNull();
+  });
+
+  it('host que resolve para IP interno não é buscado', async () => {
+    lookup.mockResolvedValue([{ address: '169.254.169.254', family: 4 }]);
+    expect(await buscarPagina('https://malicioso.com.br/')).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

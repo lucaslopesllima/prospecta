@@ -106,9 +106,39 @@ Medido contra o serviço real em 2026-08-03, ao implementar `server/src/rdap.ts`
   abre normal no navegador. Dizer ao representante que a empresa não tem site quando
   tem é pior que não afirmar nada.
 
-- **Filial não é matriz no portão.** `/entity/<cnpj de filial>` devolve 404, que lido
-  como "zero domínios" marcaria a empresa como sem site sem varrer nada. O portão
-  resolve a matriz na base local (`matriz_filial = 1`, mesma raiz) antes de perguntar.
+- **O portão não vale para grupo.** `/entity/<cnpj>` conta os domínios de UM
+  estabelecimento, e num grupo o domínio pode estar em qualquer um. Perguntar pela
+  filial dava 404 lido como "zero" (caso MALINSKI); perguntar pela matriz tem o defeito
+  espelhado — a **AMC TEXTIL** (raiz `75364570`) tem **0** domínios na matriz `0001-60`
+  e **94** na filial `0007-55`, que é a titular de `colcci.com.br`, `amctextil.com.br` e
+  `menegotti.com.br`. Não existe estabelecimento certo para perguntar. Hoje o portão só
+  é usado quando a raiz tem **um único estabelecimento** na base; havendo mais, pula-se
+  direto para a varredura.
+
+- **Grupo tem mais de uma marca.** O atalho "irmão da mesma raiz já confirmou um
+  domínio" não pode ser cego: a filial de fantasia COLCCI herdava `menegotti.com.br` do
+  irmão e nunca chegava a consultar a marca dela. O atalho só vale quando o domínio do
+  irmão é candidato **deste** estabelecimento, ou quando ele não tem fantasia nem e-mail
+  próprio (nada o distingue do grupo). Fora disso, varre-se primeiro e o domínio do irmão
+  vira a última opção, antes de dizer "sem site".
+
+- **Site da marca (`fonte = 'marca'`, confiança 40).** Domínio derivado da **fantasia**,
+  registrado e pertencente a **outro CNPJ**. A base tem 19 lojas franqueadas de fantasia
+  COLCCI, com CNPJ próprio e e-mail no gmail: `colcci.com.br` é da AMC TEXTIL, não delas.
+  Antes elas ficavam sem nada. Agora o site aparece **rotulado** — "site da marca · AMC
+  TEXTIL LTDA" — e a lista de contatos avisa que quem atende ali é a dona da marca, não a
+  loja. Regras que seguram o ruído: só candidato vindo da fantasia (palpite de razão
+  social batendo em CNPJ alheio é coincidência — caso VILLAR RAPOSO/novalar); slug de
+  menos de 4 letras não conta; entra atrás de tudo que fala da empresa em si (domínio
+  próprio, do grupo, do e-mail declarado); e só com o site de pé. Com o portão fechado
+  (zero domínios próprios) gasta no máximo 2 consultas, e só para empresa com fantasia.
+
+- **Marca na frente do e-mail.** O candidato vindo do **nome fantasia** é consultado
+  antes do domínio do e-mail declarado à Receita. A filial COLCCI declara
+  `@amctextil.com.br`, mas o site dela é `colcci.com.br` — e "COLCCI" é o que o
+  representante lê no cartão. Os dois são confirmados por CNPJ, então a ordem não troca
+  certo por errado; só decide qual domínio da empresa aparece. Palpite derivado da
+  **razão social** continua atrás do e-mail, que ali é o único candidato que não é chute.
 
 - **Cota é do IP, não do usuário.** Em produção todos os tenants dividem a mesma cota,
   o que reforça o modelo sob demanda (clique explícito) em vez de disparo automático
@@ -208,9 +238,33 @@ endpoint de *find similar companies*, ótimo para lookalike de ICP).
    titularidade, e o caso VILLAR RAPOSO/novalar mostra que domínio de e-mail
    erra. Se aparecer falso positivo, é só remover o `porEmail()` de
    `enriquecimento.ts` e a garantia de "só domínio confirmado" volta inteira.
-2. **Crawler do site próprio** — agora que o domínio é conhecido, raspar
-   `/contato`, `/sobre`, rodapé e `wa.me` é o próximo maior ganho, e custo zero.
-   É aqui que entra a tabela `company_enrichment` (campo/valor/confiança/fonte).
+2. ~~**Crawler do site próprio**~~ — **feito** (`server/src/contatos_site.ts`;
+   `GET /api/companies/:id/contatos-site`; botão "buscar contatos no site" no
+   modal da empresa, que vale nas três telas que o abrem — busca de empresas,
+   funil e clientes). Lê a home, segue os links de contato/unidades do próprio
+   domínio e tenta caminhos comuns (`/contato`, `/fale-conosco`, …), até 6
+   páginas ou 20s. Extrai e-mail, telefone e WhatsApp de `mailto:`/`tel:`/`wa.me`
+   e do texto, e agrupa por vizinhança na linearização do HTML para devolver
+   contato com nome, cargo e setor. Medido na coocam.com.br: 1 e-mail na home,
+   21 em `/contato`.
+
+   Site atrás de WAF devolve `bloqueado: true` em vez de lista vazia — a
+   `colcci.com.br` responde **403 com uma página de desafio de 14 KB**, e anunciar
+   "nada publicado" mandaria o representante embora de um site que tem todos os
+   contatos. A tela diz "o site bloqueia leitura automática — abra o site".
+
+   **Sem tabela nova, de propósito.** O resultado não é persistido: vai para a
+   tela e só vira registro pelo `POST /api/contacts` do que o representante
+   escolher. Boa parte do que sai é dado de pessoa física (nome + celular do
+   gerente), e guardar apenas o escolhido mantém a coleta na medida do uso —
+   mesma linha da migração 076, que recusa o contato administrativo do RDAP.
+   O único dado gravado continua sendo o site (`company_dominio.site_url`).
+
+   Deixado de fora: `robots.txt`. Respeitá-lo seria coerente com o `User-Agent`
+   identificado, mas muito site brasileiro atrás de WAF publica `Disallow: /`
+   para todo robô, o que mataria a função no caso legítimo — a própria empresa
+   publicando o contato dela para ser procurada. Se virar problema, é um fetch
+   por host, cacheável.
 3. **Busca web (Serper) como gerador de candidatos** — cobre as empresas cujo
    domínio não sai do nome; o registro.br continua sendo o verificador.
 4. **Google Places** — telefone, site e categoria real.
