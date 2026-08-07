@@ -99,7 +99,22 @@ function isoToLocalInput(iso) {
 
 // ─────────────────────────────────────────────────────────── estado
 
-const state = { user: null, view: 'posts', posts: [], accounts: [], media: [], templates: [] };
+const state = {
+  user: null, view: 'posts', posts: [], accounts: [], media: [], templates: [],
+  credentials: [], credentialsTab: 'meta',
+};
+
+const PROVIDER_ICON = {
+  facebook: '👍', instagram: '📸', tiktok: '🎵', linkedin: '💼',
+};
+
+// O que cada rede consegue publicar hoje — mostrado na aba para evitar a
+// surpresa de agendar algo que a plataforma recusa.
+const NETWORK_NOTES = {
+  meta: 'Publica texto e imagem no Facebook. No Instagram a imagem é obrigatória e precisa de URL pública.',
+  tiktok: 'Publica apenas vídeo, baixado de uma URL pública. Enquanto o app não passar pela auditoria do TikTok, o post sai como privado (somente você).',
+  linkedin: 'Publica texto e imagem no feed do próprio perfil. Vídeo não é suportado.',
+};
 
 // ─────────────────────────────────────────────────────────── views
 
@@ -119,10 +134,16 @@ const VIEWS = {
   },
   contas: {
     title: 'Contas sociais',
-    sub: 'Páginas do Facebook e contas do Instagram Business',
-    actions: '<button class="btn btn-primary" data-act="conectar-meta">'
-      + '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Conectar Meta</button>',
+    sub: 'Perfis e páginas conectados para publicação',
+    actions: '<button class="btn btn-primary" data-act="ir-credenciais">'
+      + '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Conectar conta</button>',
     render: renderContas,
+  },
+  credenciais: {
+    title: 'Credenciais',
+    sub: 'App ID e secret de cada rede — usados para conectar as contas',
+    actions: '',
+    render: renderCredenciais,
   },
   midia: {
     title: 'Mídia',
@@ -440,13 +461,13 @@ async function renderContas() {
 
   if (!accounts.length) {
     $('#content').innerHTML = empty('🔗', 'Nenhuma conta conectada',
-      'Conecte sua conta Meta para publicar em páginas do Facebook e no Instagram Business.');
+      'Configure as credenciais da rede em Credenciais e depois clique em Conectar conta.');
     return;
   }
 
   $('#content').innerHTML = `<div class="cards">${accounts.map((a) => `
     <article class="card account-card">
-      <div class="account-icon account-${a.provider}">${a.provider === 'instagram' ? '📸' : '👍'}</div>
+      <div class="account-icon account-${a.provider}">${PROVIDER_ICON[a.provider] ?? '🔗'}</div>
       <div class="account-body">
         <strong>${esc(a.name)}</strong>
         <small class="muted">${a.provider} · ${esc(a.external_id)}</small>
@@ -576,6 +597,59 @@ async function renderIA() {
   </div>`;
 }
 
+// ── credenciais ────────────────────────────────────────────
+
+async function renderCredenciais() {
+  state.credentials = await api('/credentials');
+  if (!state.credentials.some((c) => c.group === state.credentialsTab)) {
+    state.credentialsTab = state.credentials[0]?.group ?? 'meta';
+  }
+  const cur = state.credentials.find((c) => c.group === state.credentialsTab);
+
+  const tabs = state.credentials.map((c) => `
+    <button class="tab ${c.group === state.credentialsTab ? 'is-active' : ''}"
+            data-act="cred-tab" data-group="${esc(c.group)}">
+      ${esc(c.label)}
+      ${c.configured ? '<span class="dot dot-ok" title="configurado"></span>' : ''}
+    </button>`).join('');
+
+  const redirect = cur.redirect_uri
+    ? `<label class="field"><span>URL de redirecionamento (cadastre esta URL no painel da rede)</span>
+         <input value="${esc(cur.redirect_uri)}" readonly onclick="this.select()"></label>`
+    : `<div class="callout callout-warn">${esc(cur.redirect_uri_error ?? 'URL de redirecionamento indisponível.')}</div>`;
+
+  $('#content').innerHTML = `
+    <div class="tabs">${tabs}</div>
+    <div class="panel">
+      <div class="panel-head">
+        <h3>${esc(cur.label)}</h3>
+        <p class="muted">${esc(NETWORK_NOTES[cur.group] ?? '')}</p>
+      </div>
+      <div class="callout">O secret é criptografado em repouso e nunca volta pela API — só a máscara.
+        As credenciais valem apenas para esta conta; nada é herdado de configuração global.</div>
+      <div class="row">
+        <label class="field grow"><span>${esc(cur.field_labels.client_id)}</span>
+          <input id="cred-client-id" value="${esc(cur.client_id ?? '')}" placeholder="cole aqui"></label>
+        <label class="field grow">
+          <span>${esc(cur.field_labels.client_secret)}
+            ${cur.configured ? `<em class="muted">(atual: ${esc(cur.client_secret)})</em>` : ''}</span>
+          <input id="cred-client-secret" type="password"
+                 placeholder="${cur.configured ? 'deixe vazio para manter o atual' : 'cole aqui'}"></label>
+      </div>
+      ${redirect}
+      <p class="form-error" id="cred-error" hidden></p>
+      <div class="panel-foot">
+        ${cur.configured
+          ? `<button class="btn btn-ghost btn-danger" data-act="cred-remover" data-group="${esc(cur.group)}">Remover</button>`
+          : ''}
+        <button class="btn btn-primary" data-act="cred-salvar" data-group="${esc(cur.group)}">Salvar credenciais</button>
+        ${cur.configured
+          ? `<button class="btn" data-act="cred-conectar" data-group="${esc(cur.group)}">Conectar conta</button>`
+          : ''}
+      </div>
+    </div>`;
+}
+
 // ─────────────────────────────────────────────────────────── eventos
 
 document.addEventListener('click', async (ev) => {
@@ -598,9 +672,36 @@ document.addEventListener('click', async (ev) => {
     case 'excluir':
       return confirmDialog('Excluir post', 'Esta ação não pode ser desfeita.',
         async () => { await api(`/posts/${id}`, { method: 'DELETE' }); toast('Post excluído.'); navigate(state.view); });
-    case 'conectar-meta':
-      window.location.href = '/accounts/meta/connect';
+    case 'ir-credenciais':
+      return navigate('credenciais');
+    case 'cred-tab':
+      state.credentialsTab = btn.dataset.group;
+      return navigate('credenciais');
+    case 'cred-salvar': {
+      const body = {
+        client_id: $('#cred-client-id').value.trim(),
+        client_secret: $('#cred-client-secret').value.trim() || null,
+      };
+      try {
+        await api(`/credentials/${btn.dataset.group}`, { method: 'PUT', body });
+        toast('Credenciais salvas.');
+        navigate('credenciais');
+      } catch (e) { showFormError('#cred-error', e.message); }
       return;
+    }
+    case 'cred-conectar':
+      window.location.href = `/accounts/${btn.dataset.group}/connect`;
+      return;
+    case 'cred-remover':
+      return confirmDialog('Remover credenciais',
+        'As contas já conectadas continuam funcionando, mas não será possível conectar novas nem reconectar. Confirmar?',
+        async () => {
+          try {
+            await api(`/credentials/${btn.dataset.group}`, { method: 'DELETE' });
+            toast('Credenciais removidas.');
+            navigate('credenciais');
+          } catch (e) { toast(e.message, 'danger'); }
+        });
     case 'validar-conta':
       try {
         const r = await api(`/accounts/${id}/validate`, { method: 'POST' });

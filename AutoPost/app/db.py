@@ -69,6 +69,23 @@ CREATE TABLE IF NOT EXISTS social_accounts (
     UNIQUE (tenant_id, provider, external_id)
 );
 
+-- Credenciais do APP em cada plataforma (client id/secret do desenvolvedor),
+-- por tenant. Não confundir com social_accounts, que guarda o token de UMA
+-- conta/página conectada. Aqui é o que identifica o app no OAuth.
+-- provider_group agrupa provedores que compartilham o mesmo app: 'meta' cobre
+-- facebook e instagram; 'tiktok' e 'linkedin' são 1:1.
+CREATE TABLE IF NOT EXISTS social_credentials (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+    provider_group TEXT NOT NULL,
+    client_id TEXT NOT NULL,
+    client_secret TEXT NOT NULL,
+    extra TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE (tenant_id, provider_group)
+);
+
 CREATE TABLE IF NOT EXISTS media (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     tenant_id INTEGER NOT NULL REFERENCES tenants(id),
@@ -144,8 +161,26 @@ CREATE TABLE IF NOT EXISTS templates (
 """
 
 
+# Colunas acrescentadas depois da 1ª versão do schema. CREATE TABLE IF NOT
+# EXISTS não altera tabela existente, então bancos antigos precisam do ALTER.
+MIGRATIONS: tuple[tuple[str, str, str], ...] = (
+    # (tabela, coluna, definição)
+    ("social_accounts", "refresh_token", "TEXT"),
+)
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    for table, column, definition in MIGRATIONS:
+        cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+        if not cols:  # tabela ainda não existe — o executescript acabou de criá-la
+            continue
+        if column not in cols:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
 def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    _migrate(conn)
     conn.commit()
 
 
@@ -205,27 +240,78 @@ def get_tenant(conn, tenant_id: int):
     return conn.execute("SELECT * FROM tenants WHERE id = ?", (tenant_id,)).fetchone()
 
 
+# --------------------------------------------------------- social_credentials
+
+def upsert_social_credentials(
+    conn, tenant_id: int, provider_group: str, client_id: str,
+    client_secret_enc: str, extra: str | None,
+) -> None:
+    now = now_utc()
+    conn.execute(
+        """
+        INSERT INTO social_credentials
+            (tenant_id, provider_group, client_id, client_secret, extra,
+             created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (tenant_id, provider_group) DO UPDATE SET
+            client_id = excluded.client_id,
+            client_secret = excluded.client_secret,
+            extra = excluded.extra,
+            updated_at = excluded.updated_at
+        """,
+        (tenant_id, provider_group, client_id, client_secret_enc, extra, now, now),
+    )
+    conn.commit()
+
+
+def get_social_credentials(conn, tenant_id: int, provider_group: str):
+    return conn.execute(
+        "SELECT * FROM social_credentials WHERE tenant_id = ? AND provider_group = ?",
+        (tenant_id, provider_group),
+    ).fetchone()
+
+
+def list_social_credentials(conn, tenant_id: int):
+    return conn.execute(
+        "SELECT * FROM social_credentials WHERE tenant_id = ? ORDER BY provider_group",
+        (tenant_id,),
+    ).fetchall()
+
+
+def delete_social_credentials(conn, tenant_id: int, provider_group: str) -> bool:
+    cur = conn.execute(
+        "DELETE FROM social_credentials WHERE tenant_id = ? AND provider_group = ?",
+        (tenant_id, provider_group),
+    )
+    conn.commit()
+    return cur.rowcount == 1
+
+
 # ------------------------------------------------------------- social_accounts
 
 def upsert_social_account(
     conn, tenant_id: int, provider: str, external_id: str, name: str,
     access_token_enc: str, token_expires_at: str | None,
+    refresh_token_enc: str | None = None,
 ) -> int:
     now = now_utc()
     cur = conn.execute(
         """
         INSERT INTO social_accounts
-            (tenant_id, provider, external_id, name, access_token,
+            (tenant_id, provider, external_id, name, access_token, refresh_token,
              token_expires_at, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, 'connected', ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'connected', ?, ?)
         ON CONFLICT (tenant_id, provider, external_id) DO UPDATE SET
             name = excluded.name,
             access_token = excluded.access_token,
+            -- provedor que não devolve refresh_token na reconexão não deve
+            -- apagar o que já estava guardado.
+            refresh_token = COALESCE(excluded.refresh_token, social_accounts.refresh_token),
             token_expires_at = excluded.token_expires_at,
             status = 'connected',
             updated_at = excluded.updated_at
         """,
-        (tenant_id, provider, external_id, name, access_token_enc,
+        (tenant_id, provider, external_id, name, access_token_enc, refresh_token_enc,
          token_expires_at, now, now),
     )
     conn.commit()

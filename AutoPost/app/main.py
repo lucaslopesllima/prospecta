@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app import db, scheduler
 from app.config import settings
-from app.routes import accounts, ai, auth_routes, posts, templates, uploads
+from app.routes import accounts, ai, auth_routes, credentials, posts, templates, uploads
 
 
 def setup_logging() -> None:
@@ -50,6 +50,7 @@ app = FastAPI(title="AutoPost", lifespan=lifespan)
 
 app.include_router(auth_routes.router)
 app.include_router(posts.router)
+app.include_router(credentials.router)
 app.include_router(accounts.router)
 app.include_router(ai.router)
 app.include_router(uploads.router)

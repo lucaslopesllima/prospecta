@@ -51,19 +51,41 @@ Não há registro público, convite nem recuperação de senha por e-mail — tu
 Limitação assumida: o agendador vive no processo. App desligado no horário, o post
 não sai — mitigado pelo catch-up.
 
-## Meta (Facebook / Instagram)
+## Redes sociais
 
-1. Preencha `META_APP_ID`, `META_APP_SECRET` e `PUBLIC_BASE_URL` no `.env`.
-2. Cadastre `PUBLIC_BASE_URL/accounts/meta/callback` como Redirect URI no app da Meta.
-3. Em **Contas → Conectar Meta**: OAuth troca o code por token de longa duração e
-   salva cada página do Facebook e cada conta Instagram Business vinculada.
+Dois conceitos distintos:
+
+- **Credencial de app** — o client id/secret do *desenvolvedor* em cada plataforma.
+  Fica em `social_credentials`, **uma por conta (tenant) e por rede**, cifrada. Não
+  há herança do `.env`: quem não configurar, não conecta.
+- **Conta conectada** — o token de uma página/perfil autorizado pelo OAuth, em
+  `social_accounts`.
+
+Para ligar qualquer rede:
+
+1. Configure `PUBLIC_BASE_URL` no `.env` (compõe a URL de redirecionamento).
+2. Em **Credenciais**, escolha a aba da rede, cole client id/secret e salve.
+3. Copie a URL de redirecionamento mostrada na tela e cadastre-a no painel da
+   plataforma — precisa bater caractere a caractere.
+4. Clique em **Conectar conta** e autorize.
+
+| Rede | Redirect URI | O que publica |
+|---|---|---|
+| Meta | `/accounts/meta/callback` | Facebook: texto e imagem. Instagram: imagem obrigatória, por URL pública |
+| TikTok | `/accounts/tiktok/callback` | Só vídeo, baixado por URL pública (`PULL_FROM_URL`) |
+| LinkedIn | `/accounts/linkedin/callback` | Texto e imagem no feed do próprio perfil |
 
 Job diário (03:00 UTC) revalida os tokens. Expirado ou revogado vira status visível
 na conta — nunca falha silenciosa. Tokens são criptografados com Fernet e nunca
-aparecem em logs ou respostas da API.
+aparecem em logs ou respostas da API; o secret só volta mascarado.
 
-Instagram só aceita mídia por URL pública (limitação da Graph API): o agendador gera
-um link assinado e temporário (1h) em `/media/public/{token}` só para isso.
+Instagram e TikTok exigem mídia por URL pública: o agendador gera um link assinado
+e temporário (1h) em `/media/public/{token}` só para isso.
+
+Restrições das plataformas, não do código: o TikTok só permite `privacy_level`
+público depois que o app passa pela auditoria — antes disso o post sai como
+`SELF_ONLY`. O LinkedIn só emite `refresh_token` para apps aprovados no programa
+de refresh; sem ele, a reconexão ao expirar é manual.
 
 ## Segurança e isolamento
 

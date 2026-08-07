@@ -4,13 +4,17 @@ Fluxo OAuth: dialog -> code -> token curto -> token longo -> páginas (cada
 página tem seu próprio token, que não expira enquanto o token de usuário for
 válido). Contas Instagram Business vinculadas às páginas são detectadas e
 salvas como contas separadas (provider='instagram').
+
+As credenciais do app (App ID/Secret) vêm do tenant, não do ambiente — ver
+app/routes/credentials.py.
 """
 import mimetypes
+from urllib.parse import urlencode
 
 import httpx
 
 from app.config import settings
-from app.providers.social import PublishError, TokenExpired
+from app.providers.social import AppCredentials, PublishError, TokenExpired
 
 GRAPH = "https://graph.facebook.com/v21.0"
 OAUTH_DIALOG = "https://www.facebook.com/v21.0/dialog/oauth"
@@ -20,18 +24,26 @@ SCOPES = (
 )
 TIMEOUT = 30.0
 
+# Rótulos usados pela tela de credenciais.
+LABEL = "Meta (Facebook e Instagram)"
+FIELD_LABELS = {"client_id": "App ID", "client_secret": "App Secret"}
 
-def _redirect_uri() -> str:
+
+def redirect_uri() -> str:
     if not settings.public_base_url:
         raise PublishError("PUBLIC_BASE_URL não configurada — necessária para OAuth da Meta")
     return f"{settings.public_base_url}/accounts/meta/callback"
 
 
-def oauth_url(state: str) -> str:
-    return (
-        f"{OAUTH_DIALOG}?client_id={settings.meta_app_id}"
-        f"&redirect_uri={_redirect_uri()}&state={state}&scope={SCOPES}"
-    )
+def oauth_url(creds: AppCredentials, state: str) -> str:
+    params = {
+        "client_id": creds.client_id,
+        "redirect_uri": redirect_uri(),
+        "state": state,
+        "scope": SCOPES,
+        "response_type": "code",
+    }
+    return f"{OAUTH_DIALOG}?{urlencode(params)}"
 
 
 def _raise_for_graph_error(data: dict) -> None:
@@ -44,12 +56,17 @@ def _raise_for_graph_error(data: dict) -> None:
         raise PublishError(msg)
 
 
-async def exchange_code_for_long_lived_token(code: str) -> str:
+async def exchange_code(creds: AppCredentials, code: str) -> dict:
+    """code -> token de usuário de longa duração (~60 dias).
+
+    Retorna o formato comum a todos os provedores: access_token, refresh_token
+    (a Meta não usa) e expires_in.
+    """
     async with httpx.AsyncClient(timeout=TIMEOUT) as client:
         r = await client.get(f"{GRAPH}/oauth/access_token", params={
-            "client_id": settings.meta_app_id,
-            "client_secret": settings.meta_app_secret,
-            "redirect_uri": _redirect_uri(),
+            "client_id": creds.client_id,
+            "client_secret": creds.client_secret,
+            "redirect_uri": redirect_uri(),
             "code": code,
         })
         data = r.json()
@@ -58,20 +75,25 @@ async def exchange_code_for_long_lived_token(code: str) -> str:
 
         r = await client.get(f"{GRAPH}/oauth/access_token", params={
             "grant_type": "fb_exchange_token",
-            "client_id": settings.meta_app_id,
-            "client_secret": settings.meta_app_secret,
+            "client_id": creds.client_id,
+            "client_secret": creds.client_secret,
             "fb_exchange_token": short_token,
         })
         data = r.json()
         _raise_for_graph_error(data)
-        return data["access_token"]
+        return {
+            "access_token": data["access_token"],
+            "refresh_token": None,
+            "expires_in": data.get("expires_in"),
+        }
 
 
-async def list_connectable_accounts(user_token: str) -> list[dict]:
+async def list_connectable_accounts(creds: AppCredentials, tokens: dict) -> list[dict]:
     """Páginas do usuário + contas Instagram Business vinculadas.
 
-    Retorna: [{provider, external_id, name, access_token}]
+    Retorna: [{provider, external_id, name, access_token, refresh_token}]
     """
+    user_token = tokens["access_token"]
     accounts: list[dict] = []
     async with httpx.AsyncClient(timeout=TIMEOUT) as client:
         r = await client.get(f"{GRAPH}/me/accounts", params={
@@ -86,6 +108,7 @@ async def list_connectable_accounts(user_token: str) -> list[dict]:
                 "external_id": page["id"],
                 "name": page["name"],
                 "access_token": page["access_token"],
+                "refresh_token": None,
             })
             ig = page.get("instagram_business_account")
             if ig:
@@ -94,6 +117,7 @@ async def list_connectable_accounts(user_token: str) -> list[dict]:
                     "external_id": ig["id"],
                     "name": f"@{ig.get('username', ig['id'])}",
                     "access_token": page["access_token"],
+                    "refresh_token": None,
                 })
     return accounts
 

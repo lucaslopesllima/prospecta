@@ -22,8 +22,8 @@ class Settings:
         self.session_max_age = int(os.getenv("SESSION_MAX_AGE", "604800"))
         self.catchup_window_hours = int(os.getenv("CATCHUP_WINDOW_HOURS", "12"))
         self.max_upload_mb = int(os.getenv("MAX_UPLOAD_MB", "20"))
-        self.meta_app_id = os.getenv("META_APP_ID", "")
-        self.meta_app_secret = os.getenv("META_APP_SECRET", "")
+        # Credenciais de app (Meta/TikTok/LinkedIn) NÃO vêm do ambiente: são por
+        # tenant, na tabela social_credentials. Ver app/routes/credentials.py.
         self.public_base_url = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
         # Usado nos testes para não subir o APScheduler
         self.disable_scheduler = os.getenv("DISABLE_SCHEDULER", "") == "1"

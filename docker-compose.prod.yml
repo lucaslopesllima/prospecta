@@ -150,10 +150,8 @@ services:
     environment:
       FERNET_KEY: ${AUTOPOST_FERNET_KEY:?defina AUTOPOST_FERNET_KEY no .env (AutoPost/manage.py gen-keys)}
       SESSION_SECRET: ${AUTOPOST_SESSION_SECRET:?defina AUTOPOST_SESSION_SECRET no .env (AutoPost/manage.py gen-keys)}
-      # Credenciais do app da Meta (Rovva AutoPost). Sem elas o app sobe, mas o
-      # botão de conectar conta falha — só o OAuth depende disso.
-      META_APP_ID: ${META_APP_ID:-}
-      META_APP_SECRET: ${META_APP_SECRET:-}
+      # As credenciais de cada rede (App ID/Secret) NÃO vêm daqui: são por tenant,
+      # cifradas em social_credentials e editadas na tela Credenciais.
       # Precisa bater EXATAMENTE com o Redirect URI cadastrado no app da Meta:
       # ${AUTOPOST_BASE_URL}/accounts/meta/callback
       PUBLIC_BASE_URL: ${AUTOPOST_BASE_URL:-https://autopost.${DOMAIN}}
