@@ -6,7 +6,7 @@ import type { LatLngBoundsExpression } from 'leaflet';
 import { api, ApiError, BUSCA_DEBOUNCE_MS } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import type { Recommendation, GeocodeResult, CompanyDetail } from '../lib/types.ts';
-import { Btn, Badge, Card, Collapse, EmptyState, PageHeader, SafeButton, ScoreBar, Segmented, Spinner, StatCard, cn, useCollapseOnOutside, type Tone } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, Collapse, EmptyState, FilterPanel, PageHeader, SafeButton, ScoreBar, Segmented, Spinner, StatRow, useCollapseOnOutside, type Tone } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { CompanyFilterBar, useCompanyFilter, faixasParams, faixasInvalidas } from '../lib/companyFilter.tsx';
 import { CompanyModal } from '../lib/companyModal.tsx';
@@ -410,11 +410,15 @@ export function Recommend(): React.JSX.Element {
           )}
         </div>
       )}
-      <Collapse open={filtersOpen} duration={200}>
+      {/* Desktop: acordeão inline. Celular: folha pelo rodapé — o painel cobre a
+          lista em vez de empurrá-la, e o rodapé conta os resultados ao vivo. */}
+      <FilterPanel open={filtersOpen} onClose={() => setFiltersOpen(false)} onLimpar={filter.limpar}
+        titulo="Filtros da busca"
+        acao={{ label: `Ver ${recs.length} empresa(s)`, onClick: buscar, disabled: semTerritorio || faixaRuim }}>
         <div ref={filtrosRef}>
           <CompanyFilterBar f={filter} recommend buscando={loading} onBuscar={buscar} />
         </div>
-      </Collapse>
+      </FilterPanel>
 
       <Collapse open={kpisOpen} duration={200}>
         {/* `sub` diz "nos N carregados" porque o kpi deriva de visibleRecs — a
@@ -439,7 +443,7 @@ export function Recommend(): React.JSX.Element {
             ? 'Defina o território nos filtros para buscar empresas'
             : `${recs.length} de ${totalLabel} · ranqueados por fit`}
           actions={
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {view === 'lista' && (
                 <Btn variant={filter.filtroAtivo ? 'primary' : 'soft'} icon="search"
                   data-filtros-toggle

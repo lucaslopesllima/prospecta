@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import type { Cliente, Order, OrgUser } from '../lib/types.ts';
-import { Badge, Btn, Card, EmptyState, PageHeader, Spinner, StatCard, cn } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, EmptyState, PageHeader, Spinner, StatRow } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { toast } from '../lib/toast.tsx';
 import { brl0, dec, maskCNPJ, maskSearchCNPJ } from '../lib/format.ts';
@@ -144,13 +144,12 @@ export function Carteiras(): React.JSX.Element {
     <div className="space-y-4 p-4 sm:p-6">
       <PageHeader title="Carteiras" subtitle="A carteira de cada vendedor e seus clientes. Troque o vendedor ou mova clientes entre carteiras." />
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Carteiras" value={carteiras.filter((c) => c.ownerId !== SEM_DONO).length} icon="users" />
-        <StatCard label="Clientes alocados" value={clientes.filter((c) => c.owner_user_id != null).length} icon="building" tone="info" />
-        <StatCard label="Faturado + entregue" value={brl0([...realizado.byOwner].reduce((s, [, v]) => s + v, 0))}
-          sub="valor realizado nas carteiras" icon="wallet" tone="success" />
-        <StatCard label="Sem vendedor" value={clientes.filter((c) => c.owner_user_id == null).length} icon="alertTriangle" tone="warn" />
-      </div>
+      <StatRow items={[
+        { label: 'Carteiras', value: carteiras.filter((c) => c.ownerId !== SEM_DONO).length, icon: 'users' },
+        { label: 'Clientes alocados', value: clientes.filter((c) => c.owner_user_id != null).length, icon: 'building', tone: 'info' },
+        { label: 'Faturado + entregue', value: brl0([...realizado.byOwner].reduce((s, [, v]) => s + v, 0)), sub: 'valor realizado nas carteiras', icon: 'wallet', tone: 'success' },
+        { label: 'Sem vendedor', value: clientes.filter((c) => c.owner_user_id == null).length, icon: 'alertTriangle', tone: 'warn' },
+      ]} />
 
       <div className="grid gap-4 lg:grid-cols-[18rem_1fr]">
         {/* Lista de carteiras */}
@@ -230,7 +229,7 @@ export function Carteiras(): React.JSX.Element {
             {sel.clientes.length === 0 ? (
               <EmptyState icon="building" title="Carteira vazia" hint="Use “Adicionar clientes” para alocar clientes a este vendedor." />
             ) : sel.clientes.map((c) => (
-              <div key={c.id} className="flex items-center gap-3 rounded-xl border border-ink-200/70 bg-surface p-3">
+              <div key={c.id} className="flex items-center gap-3 rounded-xl border border-hairline bg-surface p-3">
                 <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600"><Icon name="building" size={18} /></span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">

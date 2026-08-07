@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import type { Activity, FinanceCategory, FinanceEntry, KanbanCard, RepresentedCompany } from '../lib/types.ts';
-import { Badge, Btn, Card, cn, EmptyState, inputCls, Modal, PageHeader, SafeButton, Segmented, Spinner, StatCard, type Tone } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, EmptyState, inputCls, Modal, PageHeader, SafeButton, Segmented, Spinner, StatRow, type Tone } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { brl, fmtDate, numStr, todayStr, maskMoney, clampNum } from '../lib/format.ts';
 import { toast } from '../lib/toast.tsx';
@@ -187,12 +187,12 @@ export function Finance(): React.JSX.Element {
       ]} />
 
       {view === 'fluxo' ? <CashflowView /> : view === 'dre' ? <DreView /> : <>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="A receber (aberto)" value={brl(kpis.receberAberto)} icon="arrowDown" tone="success" />
-        <StatCard label="A pagar (aberto)" value={brl(kpis.pagarAberto)} icon="arrowUp" tone="danger" />
-        <StatCard label="Saldo previsto" value={brl(kpis.saldo)} icon="wallet" tone={kpis.saldo >= 0 ? 'brand' : 'danger'} />
-        <StatCard label="Realizado" value={brl(kpis.recebido - kpis.pago)} sub={`+${brl(kpis.recebido)} · −${brl(kpis.pago)}`} icon="trendingUp" tone="info" />
-      </div>
+      <StatRow items={[
+        { label: 'A receber (aberto)', value: brl(kpis.receberAberto), icon: 'arrowDown', tone: 'success' },
+        { label: 'A pagar (aberto)', value: brl(kpis.pagarAberto), icon: 'arrowUp', tone: 'danger' },
+        { label: 'Saldo previsto', value: brl(kpis.saldo), icon: 'wallet', tone: kpis.saldo >= 0 ? 'brand' : 'danger' },
+        { label: 'Realizado', value: brl(kpis.recebido - kpis.pago), sub: `+${brl(kpis.recebido)} · −${brl(kpis.pago)}`, icon: 'trendingUp', tone: 'info' },
+      ]} />
 
       <Card className="flex flex-wrap items-center justify-between gap-3 p-3">
         <Segmented value={kind} onChange={setKind} options={[
@@ -303,7 +303,7 @@ function Row({ e, onEdit, onRemove, onLiquidar }: {
 
       {can('finance.delete') && (
         <SafeButton onClick={onRemove} aria-label="Excluir"
-          className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ink-300 hover:bg-rose-50 hover:text-rose-500">
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-ink-500 hover:bg-rose-50 hover:text-rose-500 sm:h-8 sm:w-8 sm:rounded-lg">
           <Icon name="x" size={16} />
         </SafeButton>
       )}
@@ -344,12 +344,12 @@ function CashflowView(): React.JSX.Element {
           {[1, 2, 3, 6, 12].map((m) => <option key={m} value={m}>{m} {m === 1 ? 'mês' : 'meses'}</option>)}
         </select>
       </div>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="A receber" value={brl(totals.receber)} icon="arrowDown" tone="success" />
-        <StatCard label="Comissões previstas" value={brl(totals.comissao)} icon="percent" tone="info" />
-        <StatCard label="A pagar" value={brl(totals.pagar)} icon="arrowUp" tone="danger" />
-        <StatCard label="Saldo projetado" value={brl(totals.saldo)} icon="wallet" tone={totals.saldo >= 0 ? 'brand' : 'danger'} />
-      </div>
+      <StatRow items={[
+        { label: 'A receber', value: brl(totals.receber), icon: 'arrowDown', tone: 'success' },
+        { label: 'Comissões previstas', value: brl(totals.comissao), icon: 'percent', tone: 'info' },
+        { label: 'A pagar', value: brl(totals.pagar), icon: 'arrowUp', tone: 'danger' },
+        { label: 'Saldo projetado', value: brl(totals.saldo), icon: 'wallet', tone: totals.saldo >= 0 ? 'brand' : 'danger' },
+      ]} />
       {semanas.length === 0 ? (
         <EmptyState icon="trendingUp" title="Sem projeção" hint="Não há vencimentos pendentes nem comissões previstas no período." />
       ) : (
@@ -404,11 +404,11 @@ function DreView(): React.JSX.Element {
           {[anoAtual, anoAtual - 1, anoAtual - 2].map((y) => <option key={y} value={y}>{y}</option>)}
         </select>
       </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <StatCard label="Receita (ano)" value={brl(tot.receita)} icon="arrowDown" tone="success" />
-        <StatCard label="Despesa (ano)" value={brl(tot.despesa)} icon="arrowUp" tone="danger" />
-        <StatCard label="Resultado" value={brl(tot.resultado)} icon="trendingUp" tone={tot.resultado >= 0 ? 'brand' : 'danger'} />
-      </div>
+      <StatRow cols={3} items={[
+        { label: 'Receita (ano)', value: brl(tot.receita), icon: 'arrowDown', tone: 'success' },
+        { label: 'Despesa (ano)', value: brl(tot.despesa), icon: 'arrowUp', tone: 'danger' },
+        { label: 'Resultado', value: brl(tot.resultado), icon: 'trendingUp', tone: tot.resultado >= 0 ? 'brand' : 'danger' },
+      ]} />
       {comMov.length === 0 ? (
         <EmptyState icon="barChart" title="Sem movimento" hint={`Nenhuma comissão recebida ou despesa liquidada em ${ano}.`} />
       ) : (
@@ -469,7 +469,7 @@ function CategoriesModal({ categories, onClose, onChanged }: {
     <Modal onClose={onClose} width="md">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-bold text-ink-900">Categorias financeiras</h3>
-        <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
+        <button onClick={onClose} aria-label="Fechar" className="grid h-11 w-11 place-items-center rounded-xl text-ink-500 hover:bg-ink-100 hover:text-ink-800 sm:h-8 sm:w-8 sm:rounded-lg">
           <Icon name="x" size={17} />
         </button>
       </div>
@@ -498,7 +498,7 @@ function CategoriesModal({ categories, onClose, onChanged }: {
             </div>
             {can('finance_categories.delete') && (
             <SafeButton onClick={() => remove(c)} aria-label={`Excluir ${c.nome}`}
-              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ink-300 hover:bg-rose-50 hover:text-rose-500">
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-ink-500 hover:bg-rose-50 hover:text-rose-500 sm:h-8 sm:w-8 sm:rounded-lg">
               <Icon name="trash" size={16} />
             </SafeButton>
             )}
@@ -568,7 +568,7 @@ function FinanceModal({ entry, companies, represented, activities, categories, o
     <Modal onClose={onClose} width="md">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-bold text-ink-900">{entry ? 'Editar lançamento' : 'Novo lançamento'}</h3>
-        <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
+        <button onClick={onClose} aria-label="Fechar" className="grid h-11 w-11 place-items-center rounded-xl text-ink-500 hover:bg-ink-100 hover:text-ink-800 sm:h-8 sm:w-8 sm:rounded-lg">
           <Icon name="x" size={17} />
         </button>
       </div>

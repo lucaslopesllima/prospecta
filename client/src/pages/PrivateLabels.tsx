@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.ts';
 import type { Contact, CompanyHit, PrivateLabel, PrivateLabelCompany } from '../lib/types.ts';
-import { Badge, Btn, Card, EmptyState, inputCls, PageHeader, SafeButton, Spinner } from '../lib/ui.tsx';
+import { Badge, Btn, Card, EmptyState, inputCls, PageHeader, RowActions, SafeButton, Spinner } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { useAuth } from '../lib/auth.tsx';
 import { toast } from '../lib/toast.tsx';
@@ -95,7 +95,7 @@ function LabelLinks({ label }: { label: PrivateLabel }): React.JSX.Element {
           {companies === null ? <Spinner /> : companies.length === 0 ? (
             <p className="text-xs text-ink-300">Nenhuma empresa vinculada.</p>
           ) : companies.map((c) => (
-            <div key={c.id} className="flex items-center gap-2 rounded-lg border border-ink-200/70 bg-surface px-2.5 py-1.5">
+            <div key={c.id} className="flex items-center gap-2 rounded-lg border border-hairline bg-surface px-2.5 py-1.5">
               <Icon name="building" size={14} className="shrink-0 text-ink-400" />
               <span className="min-w-0 flex-1 truncate text-sm text-ink-700">{c.nome_fantasia || c.razao_social}</span>
               <span className="shrink-0 text-[11px] text-ink-400">{c.uf}</span>
@@ -134,7 +134,7 @@ function LabelLinks({ label }: { label: PrivateLabel }): React.JSX.Element {
           {contacts.length === 0 ? (
             <p className="text-xs text-ink-300">Nenhum contato vinculado.</p>
           ) : contacts.map((c) => (
-            <div key={c.id} className="flex items-center gap-2 rounded-lg border border-ink-200/70 bg-surface px-2.5 py-1.5">
+            <div key={c.id} className="flex items-center gap-2 rounded-lg border border-hairline bg-surface px-2.5 py-1.5">
               <Icon name="users" size={14} className="shrink-0 text-ink-400" />
               <span className="min-w-0 flex-1 truncate text-sm text-ink-700">{c.nome}</span>
               {c.cargo && <span className="shrink-0 text-[11px] text-ink-400">{c.cargo}</span>}
@@ -208,7 +208,7 @@ export function PrivateLabels(): React.JSX.Element {
                   onSave={(f) => update(l.id, f)} onCancel={() => setEditing(null)} />
               </Card>
             ) : (
-              <div key={l.id} className="rounded-xl border border-ink-200/70 bg-surface p-3">
+              <div key={l.id} className="rounded-xl border border-hairline bg-surface p-3">
                 <div className="flex items-start gap-3">
                   <span className="mt-1 h-3.5 w-3.5 shrink-0 rounded-full" style={{ backgroundColor: l.cor || '#94a3b8' }} />
                   <div className="min-w-0 flex-1">
@@ -219,20 +219,12 @@ export function PrivateLabels(): React.JSX.Element {
                     </div>
                     {l.descricao && <p className="mt-0.5 truncate text-xs text-ink-400">{l.descricao}</p>}
                   </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <button onClick={() => setExpanded((e) => (e === l.id ? null : l.id))} aria-label="Vínculos"
-                      className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
-                      <Icon name={expanded === l.id ? 'chevronLeft' : 'chevronRight'} size={16} />
-                    </button>
-                    {can('private_labels.update') && (
-                      <button onClick={() => setEditing(l.id)} aria-label="Editar"
-                        className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100"><Icon name="pencil" size={16} /></button>
-                    )}
-                    {can('private_labels.delete') && (
-                      <SafeButton onClick={() => remove(l.id)} aria-label="Excluir"
-                        className="grid h-8 w-8 place-items-center rounded-lg text-ink-300 hover:bg-rose-50 hover:text-rose-500"><Icon name="trash" size={16} /></SafeButton>
-                    )}
-                  </div>
+                  <RowActions
+                    primary={{ icon: expanded === l.id ? 'chevronLeft' : 'chevronRight', label: 'Vínculos', onClick: () => setExpanded((e) => (e === l.id ? null : l.id)) }}
+                    actions={[
+                      { icon: 'pencil', label: 'Editar', onClick: () => setEditing(l.id), hidden: !can('private_labels.update') },
+                      { icon: 'trash', label: 'Excluir', onClick: () => remove(l.id), tone: 'danger', hidden: !can('private_labels.delete') },
+                    ]} />
                 </div>
                 {expanded === l.id && can('private_labels.update') && <LabelLinks label={l} />}
               </div>

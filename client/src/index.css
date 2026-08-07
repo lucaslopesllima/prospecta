@@ -30,7 +30,11 @@
   --color-brand-950: #152351;
 
   /* ink — cool, slightly blue neutral for text / surfaces / sidebar */
-  --color-ink-50:  #f6f7fb;
+  /* 50 é o CANVAS. Estava a 2% do branco da superfície, então o cartão não se
+     descolava do fundo e a tela lia como um plano branco só. Descendo o canvas
+     (e mantendo o hue 226) o cartão volta a ser cartão sem precisar de borda
+     mais dura. */
+  --color-ink-50:  #eef1f8;
   --color-ink-100: #eceef5;
   --color-ink-200: #d9dde9;
   --color-ink-300: #b8bfd2;
@@ -52,8 +56,13 @@
   --radius-xl: 1rem;
   --radius-2xl: 1.25rem;
 
-  --shadow-card: 0 1px 2px 0 rgb(16 24 40 / 0.04), 0 1px 3px 0 rgb(16 24 40 / 0.06);
-  --shadow-pop: 0 10px 30px -12px rgb(16 24 40 / 0.25);
+  /* Sombras em duas partes: um contato curto e nítido (a peça tocando o fundo)
+     e um halo largo e fraco (a luz ambiente). A versão anterior tinha só o
+     contato, com alpha .04 — na prática invisível, e a elevação vinha toda da
+     borda. `lift` é o estado de hover: a peça sobe, não muda de cor. */
+  --shadow-card: 0 1px 2px 0 rgb(16 24 40 / 0.06), 0 2px 8px -2px rgb(16 24 40 / 0.07);
+  --shadow-lift: 0 2px 4px 0 rgb(16 24 40 / 0.07), 0 8px 20px -6px rgb(16 24 40 / 0.13);
+  --shadow-pop: 0 16px 40px -16px rgb(16 24 40 / 0.28), 0 4px 12px -6px rgb(16 24 40 / 0.10);
 
   /* ── Camada translúcida ────────────────────────────────────
      `surface` é opaco (cartão dentro do fluxo). O que FLUTUA acima do conteúdo
@@ -62,7 +71,7 @@
      lê como camada, não como bloco colado. `hairline` é a borda dessas camadas:
      mais fraca que ink-200 pra o contorno não competir com o desfoque. */
   --color-glass: color-mix(in srgb, #ffffff 78%, transparent);
-  --color-hairline: color-mix(in srgb, #d9dde9 55%, transparent);
+  --color-hairline: color-mix(in srgb, #cdd3e2 85%, transparent);
   --color-scrim: color-mix(in srgb, #0c0f1a 42%, transparent);
 
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -113,14 +122,17 @@
   --color-brand-700: #2f52c6;
   --color-brand-800: #2945a3;
 
-  /* sombra rende pouco no escuro: aprofunda + serve de separador */
-  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.40);
-  --shadow-pop:  0 12px 32px -12px rgb(0 0 0 / 0.65);
+  /* No escuro a sombra rende pouco (preto sobre quase-preto), então quem separa
+     é a diferença de superfície + um contato bem curto. O halo largo continua,
+     de leve, só para o modal não parecer recortado com tesoura. */
+  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.45), 0 1px 3px 0 rgb(0 0 0 / 0.30);
+  --shadow-lift: 0 2px 6px 0 rgb(0 0 0 / 0.50), 0 10px 24px -8px rgb(0 0 0 / 0.45);
+  --shadow-pop:  0 18px 44px -16px rgb(0 0 0 / 0.70), 0 4px 12px -6px rgb(0 0 0 / 0.45);
 
   /* camada translúcida no escuro: alpha um pouco maior (o blur sobre fundo
      escuro some rápido) e hairline clareando em vez de escurecendo. */
   --color-glass: color-mix(in srgb, #181c2b 82%, transparent);
-  --color-hairline: color-mix(in srgb, #59637f 45%, transparent);
+  --color-hairline: color-mix(in srgb, #59637f 70%, transparent);
   --color-scrim: color-mix(in srgb, #05070d 60%, transparent);
 }
 
@@ -201,6 +213,20 @@ select:-webkit-autofill {
   from { opacity: 0; transform: translateY(-8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ── Chips semânticos (Badge) ───────────────────────────────
+   No claro os chips usam o tom 50 da cor + texto no tom 700 — legível e macio.
+   No escuro esse mesmo par vira um retângulo QUASE BRANCO sobre o canvas
+   quase-preto: o status grita mais que o nome da empresa ao lado. Aqui o chip
+   passa a ser um véu da própria cor sobre a superfície, com o texto na versão
+   clara dela — mesma informação, mesmo peso relativo, sem o estouro.
+   O Badge marca `data-badge` + `data-tone`; só o escuro sobrescreve. */
+.dark [data-badge][data-tone='brand']   { background: color-mix(in srgb, #5d7ce5 22%, transparent); color: #aabdf8; }
+.dark [data-badge][data-tone='success'] { background: color-mix(in srgb, #3ccb8b 20%, transparent); color: #6ee7b7; }
+.dark [data-badge][data-tone='info']    { background: color-mix(in srgb, #38bdf8 20%, transparent); color: #7dd3fc; }
+.dark [data-badge][data-tone='warn']    { background: color-mix(in srgb, #f0a35e 20%, transparent); color: #fcd34d; }
+.dark [data-badge][data-tone='danger']  { background: color-mix(in srgb, #fb7185 20%, transparent); color: #fda4af; }
+.dark [data-badge][data-tone='neutral'] { background: color-mix(in srgb, #8b93ab 18%, transparent); color: #b3bacd; }
 
 /* ── Foco de teclado global ─────────────────────────────────
    Só o Btn tinha anel de foco; Segmented, chips, ícones de ação e os botões

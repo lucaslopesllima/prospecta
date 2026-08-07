@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import type { Carrier, CompanyHit } from '../lib/types.ts';
-import { Badge, Btn, Card, cn, EmptyState, inputCls, PageHeader, SafeButton, Spinner } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, EmptyState, inputCls, PageHeader, RowActions, Spinner } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { CompanySearch } from '../lib/companySearch.tsx';
 import { toast } from '../lib/toast.tsx';
@@ -90,7 +90,7 @@ export function Carriers(): React.JSX.Element {
                 <CarrierForm initial={toForm(c)} onSave={(f) => update(c.id, f)} onCancel={() => setEditing(null)} />
               </Card>
             ) : (
-              <div key={c.id} className={cn('flex items-start gap-3 rounded-xl border border-ink-200/70 bg-surface p-3', !c.ativo && 'opacity-60')}>
+              <div key={c.id} className={cn('flex items-start gap-3 rounded-xl border border-hairline bg-surface p-3', !c.ativo && 'opacity-60')}>
                 <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-ink-100 text-ink-500"><Icon name="car" size={18} /></span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
@@ -102,20 +102,12 @@ export function Carriers(): React.JSX.Element {
                     {[c.contato, c.telefone, c.email].filter(Boolean).join(' · ') || 'sem contato'}
                   </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  {can('carriers.update') && (
-                    <SafeButton onClick={() => toggleAtivo(c)} title={c.ativo ? 'Desativar' : 'Ativar'}
-                      className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100"><Icon name={c.ativo ? 'check' : 'x'} size={16} /></SafeButton>
-                  )}
-                  {can('carriers.update') && (
-                    <button onClick={() => setEditing(c.id)} aria-label="Editar transportadora"
-                      className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100"><Icon name="pencil" size={16} /></button>
-                  )}
-                  {can('carriers.delete') && (
-                    <SafeButton onClick={() => remove(c)} aria-label="Excluir transportadora"
-                      className="grid h-8 w-8 place-items-center rounded-lg text-ink-300 hover:bg-rose-50 hover:text-rose-500"><Icon name="trash" size={16} /></SafeButton>
-                  )}
-                </div>
+                <RowActions
+                  primary={{ icon: 'pencil', label: 'Editar transportadora', onClick: () => setEditing(c.id), hidden: !can('carriers.update') }}
+                  actions={[
+                    { icon: c.ativo ? 'x' : 'check', label: c.ativo ? 'Desativar' : 'Ativar', onClick: () => toggleAtivo(c), hidden: !can('carriers.update') },
+                    { icon: 'trash', label: 'Excluir transportadora', onClick: () => remove(c), tone: 'danger', hidden: !can('carriers.delete') },
+                  ]} />
               </div>
             ))}
           </div>

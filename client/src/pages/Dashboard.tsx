@@ -51,7 +51,7 @@ export function Dashboard(): React.JSX.Element {
     <div className="space-y-5 p-4 sm:p-6">
       <PageHeader title="Dashboard" subtitle="Visão geral da operação no mês."
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <SellerFilter value={ownerId} onChange={setOwnerId} sellers={sellers} />
             <input type="month" value={competencia} onChange={(e) => setCompetencia(e.target.value)} aria-label="Competência"
               className="rounded-lg border border-ink-200 bg-surface px-2.5 py-1.5 text-xs font-semibold text-ink-600 outline-none focus:border-brand-400" />

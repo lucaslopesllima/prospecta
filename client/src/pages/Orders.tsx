@@ -4,7 +4,7 @@ import { api, BUSCA_DEBOUNCE_MS } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import { useSellers, SellerFilter } from '../lib/sellers.tsx';
 import type { Order, OrderStatus, RepresentedCompany } from '../lib/types.ts';
-import { Badge, Btn, Card, cn, Collapse, EmptyState, inputCls, Modal, PageHeader, SafeButton, Spinner, StatCard, type Tone } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, Collapse, EmptyState, FilterPanel, inputCls, Modal, PageHeader, RowActions, SafeButton, Spinner, StatRow, useIsNarrow, type Tone } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { brl, csvNum, fmtDate, maskSearchCNPJ } from '../lib/format.ts';
 import { downloadCsv } from '../lib/export.ts';
@@ -54,6 +54,8 @@ export function Orders(): React.JSX.Element {
   const [companyQ, setCompanyQ] = useState('');
   const [companyTerm, setCompanyTerm] = useState('');
   const sellers = useSellers();
+  // A tabela precisa de ~900px: no tablet com sidebar ainda não cabe.
+  const mobile = useIsNarrow();
   const [editing, setEditing] = useState<Order | null>(null);
   const [adding, setAdding] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -234,8 +236,12 @@ export function Orders(): React.JSX.Element {
           </div>
         } />
 
-      <Collapse open={showFilters} duration={200}>
-        <Card className="flex flex-wrap items-center gap-3 p-3">
+      {/* Desktop: acordeão inline. Celular: folha pelo rodapé — cobre a lista
+          em vez de empurrá-la para fora da tela. */}
+      <FilterPanel open={showFilters} onClose={() => setShowFilters(false)}
+        titulo="Filtros dos pedidos"
+        acao={{ label: `Ver ${filtered.length} pedido(s)`, onClick: () => setShowFilters(false) }}>
+        <Card className="flex flex-wrap items-center gap-3 p-3 max-sm:flex-col max-sm:items-stretch max-sm:border-0 max-sm:bg-transparent max-sm:p-0 max-sm:shadow-none">
           <div className="relative min-w-[220px] flex-1">
             <Icon name="search" size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-400" />
             <input value={companyQ} onChange={(e) => setCompanyQ(maskSearchCNPJ(e.target.value))}
@@ -256,14 +262,14 @@ export function Orders(): React.JSX.Element {
           </select>
           <SellerFilter value={ownerId} onChange={setOwnerId} sellers={sellers} />
         </Card>
-      </Collapse>
+      </FilterPanel>
 
       <Collapse open={showKpis} duration={200}>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-          <StatCard label="Em aberto" value={brl(kpis.aberto)} icon="trendingUp" tone="info" />
-          <StatCard label="Total faturado" value={brl(kpis.faturado)} icon="check" tone="success" />
-          <StatCard label="Pedidos" value={String(filtered.length)} icon="list" tone="brand" />
-        </div>
+        <StatRow cols={3} items={[
+          { label: 'Em aberto', value: brl(kpis.aberto), icon: 'trendingUp', tone: 'info' },
+          { label: 'Total faturado', value: brl(kpis.faturado), icon: 'check', tone: 'success' },
+          { label: 'Pedidos', value: String(filtered.length), icon: 'list', tone: 'brand' },
+        ]} />
       </Collapse>
 
       {loading ? (
@@ -271,16 +277,28 @@ export function Orders(): React.JSX.Element {
       ) : filtered.length === 0 ? (
         <EmptyState icon="list" title="Nenhum pedido" hint="Crie uma cotação ou pedido para começar." />
       ) : (
+        // A tabela tem 6 colunas e a célula de ações sozinha ocupa 240px fixos:
+        // em 360px isso virava rolagem nos DOIS eixos, e o usuário arrastava de
+        // lado perdendo de vista a linha que estava lendo. No celular cada
+        // pedido vira um cartão; a tabela volta a partir de `md`.
+        mobile ? (
+          <div className="min-h-0 flex-1 space-y-2 overflow-auto">
+            {filtered.map((o) => (
+              <OrderCard key={o.id} o={o} showOwner={showOwner} onEdit={() => openEdit(o)} onRemove={() => remove(o)}
+                onTransition={(to) => transition(o, to)} onPrint={() => printOrder(o)} />
+            ))}
+          </div>
+        ) : (
         <Card className="min-h-0 flex-1 overflow-auto p-0">
           <table className="w-full border-collapse text-sm">
-            <thead className="sticky top-0 z-10 bg-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-500 [&>tr>th]:border [&>tr>th]:border-ink-200">
+            <thead className="sticky top-0 z-10 text-left text-xs font-semibold uppercase tracking-wide text-ink-500 [&>tr>th]:border [&>tr>th]:border-ink-200 [&>tr>th]:bg-ink-100">
               <tr>
                 <th className="w-14 px-3 py-2.5">#</th>
-                <th className="px-3 py-2.5">Cliente</th>
-                {showOwner && <th className="px-3 py-2.5">Vendedor</th>}
-                <th className="px-3 py-2.5">Status</th>
-                <th className="px-3 py-2.5">Total</th>
-                <th className="px-3 py-2.5">Ações</th>
+                <th className="w-full px-3 py-2.5">Cliente</th>
+                {showOwner && <th className="w-px whitespace-nowrap px-3 py-2.5">Vendedor</th>}
+                <th className="w-px whitespace-nowrap px-3 py-2.5">Status</th>
+                <th className="w-px whitespace-nowrap px-3 py-2.5">Total</th>
+                <th className="w-px whitespace-nowrap px-3 py-2.5">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -291,6 +309,7 @@ export function Orders(): React.JSX.Element {
             </tbody>
           </table>
         </Card>
+        )
       )}
 
       {!loading && hasMore && (
@@ -336,6 +355,49 @@ function NfModal({ order, onClose, onConfirm }: { order: Order; onClose: () => v
   );
 }
 
+// Versão mobile da linha: mesmos dados e as mesmas ações, empilhados. A ação de
+// avanço (o `next` do status) fica exposta porque é o que se faz num pedido;
+// imprimir/cancelar/excluir vão para o `⋯` do RowActions.
+function OrderCard({ o, showOwner, onEdit, onRemove, onTransition, onPrint }: {
+  o: Order; showOwner: boolean; onEdit: () => Promise<void>; onRemove: () => Promise<void>;
+  onTransition: (to: OrderStatus) => Promise<void>; onPrint: () => Promise<void>;
+}): React.JSX.Element {
+  const { can } = useAuth();
+  const meta = STATUS_META[o.status];
+  const next = NEXT[o.status];
+  const editable = o.status === 'cotacao' || o.status === 'rascunho';
+  const cancellable = o.status !== 'cancelado' && o.status !== 'entregue';
+  return (
+    <Card className="p-3">
+      <div className="flex items-start justify-between gap-2">
+        <SafeButton onClick={onEdit} className="min-w-0 flex-1 text-left" title={editable ? 'Editar pedido' : 'Ver pedido'}>
+          <span className="block truncate font-semibold text-ink-800">{o.company_nome}</span>
+          <span className="mt-0.5 block truncate text-xs text-ink-400">
+            #{o.numero} · {o.represented_nome}
+            {o.nf_numero ? ` · NF ${o.nf_numero}` : ''}
+            {showOwner && o.owner_nome ? ` · ${o.owner_nome}` : ''}
+          </span>
+        </SafeButton>
+        <RowActions
+          actions={[
+            { icon: 'download', label: 'Imprimir / PDF', onClick: onPrint, hidden: !can('orders.print') },
+            { icon: 'x', label: 'Cancelar pedido', onClick: () => onTransition('cancelado'), tone: 'danger', hidden: !(cancellable && can('orders.delete')) },
+            { icon: 'trash', label: 'Excluir pedido', onClick: onRemove, tone: 'danger', hidden: !(editable && can('orders.delete')) },
+          ]} />
+      </div>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Badge tone={meta.tone}>{meta.label}</Badge>
+          <span className="tabnums text-sm font-bold text-ink-800">{brl(Number(o.total))}</span>
+        </div>
+        {next && can('orders.transition') && (
+          <Btn size="sm" variant="soft" onClick={() => onTransition(next.to)}>{next.label}</Btn>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 function Row({ o, showOwner, onEdit, onRemove, onTransition, onPrint }: {
   o: Order; showOwner: boolean; onEdit: () => Promise<void>; onRemove: () => Promise<void>;
   onTransition: (to: OrderStatus) => Promise<void>; onPrint: () => Promise<void>;
@@ -347,7 +409,7 @@ function Row({ o, showOwner, onEdit, onRemove, onTransition, onPrint }: {
   const owner = o.owner_nome ?? o.owner_email ?? '—';
   const cancellable = o.status !== 'cancelado' && o.status !== 'entregue';
   return (
-    <tr className="transition-colors hover:bg-ink-50 [&>td]:border [&>td]:border-ink-100">
+    <tr className="transition-colors hover:bg-ink-50 [&>td]:border [&>td]:border-ink-200">
       <td className="px-3 py-2.5 align-middle">
         <span className="tabnums text-xs font-bold text-ink-500">#{o.numero}</span>
       </td>
@@ -413,7 +475,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
     <Modal onClose={onClose} width="lg">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-bold text-ink-900">Importar faturamento (CSV)</h3>
-        <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
+        <button onClick={onClose} aria-label="Fechar" className="grid h-11 w-11 place-items-center rounded-xl text-ink-500 hover:bg-ink-100 hover:text-ink-800 sm:h-8 sm:w-8 sm:rounded-lg">
           <Icon name="x" size={17} />
         </button>
       </div>

@@ -253,7 +253,7 @@ export function OrderModal({ order = null, prefill = null, onClose, onSaved }: {
           {order ? `Pedido #${order.numero}` : 'Novo pedido'}
           {readOnly && <span className="ml-2 text-xs font-medium text-ink-400">(somente leitura)</span>}
         </h3>
-        <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
+        <button onClick={onClose} aria-label="Fechar" className="grid h-11 w-11 place-items-center rounded-xl text-ink-500 hover:bg-ink-100 hover:text-ink-800 sm:h-8 sm:w-8 sm:rounded-lg">
           <Icon name="x" size={17} />
         </button>
       </div>
@@ -290,14 +290,14 @@ export function OrderModal({ order = null, prefill = null, onClose, onSaved }: {
             const fieldCls = (bad: boolean): string => cn('rounded-lg border bg-surface px-2 py-1.5 text-sm',
               bad ? 'border-rose-400 ring-1 ring-rose-200' : 'border-ink-200');
             return (
-            <div key={idx} className="space-y-1.5 rounded-xl border border-ink-200/70 bg-ink-50/50 p-2">
+            <div key={idx} className="space-y-1.5 rounded-xl border border-hairline bg-ink-50/50 p-2">
               <div className="flex items-center gap-2">
                 <input value={i.descricao} disabled={readOnly} maxLength={120} aria-label={`Descrição item ${idx + 1}`} aria-invalid={err.desc}
                   onChange={(e) => setItem(idx, { descricao: e.target.value })} placeholder="Descrição *"
                   className={cn('min-w-0 flex-1', fieldCls(err.desc))} />
                 {!readOnly && (
                   <button type="button" aria-label={`Remover item ${idx + 1}`} onClick={() => setItems((xs) => xs.filter((_, j) => j !== idx))}
-                    className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ink-300 hover:bg-rose-50 hover:text-rose-500"><Icon name="x" size={15} /></button>
+                    className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-ink-500 hover:bg-rose-50 hover:text-rose-500 sm:h-8 sm:w-8 sm:rounded-lg"><Icon name="x" size={15} /></button>
                 )}
               </div>
               <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4">

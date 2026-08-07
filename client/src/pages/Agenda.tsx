@@ -301,7 +301,7 @@ function MonthGrid({ grid, cursor, today, byDay, onDay }: {
 }): React.JSX.Element {
   return (
     <Card className="flex min-h-0 flex-1 flex-col overflow-hidden p-0">
-      <div className="grid grid-cols-7 border-b border-ink-200/70">
+      <div className="grid grid-cols-7 border-b border-hairline">
         {WEEKDAYS.map((w) => (
           <div key={w} className="py-2 text-center text-[11px] font-semibold uppercase tracking-wider text-ink-400">{w}</div>
         ))}
@@ -363,7 +363,7 @@ function WeekView({ days, today, byDay, onDay, onSlot }: {
   return (
     <Card className="flex min-h-0 flex-1 flex-col overflow-hidden p-0">
       {/* day headers */}
-      <div className="grid border-b border-ink-200/70" style={{ gridTemplateColumns: cols }}>
+      <div className="grid border-b border-hairline" style={{ gridTemplateColumns: cols }}>
         <div />
         {days.map((d, i) => {
           const isToday = sameDay(d, today);
@@ -484,7 +484,7 @@ function Row({ a, onToggle, onRemove, onEdit, onVisit }: {
       )}
       {can('activities.delete') && (
         <SafeButton onClick={() => onRemove(a)} aria-label="Excluir"
-          className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ink-300 hover:bg-rose-50 hover:text-rose-500">
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-ink-500 hover:bg-rose-50 hover:text-rose-500 sm:h-8 sm:w-8 sm:rounded-lg">
           <Icon name="trash" size={16} />
         </SafeButton>
       )}

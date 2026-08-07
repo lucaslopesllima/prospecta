@@ -429,7 +429,7 @@ function FunilEditor({ inputCls }: { inputCls: string }): React.JSX.Element {
 
       <ul className="mt-4 space-y-2">
         {stages.map((st, i) => (
-          <li key={st.id} className="flex items-center gap-2 rounded-xl border border-ink-200/70 bg-ink-50 p-2">
+          <li key={st.id} className="flex items-center gap-2 rounded-xl border border-hairline bg-ink-50 p-2">
             <span className="tabnums grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-surface text-xs font-bold text-ink-400 shadow-card">
               {i + 1}
             </span>
@@ -521,7 +521,7 @@ function NamedListEditor({ inputCls, path, titulo, desc, icon, placeholder }: {
 
       <ul className="mt-4 space-y-2">
         {items.map((it) => (
-          <li key={it.id} className="flex items-center gap-2 rounded-xl border border-ink-200/70 bg-ink-50 p-2">
+          <li key={it.id} className="flex items-center gap-2 rounded-xl border border-hairline bg-ink-50 p-2">
             <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-surface text-ink-400 shadow-card"><Icon name={icon} size={15} /></span>
             <input defaultValue={it.nome} disabled={!can(`${path}.update`)} maxLength={120}
               onBlur={(e) => { if (e.target.value.trim() !== it.nome) void rename(it.id, e.target.value); }}

@@ -145,8 +145,8 @@ function Abc({ ownerId }: { ownerId: 'todos' | number }): React.JSX.Element {
       {/* min-w: sem ele a tabela obedece ao container estreito e espreme as
           colunas até quebrar letra a letra — o overflow-x do Card nunca rola. */}
       <table className="w-full min-w-[560px] text-sm">
-        <thead className="sticky top-0 z-10 bg-surface">
-          <tr className="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
+        <thead className="sticky top-0 z-10 [&>tr>th]:bg-surface">
+          <tr className="border-b border-ink-200 text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
             <th className="px-4 py-2">Cliente</th>
             <th className="px-4 py-2 text-right">Faturamento</th>
             <th className="px-4 py-2 text-right">Share</th>
@@ -155,7 +155,7 @@ function Abc({ ownerId }: { ownerId: 'todos' | number }): React.JSX.Element {
         </thead>
         <tbody>
           {clientes.map((c) => (
-            <tr key={c.company_id} className="border-b border-ink-50 last:border-0">
+            <tr key={c.company_id} className="border-b border-hairline last:border-0">
               <td className="px-4 py-2 font-medium text-ink-800">{c.nome_fantasia || c.razao_social}</td>
               <td className="tabnums px-4 py-2 text-right text-ink-700">{brl(c.total)}</td>
               <td className="tabnums px-4 py-2 text-right text-ink-500">{c.share}%</td>

@@ -3,8 +3,8 @@ import './whatsapp-theme.css';
 import { useSearchParams } from 'react-router-dom';
 import { api, getToken, ApiError } from '../lib/api.ts';
 import { toast } from '../lib/toast.tsx';
-import { Btn, Card, cn, inputCls, Popover, SafeButton, Spinner } from '../lib/ui.tsx';
-import { Icon } from '../lib/icons.tsx';
+import { Btn, Card, cn, inputCls, Popover, SafeButton, Spinner, useIsNarrow } from '../lib/ui.tsx';
+import { Icon, type IconName } from '../lib/icons.tsx';
 import { isEmail, maskPhone } from '../lib/format.ts';
 import { CompanySearch } from '../lib/companySearch.tsx';
 import { OrderModal } from '../lib/orderModal.tsx';
@@ -89,6 +89,58 @@ async function fetchAvatar(c: WaChat): Promise<string | null> {
     .finally(() => avatarPending.delete(key));
   avatarPending.set(key, p);
   return p;
+}
+
+/* Ações da barra da conversa. Desktop expõe todas; no estreito só a urgente
+   (pedir o número quando ele falta) e a de criar pedido ficam à mão — o resto
+   entra num `⋯`, senão o cromo do cabeçalho não deixa espaço para o nome. */
+interface AcaoChat {
+  icon: IconName; label: string; onClick: () => unknown;
+  urgente?: boolean; perigo?: boolean; ativo?: boolean; hidden?: boolean;
+}
+function ChatHeaderActions({ acoes }: { acoes: AcaoChat[] }): React.JSX.Element {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const estreito = useIsNarrow();
+  const todas = acoes.filter((a) => !a.hidden);
+  const expostas = estreito ? todas.filter((a) => a.urgente || a.icon === 'plus') : todas;
+  const noMenu = todas.filter((a) => !expostas.includes(a));
+
+  const cor = (a: AcaoChat): string =>
+    a.urgente ? 'text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10'
+      : a.perigo ? 'text-[var(--wa-muted)] hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10'
+      : a.ativo ? 'text-emerald-600 hover:bg-[var(--wa-hover)]'
+      : 'text-[var(--wa-muted)] hover:bg-[var(--wa-hover)]';
+
+  return (
+    <div className="flex shrink-0 items-center gap-0.5">
+      {expostas.map((a) => (
+        <SafeButton key={a.label} title={a.label} aria-label={a.label} onClick={a.onClick}
+          className={cn('grid h-9 w-9 place-items-center rounded-full', cor(a))}>
+          <Icon name={a.icon} size={18} />
+        </SafeButton>
+      ))}
+      {noMenu.length > 0 && estreito && (
+        <>
+          <button ref={btnRef} type="button" onClick={() => setOpen((v) => !v)}
+            aria-label="Mais ações da conversa" aria-haspopup="menu" aria-expanded={open}
+            className="grid h-9 w-9 place-items-center rounded-full text-[var(--wa-muted)] hover:bg-[var(--wa-hover)]">
+            <Icon name="menu" size={18} />
+          </button>
+          <Popover open={open} anchorRef={btnRef} onClose={() => setOpen(false)} width={230}>
+            {noMenu.map((a) => (
+              <SafeButton key={a.label} role="menuitem"
+                onClick={() => { setOpen(false); return a.onClick(); }}
+                className={cn('flex w-full items-center gap-2.5 px-3 py-3 text-left text-sm hover:bg-ink-50',
+                  a.perigo ? 'text-rose-600' : a.ativo ? 'text-emerald-600' : 'text-ink-700')}>
+                <Icon name={a.icon} size={16} className="shrink-0" />{a.label}
+              </SafeButton>
+            ))}
+          </Popover>
+        </>
+      )}
+    </div>
+  );
 }
 
 // Avatar da conversa: mostra a inicial enquanto carrega (ou se não houver foto) e
@@ -1487,8 +1539,8 @@ export function WhatsApp(): React.JSX.Element {
       <input ref={fileRef} type="file" hidden onChange={(e) => void onFile(e)} />
       <div className="wa relative flex h-full overflow-hidden">
         {/* coluna de conversas — vira tela cheia no mobile quando não há chat aberto */}
-        <div className={cn('w-full shrink-0 flex-col border-r border-[var(--wa-border)] bg-[var(--wa-sidebar)] md:flex md:w-[360px]',
-          active ? 'hidden md:flex' : 'flex')}>
+        <div className={cn('w-full shrink-0 flex-col border-r border-[var(--wa-border)] bg-[var(--wa-sidebar)] lg:flex lg:w-[360px]',
+          active ? 'hidden lg:flex' : 'flex')}>
           <div className="flex items-center justify-between gap-2 bg-[var(--wa-panel)] px-4 py-2.5">
             <span className="text-base font-semibold text-[var(--wa-ink)]">Conversas</span>
             <div className="flex shrink-0 items-center gap-0.5">
@@ -1552,12 +1604,12 @@ export function WhatsApp(): React.JSX.Element {
         </div>
 
         {/* coluna do chat */}
-        <div className={cn('min-w-0 flex-1 flex-col', active ? 'flex' : 'hidden md:flex')}>
+        <div className={cn('min-w-0 flex-1 flex-col', active ? 'flex' : 'hidden lg:flex')}>
           {active ? (
             <>
               <div className="flex items-center gap-2 border-b border-[var(--wa-border)] bg-[var(--wa-panel)] px-3 py-2">
                 <button onClick={() => { setActiveId(null); setMessages([]); }} aria-label="Voltar"
-                  className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-[var(--wa-muted)] hover:bg-[var(--wa-hover)] md:hidden">
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-[var(--wa-muted)] hover:bg-[var(--wa-hover)] lg:hidden">
                   <Icon name="chevronLeft" size={20} />
                 </button>
                 <button onClick={() => setDetailsOpen(true)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
@@ -1565,11 +1617,18 @@ export function WhatsApp(): React.JSX.Element {
                   <span className="min-w-0">
                     <span className="flex items-center gap-2">
                       <span className="truncate font-semibold text-[var(--wa-ink)]">{nomeChat(active)}</span>
+                      {/* O selo é `shrink-0`: com o texto por extenso ele tinha
+                          ~150px e, no celular, cobria o próprio nome do contato
+                          que deveria acompanhar. No estreito fica só o relógio
+                          e o número; a frase volta a partir de `sm`. */}
                       {active.agendamentos_pendentes > 0 && (
                         <span title="Há mensagens agendadas para este contato"
                           className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">
                           <Icon name="clock" size={11} />
-                          {active.agendamentos_pendentes > 1 ? `${active.agendamentos_pendentes} mensagens agendadas` : 'Mensagem agendada'}
+                          <span className="max-lg:hidden">
+                            {active.agendamentos_pendentes > 1 ? `${active.agendamentos_pendentes} mensagens agendadas` : 'Mensagem agendada'}
+                          </span>
+                          <span className="lg:hidden">{active.agendamentos_pendentes}</span>
                         </span>
                       )}
                     </span>
@@ -1581,42 +1640,20 @@ export function WhatsApp(): React.JSX.Element {
                     </span>
                   </span>
                 </button>
-                <div className="flex shrink-0 items-center gap-0.5">
-                  {needsNumber && can('whatsapp.link') && (
-                    <button title="Informar número do contato" onClick={() => setNumberOpen(true)}
-                      className="grid h-9 w-9 place-items-center rounded-full text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10">
-                      <Icon name="phone" size={18} />
-                    </button>
-                  )}
-                  {active.company_id != null && (
-                    <button title="Criar pedido" onClick={() => setOrderOpen(true)}
-                      className="grid h-9 w-9 place-items-center rounded-full text-[var(--wa-muted)] hover:bg-[var(--wa-hover)]">
-                      <Icon name="plus" size={18} />
-                    </button>
-                  )}
-                  {can('whatsapp.link') && (
-                    <button title="Conciliar conversas (telefone + LID)" onClick={() => setMergeOpen(true)}
-                      className="grid h-9 w-9 place-items-center rounded-full text-[var(--wa-muted)] hover:bg-[var(--wa-hover)]">
-                      <Icon name="layers" size={18} />
-                    </button>
-                  )}
-                  {can('whatsapp.schedule') && (
-                    <button title="Agendar mensagem" onClick={() => setSchedOpen(true)}
-                      className="grid h-9 w-9 place-items-center rounded-full text-[var(--wa-muted)] hover:bg-[var(--wa-hover)]">
-                      <Icon name="clock" size={18} />
-                    </button>
-                  )}
-                  {can('whatsapp.link') && (
-                    <button title={active.company_id != null ? 'Empresa vinculada' : 'Vincular empresa'} onClick={() => setLinkOpen(true)}
-                      className={cn('grid h-9 w-9 place-items-center rounded-full hover:bg-[var(--wa-hover)]', active.company_id != null ? 'text-emerald-600' : 'text-[var(--wa-muted)]')}>
-                      <Icon name="users" size={18} />
-                    </button>
-                  )}
-                  <SafeButton title="Apagar conversa" onClick={() => delChat(active)}
-                    className="grid h-9 w-9 place-items-center rounded-full text-[var(--wa-muted)] hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10">
-                    <Icon name="trash" size={18} />
-                  </SafeButton>
-                </div>
+                {/* Seis ações de 36px = 216px de cromo. Em 390px, somadas ao
+                    voltar e ao avatar, sobrava menos de um quarto da barra para
+                    o nome do contato. No estreito fica exposta só a ação urgente
+                    (informar número, quando falta) mais "criar pedido"; o resto
+                    vai para o `⋯`. No desktop nada muda. */}
+                <ChatHeaderActions
+                  acoes={[
+                    { icon: 'phone', label: 'Informar número do contato', onClick: () => setNumberOpen(true), urgente: true, hidden: !(needsNumber && can('whatsapp.link')) },
+                    { icon: 'plus', label: 'Criar pedido', onClick: () => setOrderOpen(true), hidden: active.company_id == null },
+                    { icon: 'layers', label: 'Conciliar conversas (telefone + LID)', onClick: () => setMergeOpen(true), hidden: !can('whatsapp.link') },
+                    { icon: 'clock', label: 'Agendar mensagem', onClick: () => setSchedOpen(true), hidden: !can('whatsapp.schedule') },
+                    { icon: 'users', label: active.company_id != null ? 'Empresa vinculada' : 'Vincular empresa', onClick: () => setLinkOpen(true), ativo: active.company_id != null, hidden: !can('whatsapp.link') },
+                    { icon: 'trash', label: 'Apagar conversa', onClick: () => delChat(active), perigo: true },
+                  ]} />
               </div>
 
               <div ref={canvasRef} className="wa-canvas min-h-0 flex-1 overflow-y-auto py-3">
@@ -1655,24 +1692,24 @@ export function WhatsApp(): React.JSX.Element {
                 {/* Alterna entre enviar mensagem e criar nota interna (só a equipe vê). */}
                 <button onClick={() => { setNoteMode((v) => { if (v) setNoteReplyTo(null); return !v; }); }} aria-pressed={noteMode}
                   title={noteMode ? 'Modo nota interna (clique para voltar a enviar)' : 'Nota interna (não enviada ao contato)'}
-                  className={cn('grid h-8 w-8 shrink-0 place-items-center rounded-full md:h-10 md:w-10',
+                  className={cn('grid h-11 w-11 shrink-0 place-items-center rounded-full md:h-10 md:w-10',
                     noteMode ? 'bg-amber-400/30 text-amber-700 dark:text-amber-300' : 'text-[var(--wa-muted)] hover:bg-[var(--wa-hover)]')}>
                   <Icon name="pencil" size={20} />
                 </button>
                 {!noteMode && can('whatsapp.send') && (
                   <button onClick={() => fileRef.current?.click()} aria-label="Anexar"
-                    className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[var(--wa-muted)] hover:bg-[var(--wa-hover)] md:h-10 md:w-10">
+                    className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-[var(--wa-muted)] hover:bg-[var(--wa-hover)] md:h-10 md:w-10">
                     <Icon name="paperclip" size={20} />
                   </button>
                 )}
                 <textarea ref={composerRef} value={draft} maxLength={2000} onChange={(e) => setDraft(e.target.value)} rows={1} autoFocus
                   onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (noteMode) void sendNote(); else if (can('whatsapp.send')) void send(); } }}
                   placeholder={noteMode ? 'Nota interna — só a equipe vê…' : 'Digite uma mensagem…'}
-                  className={cn('max-h-24 min-h-[28px] min-w-0 flex-1 resize-none rounded-lg px-3 py-1 text-sm leading-tight outline-none md:max-h-32 md:min-h-[40px] md:py-2 md:leading-normal',
+                  className={cn('max-h-24 min-h-[40px] min-w-0 flex-1 resize-none rounded-lg px-3 py-2 text-base leading-snug outline-none md:max-h-32 md:text-sm md:leading-normal',
                     noteMode ? 'bg-amber-50 text-amber-900 placeholder:text-amber-700/60 dark:bg-amber-400/10 dark:text-amber-100' : 'bg-[var(--wa-in)] text-[var(--wa-ink)] placeholder:text-[var(--wa-muted)]')} />
                 {(noteMode || can('whatsapp.send')) && (
                   <SafeButton onClick={() => (noteMode ? sendNote() : send())} aria-label={noteMode ? 'Salvar nota' : 'Enviar'}
-                    className={cn('grid h-8 w-8 shrink-0 place-items-center rounded-full hover:bg-[var(--wa-hover)] md:h-10 md:w-10',
+                    className={cn('grid h-11 w-11 shrink-0 place-items-center rounded-full hover:bg-[var(--wa-hover)] md:h-10 md:w-10',
                       noteMode ? 'text-amber-700 dark:text-amber-300' : 'text-[var(--wa-green)]')}>
                     <Icon name={noteMode ? 'check' : 'send'} size={20} />
                   </SafeButton>

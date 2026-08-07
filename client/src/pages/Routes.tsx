@@ -5,7 +5,7 @@ import { MapContainer, TileLayer, CircleMarker, Polyline, Popup, Tooltip, useMap
 import type { LatLngBoundsExpression } from 'leaflet';
 import { api, ApiError } from '../lib/api.ts';
 import type { FunnelCompany, Vehicle, OptimizeResult, RouteStop, SavedRoute } from '../lib/types.ts';
-import { Badge, Btn, Card, cn, EmptyState, Modal, PageHeader, SafeButton, Segmented, Spinner, StatCard } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, EmptyState, Modal, PageHeader, SafeButton, Segmented, Spinner, StatRow } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { brl, maskPlaca, maskMoney, clampNum } from '../lib/format.ts';
 import { toast } from '../lib/toast.tsx';
@@ -357,12 +357,12 @@ function Planner({ vehicles }: { vehicles: Vehicle[] }): React.JSX.Element {
           </Card>
         ) : (
           <>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:grid-cols-4">
-              <StatCard icon="route" label="Distância" value={km(result.dist_km)} sub="ida e volta" />
-              <StatCard icon="calendar" label="Duração" value={dur(result.dur_min)} tone="info" />
-              <StatCard icon="fuel" label="Combustível" value={result.litros != null ? `${result.litros.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} L` : '—'} tone="warn" />
-              <StatCard icon="wallet" label="Custo estimado" value={result.custo_total != null ? brl(result.custo_total) : '—'} tone="success" />
-            </div>
+            <StatRow items={[
+              { icon: 'route', label: 'Distância', value: km(result.dist_km), sub: 'ida e volta' },
+              { icon: 'calendar', label: 'Duração', value: dur(result.dur_min), tone: 'info' },
+              { icon: 'fuel', label: 'Combustível', value: result.litros != null ? `${result.litros.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} L` : '—', tone: 'warn' },
+              { icon: 'wallet', label: 'Custo estimado', value: result.custo_total != null ? brl(result.custo_total) : '—', tone: 'success' },
+            ]} />
 
             <Card className="overflow-hidden p-0">
               <div className="h-[320px] w-full">
@@ -571,7 +571,7 @@ function Vehicles({ vehicles, reload }: { vehicles: Vehicle[]; reload: () => voi
                 )}
                 {can('vehicles.delete') && (
                   <SafeButton onClick={() => remove(v.id)} aria-label="Excluir"
-                    className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ink-300 hover:bg-rose-50 hover:text-rose-500"><Icon name="trash" size={16} /></SafeButton>
+                    className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-ink-500 hover:bg-rose-50 hover:text-rose-500 sm:h-8 sm:w-8 sm:rounded-lg"><Icon name="trash" size={16} /></SafeButton>
                 )}
               </li>
             ))}

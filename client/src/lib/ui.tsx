@@ -50,7 +50,7 @@ export function SafeButton(
 
 /* ── Card ─────────────────────────────────────────────── */
 export function Card({ className, children }: { className?: string; children: ReactNode }): React.JSX.Element {
-  return <div className={cn('rounded-2xl border border-hairline bg-surface shadow-card', className)}>{children}</div>;
+  return <div className={cn('rounded-2xl border border-hairline bg-surface shadow-card transition-shadow', className)}>{children}</div>;
 }
 
 /* ── Button ───────────────────────────────────────────── */
@@ -95,8 +95,17 @@ const TONE: Record<Tone, string> = {
   danger: 'bg-rose-50 text-rose-600',
   neutral: 'bg-ink-100 text-ink-600',
 };
+// No escuro os pares 50/700 viravam um retângulo quase branco sobre o canvas
+// quase-preto — o status gritava mais que o nome da empresa. As variáveis
+// `--chip-*` (definidas em `.dark` no index.css) trocam por um véu da própria
+// cor; no claro elas não existem e o `TONE` acima segue valendo.
 export function Badge({ tone = 'neutral', className, children }: { tone?: Tone; className?: string; children: ReactNode }): React.JSX.Element {
-  return <span className={cn('inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold', TONE[tone], className)}>{children}</span>;
+  return (
+    <span data-badge data-tone={tone}
+      className={cn('inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold', TONE[tone], className)}>
+      {children}
+    </span>
+  );
 }
 
 /* ── StatCard — the analytics KPI tile ───────────────────── */
@@ -137,9 +146,12 @@ export function StatCard(
 export function StatRow(
   { items, cols = 4 }: { items: { label: string; value: ReactNode; sub?: ReactNode; icon: IconName; tone?: Tone }[]; cols?: 3 | 4 },
 ): React.JSX.Element {
-  return (
-    <>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-hairline bg-surface px-3 py-2 text-xs text-ink-500 sm:hidden">
+  // Um render só, escolhido em JS. A primeira versão emitia as DUAS variantes e
+  // escondia uma por CSS — o leitor de tela anunciava cada número duas vezes.
+  const mobile = useIsMobile();
+  if (mobile) {
+    return (
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-hairline bg-surface px-3 py-2 text-xs text-ink-500">
         {items.map((s, i) => (
           <span key={s.label} className="inline-flex items-center gap-1.5">
             {i > 0 && <span className="text-ink-300">·</span>}
@@ -147,10 +159,12 @@ export function StatRow(
           </span>
         ))}
       </div>
-      <div className={cn('hidden gap-3 sm:grid sm:grid-cols-2', cols === 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-3')}>
-        {items.map((s) => <StatCard key={s.label} {...s} />)}
-      </div>
-    </>
+    );
+  }
+  return (
+    <div className={cn('grid gap-3 sm:grid-cols-2', cols === 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-3')}>
+      {items.map((s) => <StatCard key={s.label} {...s} />)}
+    </div>
   );
 }
 
@@ -167,6 +181,7 @@ export interface RowAction {
 export function RowActions({ actions, primary }: { actions: RowAction[]; primary?: RowAction }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
+  const mobile = useIsMobile();
   const shown = actions.filter((a) => !a.hidden);
   const all = primary && !primary.hidden ? [primary, ...shown] : shown;
   if (all.length === 0) return <></>;
@@ -181,15 +196,20 @@ export function RowActions({ actions, primary }: { actions: RowAction[]; primary
     </SafeButton>
   );
 
+  // Desktop mantém tudo exposto. No celular só a ação primária fica visível e o
+  // resto vai para o `⋯` — 4 ícones encostados comiam 140px da linha e erravam
+  // o alvo. Um render só (não CSS), senão cada ação existiria duas vezes no DOM.
+  if (!mobile) {
+    return <div className="flex shrink-0 items-center gap-1">{all.map((a, i) => iconBtn(a, String(i)))}</div>;
+  }
   return (
-    <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
-      {/* mobile: ação primária (ou a primeira) + overflow */}
-      <span className="sm:hidden">{iconBtn(all[0]!, 'primary')}</span>
+    <div className="flex shrink-0 items-center gap-0.5">
+      {iconBtn(all[0]!, 'primary')}
       {all.length > 1 && (
         <>
           <button ref={btnRef} type="button" onClick={() => setOpen((v) => !v)}
             aria-label="Mais ações" aria-haspopup="menu" aria-expanded={open}
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-ink-400 transition hover:bg-ink-100 hover:text-ink-700 sm:hidden">
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-ink-400 transition hover:bg-ink-100 hover:text-ink-700">
             <Icon name="menu" size={17} />
           </button>
           <Popover open={open} anchorRef={btnRef} onClose={() => setOpen(false)} width={200}>
@@ -204,8 +224,6 @@ export function RowActions({ actions, primary }: { actions: RowAction[]; primary
           </Popover>
         </>
       )}
-      {/* desktop: tudo exposto, como antes */}
-      <span className="hidden items-center gap-1 sm:flex">{all.map((a, i) => iconBtn(a, String(i)))}</span>
     </div>
   );
 }
@@ -249,6 +267,33 @@ export function ChipBar({ chips, onClear }: { chips: FilterChip[]; onClear?: () 
    — três cópias, e nada impedindo os dois painéis abertos ao mesmo tempo
    (que é o estado que o storage devolvia na visita seguinte, empurrando o
    primeiro resultado para 880px abaixo do topo). Abrir um agora fecha o outro. */
+/* Breakpoint em JS, não em CSS. Necessário para decidir entre acordeão e folha:
+   o `Modal` sai em PORTAL no body, então um wrapper `sm:hidden` NÃO esconde a
+   folha — ela vazaria para o desktop, aberta por cima do acordeão. Casa com o
+   `sm` do Tailwind (640px). */
+export function useMediaQuery(query: string): boolean {
+  const [match, setMatch] = useState(
+    () => typeof matchMedia !== 'undefined' && matchMedia(query).matches,
+  );
+  useEffect(() => {
+    if (typeof matchMedia === 'undefined') return;
+    const mq = matchMedia(query);
+    const on = (): void => setMatch(mq.matches);
+    on();
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, [query]);
+  return match;
+}
+
+/* Casa com o `sm` do Tailwind (640px). */
+export const useIsMobile = (): boolean => useMediaQuery('(max-width: 639px)');
+
+/* Casa com o `lg` do Tailwind (1024px). Para conteúdo que só cabe em tela larga
+   — a tabela de pedidos, por exemplo, precisa de ~900px e no tablet (768px,
+   ainda descontando a sidebar) continuaria espremida. */
+export const useIsNarrow = (): boolean => useMediaQuery('(max-width: 1023px)');
+
 export type PanelName = 'filtros' | 'kpis';
 export function usePanels(scope: string, inicial: PanelName | null = 'kpis'): {
   aberto: PanelName | null; toggle: (p: PanelName) => void; abrir: (p: PanelName) => void; fechar: () => void;
@@ -276,36 +321,31 @@ export function usePanels(scope: string, inicial: PanelName | null = 'kpis'): {
    o painel COBRIR a lista em vez de empurrá-la — com um rodapé fixo que conta
    os resultados ao vivo, então aplicar e fechar viram o mesmo gesto. */
 export function FilterPanel(
-  { open, onClose, titulo = 'Filtros', acao, children }: {
-    open: boolean; onClose: () => void; titulo?: string;
+  { open, onClose, onLimpar, titulo = 'Filtros', acao, children }: {
+    open: boolean; onClose: () => void; onLimpar?: () => void; titulo?: string;
     acao?: { label: string; onClick: () => void; disabled?: boolean };
     children: ReactNode;
   },
 ): React.JSX.Element {
+  const mobile = useIsMobile();
+  if (!mobile) return <Collapse open={open} duration={200}>{children}</Collapse>;
+  // A barra de filtros esconde a própria linha Limpar/Buscar abaixo de `sm`
+  // (seria um segundo rodapé) — então as duas ações vivem aqui.
   return (
-    <>
-      <div className="hidden sm:block">
-        <Collapse open={open} duration={200}>{children}</Collapse>
-      </div>
-      <div className="sm:hidden">
-        {open && (
-          <Modal open title={titulo} onClose={onClose} width="lg"
-            footer={
-              <>
-                <Btn variant="ghost" type="button" onClick={onClose}>Fechar</Btn>
-                {acao && (
-                  <Btn type="button" icon="search" disabled={acao.disabled}
-                    onClick={() => { acao.onClick(); onClose(); }} className="flex-1 sm:flex-none">
-                    {acao.label}
-                  </Btn>
-                )}
-              </>
-            }>
-            {children}
-          </Modal>
-        )}
-      </div>
-    </>
+    <Modal open={open} title={titulo} onClose={onClose} width="lg"
+      footer={
+        <>
+          {onLimpar && <Btn variant="ghost" type="button" onClick={onLimpar}>Limpar</Btn>}
+          {acao && (
+            <Btn type="button" icon="search" disabled={acao.disabled} className="flex-1"
+              onClick={() => { acao.onClick(); onClose(); }}>
+              {acao.label}
+            </Btn>
+          )}
+        </>
+      }>
+      {children}
+    </Modal>
   );
 }
 
@@ -370,11 +410,16 @@ export function Segmented<T extends string>(
   { value, onChange, options }: { value: T; onChange: (v: T) => void; options: { value: T; label: string; icon?: IconName }[] },
 ): React.JSX.Element {
   return (
-    <div className="inline-flex rounded-xl bg-ink-100 p-1 text-sm font-medium">
+    // A trilha ganha borda hairline: no escuro `bg-ink-100` fica a poucos pontos
+    // da superfície do cartão e o controle sumia dentro dela. O item ativo sobe
+    // com sombra + peso; os inativos ficam de fato inativos.
+    <div className="inline-flex max-w-full overflow-x-auto rounded-xl border border-hairline bg-ink-100 p-1 text-sm font-medium no-scrollbar">
       {options.map((o) => (
-        <button key={o.value} onClick={() => onChange(o.value)}
-          className={cn('inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition-colors',
-            value === o.value ? 'bg-surface text-brand-700 shadow-sm' : 'text-ink-500 hover:text-ink-700')}>
+        <button key={o.value} onClick={() => onChange(o.value)} aria-pressed={value === o.value}
+          className={cn('inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 transition-colors max-sm:min-h-10',
+            value === o.value
+              ? 'bg-surface font-semibold text-brand-700 shadow-card'
+              : 'text-ink-500 hover:bg-surface/50 hover:text-ink-800')}>
           {o.icon && <Icon name={o.icon} size={15} />}{o.label}
         </button>
       ))}
@@ -386,11 +431,15 @@ export function Segmented<T extends string>(
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }): React.JSX.Element {
   return (
     <div className="flex flex-wrap items-end justify-between gap-3">
-      <div>
+      <div className="min-w-0">
         <h2 className="text-lg font-bold tracking-tight text-ink-900">{title}</h2>
-        {subtitle && <p className="mt-0.5 text-sm text-ink-500">{subtitle}</p>}
+        {/* Os subtítulos são frases inteiras e no celular ocupavam 3–4 linhas de
+            prosa acima da dobra, em toda visita. Uma linha no mobile, completo
+            no desktop. */}
+        {subtitle && <p className="mt-0.5 line-clamp-1 text-sm text-ink-500 sm:line-clamp-none">{subtitle}</p>}
       </div>
-      {actions}
+      {/* As ações do header são 2–4 botões: sem wrap, o último saía da tela. */}
+      {actions && <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }
@@ -406,10 +455,13 @@ export function Spinner({ label }: { label?: string }): React.JSX.Element {
 }
 export function EmptyState({ icon, title, hint }: { icon: IconName; title: string; hint?: ReactNode }): React.JSX.Element {
   return (
-    <div className="flex flex-col items-center gap-2 py-12 text-center">
-      <span className="grid h-12 w-12 place-items-center rounded-2xl bg-ink-100 text-ink-400"><Icon name={icon} size={24} /></span>
-      <p className="text-sm font-medium text-ink-600">{title}</p>
-      {hint && <p className="max-w-xs text-xs text-ink-400">{hint}</p>}
+    <div className="flex flex-col items-center gap-2.5 px-4 py-14 text-center">
+      {/* Halo em vez de bloco chapado: o ícone marca o vazio sem virar botão. */}
+      <span className="grid h-14 w-14 place-items-center rounded-2xl bg-ink-100 text-ink-400 ring-8 ring-ink-100/40">
+        <Icon name={icon} size={26} />
+      </span>
+      <p className="text-sm font-semibold text-ink-700">{title}</p>
+      {hint && <p className="max-w-sm text-xs leading-relaxed text-ink-400">{hint}</p>}
     </div>
   );
 }

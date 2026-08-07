@@ -122,6 +122,6 @@ describe('Catalog', () => {
   it('catálogo vazio mostra empty state', async () => {
     m.get.mockImplementation(async (p: string) => p === '/api/catalog' ? { items: [] } : { empresas: [] });
     render(<Catalog />);
-    expect(await screen.findByText('Catálogo vazio')).toBeInTheDocument();
+    expect(await screen.findByText('Mostruário vazio')).toBeInTheDocument();
   });
 });

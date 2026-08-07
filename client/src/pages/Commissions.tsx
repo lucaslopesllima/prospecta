@@ -5,7 +5,7 @@ import type {
   CatalogItem, CommissionEntry, CommissionRule, CommissionStatus,
   KanbanCard, OrgUser, RepresentedCompany,
 } from '../lib/types.ts';
-import { Badge, Btn, Card, cn, EmptyState, inputCls, Modal, PageHeader, SafeButton, Segmented, Spinner, StatCard, type Tone } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, EmptyState, inputCls, Modal, PageHeader, SafeButton, Segmented, Spinner, StatRow, type Tone } from '../lib/ui.tsx';
 import { useSellers, SellerFilter } from '../lib/sellers.tsx';
 import { downloadCsv } from '../lib/export.ts';
 import { Icon } from '../lib/icons.tsx';
@@ -102,12 +102,11 @@ function Extrato({ reps }: { reps: RepresentedCompany[] }): React.JSX.Element {
 
   return (
     <>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-        <StatCard label="Recebido no mês" value={brl(kpis.recebido)} sub={`previsto ${brl(kpis.previsto)}`} icon="check" tone="success" />
-        <StatCard label="A receber" value={brl(Math.max(0, kpis.previsto - kpis.recebido))} sub="previsto ainda não pago" icon="trendingUp" tone="info" />
-        <StatCard label="Divergências" value={String(kpis.divergentes)} sub={kpis.divergentes > 0 ? 'revisar baixas' : 'tudo certo'} icon="alertTriangle"
-          tone={kpis.divergentes > 0 ? 'danger' : 'neutral'} />
-      </div>
+      <StatRow cols={3} items={[
+        { label: 'Recebido no mês', value: brl(kpis.recebido), sub: `previsto ${brl(kpis.previsto)}`, icon: 'check', tone: 'success' },
+        { label: 'A receber', value: brl(Math.max(0, kpis.previsto - kpis.recebido)), sub: 'previsto ainda não pago', icon: 'trendingUp', tone: 'info' },
+        { label: 'Divergências', value: String(kpis.divergentes), sub: kpis.divergentes > 0 ? 'revisar baixas' : 'tudo certo', icon: 'alertTriangle', tone: kpis.divergentes > 0 ? 'danger' : 'neutral' },
+      ]} />
 
       <Card className="flex flex-wrap items-center gap-3 p-3">
         <input type="month" value={competencia} onChange={(e) => setCompetencia(e.target.value)} aria-label="Competência"
@@ -244,7 +243,7 @@ function SettleModal({ entry, onClose, onSaved }: {
     <Modal onClose={onClose} width="md">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-bold text-ink-900">Baixa da comissão · pedido #{entry.order_numero}</h3>
-        <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
+        <button onClick={onClose} aria-label="Fechar" className="grid h-11 w-11 place-items-center rounded-xl text-ink-500 hover:bg-ink-100 hover:text-ink-800 sm:h-8 sm:w-8 sm:rounded-lg">
           <Icon name="x" size={17} />
         </button>
       </div>
@@ -298,7 +297,7 @@ function ReconcileModal({ onClose, onDone }: { onClose: () => void; onDone: () =
     <Modal onClose={onClose} width="lg">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-bold text-ink-900">Conciliar pagamentos (CSV)</h3>
-        <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
+        <button onClick={onClose} aria-label="Fechar" className="grid h-11 w-11 place-items-center rounded-xl text-ink-500 hover:bg-ink-100 hover:text-ink-800 sm:h-8 sm:w-8 sm:rounded-lg">
           <Icon name="x" size={17} />
         </button>
       </div>
@@ -400,7 +399,7 @@ function Rules({ reps, admin }: { reps: RepresentedCompany[]; admin: boolean }):
       {rules.map((r) => {
         const alvo = alvoRegra(r);
         return (
-          <div key={r.id} className={cn('flex items-start gap-3 rounded-xl border border-ink-200/70 bg-surface p-3', !r.ativo && 'opacity-60')}>
+          <div key={r.id} className={cn('flex items-start gap-3 rounded-xl border border-hairline bg-surface p-3', !r.ativo && 'opacity-60')}>
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-ink-100 text-ink-500"><Icon name="percent" size={18} /></span>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-1.5">
@@ -417,11 +416,11 @@ function Rules({ reps, admin }: { reps: RepresentedCompany[]; admin: boolean }):
               <div className="flex shrink-0 items-center gap-1">
                 {can('commission_rules.update') && (
                   <button onClick={() => setEditing(r)} aria-label="Editar regra"
-                    className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100"><Icon name="pencil" size={16} /></button>
+                    className="grid h-11 w-11 place-items-center rounded-xl text-ink-500 hover:bg-ink-100 hover:text-ink-800 sm:h-8 sm:w-8 sm:rounded-lg"><Icon name="pencil" size={16} /></button>
                 )}
                 {can('commission_rules.delete') && (
                   <SafeButton onClick={() => remove(r)} aria-label="Excluir regra"
-                    className="grid h-8 w-8 place-items-center rounded-lg text-ink-300 hover:bg-rose-50 hover:text-rose-500"><Icon name="trash" size={16} /></SafeButton>
+                    className="grid h-11 w-11 place-items-center rounded-xl text-ink-500 hover:bg-rose-50 hover:text-rose-500 sm:h-8 sm:w-8 sm:rounded-lg"><Icon name="trash" size={16} /></SafeButton>
                 )}
               </div>
             )}

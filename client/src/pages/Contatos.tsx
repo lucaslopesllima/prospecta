@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.ts';
 import type { Contact, RepresentedCompany } from '../lib/types.ts';
-import { Badge, Btn, Card, EmptyState, PageHeader, SafeButton, Spinner } from '../lib/ui.tsx';
+import { Badge, Btn, Card, EmptyState, PageHeader, RowActions, Spinner } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { useAuth } from '../lib/auth.tsx';
 import { toast } from '../lib/toast.tsx';
@@ -79,7 +79,7 @@ export function Contatos(): React.JSX.Element {
                 )}
               </Card>
             ) : (
-              <div key={c.id} className="flex items-start gap-3 rounded-xl border border-ink-200/70 bg-surface p-3">
+              <div key={c.id} className="flex items-start gap-3 rounded-xl border border-hairline bg-surface p-3">
                 <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-ink-100 text-ink-500"><Icon name="users" size={18} /></span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
@@ -90,16 +90,11 @@ export function Contatos(): React.JSX.Element {
                   </div>
                   <p className="mt-0.5 truncate text-xs text-ink-400">{[c.email, c.telefone].filter(Boolean).join(' · ') || 'sem contato'}</p>
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  {can('contacts.update') && (
-                    <button onClick={() => setEditing(c.id)} aria-label="Editar"
-                      className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100"><Icon name="pencil" size={16} /></button>
-                  )}
-                  {can('contacts.delete') && (
-                    <SafeButton onClick={() => remove(c.id)} aria-label="Excluir"
-                      className="grid h-8 w-8 place-items-center rounded-lg text-ink-300 hover:bg-rose-50 hover:text-rose-500"><Icon name="trash" size={16} /></SafeButton>
-                  )}
-                </div>
+                <RowActions
+                  primary={{ icon: 'pencil', label: 'Editar', onClick: () => setEditing(c.id), hidden: !can('contacts.update') }}
+                  actions={[
+                    { icon: 'trash', label: 'Excluir', onClick: () => remove(c.id), tone: 'danger', hidden: !can('contacts.delete') },
+                  ]} />
               </div>
             ))}
           </div>

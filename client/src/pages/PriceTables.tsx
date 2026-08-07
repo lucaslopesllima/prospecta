@@ -51,7 +51,7 @@ export function PriceTables({ reps, catalog, adding, onCloseAdd }: {
           hint="Crie uma tabela por representada com os preços e descontos acordados." />
       )}
       {tables.map((t) => (
-        <div key={t.id} className={cn('flex items-start gap-3 rounded-xl border border-ink-200/70 bg-surface p-3', !t.ativo && 'opacity-60')}>
+        <div key={t.id} className={cn('flex items-start gap-3 rounded-xl border border-hairline bg-surface p-3', !t.ativo && 'opacity-60')}>
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-ink-100 text-ink-500"><Icon name="layers" size={18} /></span>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-1.5">
@@ -66,11 +66,11 @@ export function PriceTables({ reps, catalog, adding, onCloseAdd }: {
           <div className="flex shrink-0 items-center gap-1">
             {can('price_tables.update') && (
               <SafeButton onClick={() => openEdit(t.id, setEditing)} aria-label="Editar tabela"
-                className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100"><Icon name="pencil" size={16} /></SafeButton>
+                className="grid h-11 w-11 place-items-center rounded-xl text-ink-500 hover:bg-ink-100 hover:text-ink-800 sm:h-8 sm:w-8 sm:rounded-lg"><Icon name="pencil" size={16} /></SafeButton>
             )}
             {can('price_tables.delete') && (
               <SafeButton onClick={() => remove(t)} aria-label="Excluir tabela"
-                className="grid h-8 w-8 place-items-center rounded-lg text-ink-300 hover:bg-rose-50 hover:text-rose-500"><Icon name="trash" size={16} /></SafeButton>
+                className="grid h-11 w-11 place-items-center rounded-xl text-ink-500 hover:bg-rose-50 hover:text-rose-500 sm:h-8 sm:w-8 sm:rounded-lg"><Icon name="trash" size={16} /></SafeButton>
             )}
           </div>
         </div>
@@ -169,7 +169,7 @@ function TableForm({ reps, catalog, table, onClose, onSaved }: {
             // item acabou de ser adicionado pelo <select> — coage os dois lados.
             const cat = catalog.find((c) => Number(c.id) === Number(i.catalog_item_id));
             return (
-              <div key={i.catalog_item_id} className="flex items-center gap-2 rounded-xl border border-ink-200/70 bg-surface p-2">
+              <div key={i.catalog_item_id} className="flex items-center gap-2 rounded-xl border border-hairline bg-surface p-2">
                 <span className="min-w-0 flex-1 truncate text-sm text-ink-700">{cat?.nome ?? `#${i.catalog_item_id}`}</span>
                 <input type="text" inputMode="decimal" value={i.preco} aria-label={`Preço ${cat?.nome ?? i.catalog_item_id}`}
                   onChange={(e) => setItem(idx, { preco: maskMoney(e.target.value) })} placeholder="Preço *"
@@ -178,7 +178,7 @@ function TableForm({ reps, catalog, table, onClose, onSaved }: {
                   onChange={(e) => setItem(idx, { desconto_max_pct: maskPct(e.target.value) })} placeholder="Desc. máx %"
                   className="w-28 rounded-lg border border-ink-200 px-2 py-1.5 text-sm" />
                 <button type="button" aria-label="Remover item" onClick={() => setItems((xs) => xs.filter((_, j) => j !== idx))}
-                  className="grid h-8 w-8 place-items-center rounded-lg text-ink-300 hover:bg-rose-50 hover:text-rose-500"><Icon name="x" size={15} /></button>
+                  className="grid h-11 w-11 place-items-center rounded-xl text-ink-500 hover:bg-rose-50 hover:text-rose-500 sm:h-8 sm:w-8 sm:rounded-lg"><Icon name="x" size={15} /></button>
               </div>
             );
           })}

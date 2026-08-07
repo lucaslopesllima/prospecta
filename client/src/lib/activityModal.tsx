@@ -152,7 +152,7 @@ export function ActivityCreateModal({ preset, funnel, represented, presetCompany
     <Modal onClose={onClose} width="md">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-bold text-ink-900">{editando ? 'Editar atividade' : 'Nova atividade'}</h3>
-        <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
+        <button onClick={onClose} aria-label="Fechar" className="grid h-11 w-11 place-items-center rounded-xl text-ink-500 hover:bg-ink-100 hover:text-ink-800 sm:h-8 sm:w-8 sm:rounded-lg">
           <Icon name="x" size={17} />
         </button>
       </div>
@@ -321,7 +321,7 @@ export function VisitModal({ activity, onClose, onSaved }: {
           <h3 className="truncate text-sm font-bold text-ink-900">Visita</h3>
           {activity.razao_social && <p className="truncate text-xs text-ink-400">{activity.razao_social}</p>}
         </div>
-        <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
+        <button onClick={onClose} aria-label="Fechar" className="grid h-11 w-11 place-items-center rounded-xl text-ink-500 hover:bg-ink-100 hover:text-ink-800 sm:h-8 sm:w-8 sm:rounded-lg">
           <Icon name="x" size={17} />
         </button>
       </div>

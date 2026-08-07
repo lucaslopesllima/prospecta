@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import type { Cliente, CompanyHit } from '../lib/types.ts';
-import { Badge, Btn, Card, cn, EmptyState, inputCls, PageHeader, SafeButton, Spinner, StatCard } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, EmptyState, inputCls, PageHeader, RowActions, Spinner, StatRow } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { CompanySearch } from '../lib/companySearch.tsx';
 import { CompanyModal } from '../lib/companyModal.tsx';
@@ -122,7 +122,7 @@ export function Clientes(): React.JSX.Element {
     <div className="space-y-4 p-4 sm:p-6">
       <PageHeader title="Clientes" subtitle="Empresas convertidas em cliente. Os dados cadastrais vêm da base — aqui só o relacionamento."
         actions={(
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <input ref={fileRef} type="file" accept=".csv,text/csv,text/plain" className="hidden" onChange={(e) => void onFile(e)} />
             {can('relationships.import') && (
               <Btn variant="soft" icon="download" disabled={importing} onClick={() => fileRef.current?.click()}>
@@ -135,10 +135,10 @@ export function Clientes(): React.JSX.Element {
 
       {loading ? <Spinner /> : (
         <>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <StatCard label="Clientes ativos" value={list.length} icon="users" />
-            <StatCard label="Valor estimado total" value={brl0(totalValor)} icon="wallet" tone="success" />
-          </div>
+          <StatRow items={[
+            { label: 'Clientes ativos', value: list.length, icon: 'users' },
+            { label: 'Valor estimado total', value: brl0(totalValor), icon: 'wallet', tone: 'success' },
+          ]} />
 
           <Card className="p-4">
             {adding && (
@@ -172,7 +172,7 @@ export function Clientes(): React.JSX.Element {
                   <ClienteForm cliente={c} onSave={(p) => save(c.id, p)} onCancel={() => setEditing(null)} />
                 </Card>
               ) : (
-                <div key={c.id} className={cn('flex items-start gap-3 rounded-xl border border-ink-200/70 bg-surface p-3', !c.ativo && 'opacity-60')}>
+                <div key={c.id} className={cn('flex items-start gap-3 rounded-xl border border-hairline bg-surface p-3', !c.ativo && 'opacity-60')}>
                   <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600"><Icon name="building" size={18} /></span>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-1.5">
@@ -190,22 +190,15 @@ export function Clientes(): React.JSX.Element {
                       ].filter(Boolean).join(' · ') || 'sem detalhes do relacionamento'}
                     </p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    {can('relationships.delete') && (
-                      <SafeButton onClick={() => toggleAtivo(c)} title={c.ativo ? 'Inativar cliente' : 'Reativar cliente'}
-                        className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100"><Icon name={c.ativo ? 'check' : 'x'} size={16} /></SafeButton>
-                    )}
-                    <button onClick={() => setVerEmpresa(c.company_id)} title="Ver dados da empresa"
-                      className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100"><Icon name="eye" size={16} /></button>
-                    {can('relationships.update') && (
-                      <button onClick={() => setEditing(c.id)} aria-label="Editar relacionamento"
-                        className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100"><Icon name="pencil" size={16} /></button>
-                    )}
-                    {can('relationships.delete') && (
-                      <SafeButton onClick={() => remove(c)} aria-label="Remover cliente"
-                        className="grid h-8 w-8 place-items-center rounded-lg text-ink-300 hover:bg-rose-50 hover:text-rose-500"><Icon name="trash" size={16} /></SafeButton>
-                    )}
-                  </div>
+                  {/* No celular fica só "ver empresa"; o resto entra no `⋯`.
+                      Quatro ícones fixavam 140px da linha e o nome sumia. */}
+                  <RowActions
+                    primary={{ icon: 'eye', label: 'Ver dados da empresa', onClick: () => setVerEmpresa(c.company_id) }}
+                    actions={[
+                      { icon: 'pencil', label: 'Editar relacionamento', onClick: () => setEditing(c.id), hidden: !can('relationships.update') },
+                      { icon: c.ativo ? 'x' : 'check', label: c.ativo ? 'Inativar cliente' : 'Reativar cliente', onClick: () => toggleAtivo(c), hidden: !can('relationships.delete') },
+                      { icon: 'trash', label: 'Remover cliente', onClick: () => remove(c), tone: 'danger', hidden: !can('relationships.delete') },
+                    ]} />
                 </div>
               ))}
             </div>

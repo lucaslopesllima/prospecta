@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.ts';
 import type { Brand, CompanyHit, RepresentedCompany } from '../lib/types.ts';
-import { Badge, Btn, Card, cn, EmptyState, inputCls, PageHeader, SafeButton, Spinner } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, EmptyState, inputCls, PageHeader, RowActions, SafeButton, Spinner } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { useAuth } from '../lib/auth.tsx';
 import { CompanySearch } from '../lib/companySearch.tsx';
@@ -82,7 +82,7 @@ export function Representadas(): React.JSX.Element {
                 </div>
               </Card>
             ) : (
-              <div key={e.id} className={cn('flex items-start gap-3 rounded-xl border border-ink-200/70 bg-surface p-3', !e.ativo && 'opacity-60')}>
+              <div key={e.id} className={cn('flex items-start gap-3 rounded-xl border border-hairline bg-surface p-3', !e.ativo && 'opacity-60')}>
                 <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-ink-100 text-ink-500"><Icon name="building" size={18} /></span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
@@ -95,22 +95,12 @@ export function Representadas(): React.JSX.Element {
                   </p>
                   {e.notas && <p className="mt-1 line-clamp-2 text-xs text-ink-500">{e.notas}</p>}
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  {can('represented.update') && (
-                    <SafeButton onClick={() => toggleAtivo(e)} title={e.ativo ? 'Desativar' : 'Ativar'}
-                      className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
-                      <Icon name={e.ativo ? 'check' : 'x'} size={16} />
-                    </SafeButton>
-                  )}
-                  {can('represented.update') && (
-                    <button onClick={() => setEditing(e.id)} aria-label="Editar"
-                      className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100"><Icon name="pencil" size={16} /></button>
-                  )}
-                  {can('represented.delete') && (
-                    <SafeButton onClick={() => remove(e.id)} aria-label="Excluir"
-                      className="grid h-8 w-8 place-items-center rounded-lg text-ink-300 hover:bg-rose-50 hover:text-rose-500"><Icon name="trash" size={16} /></SafeButton>
-                  )}
-                </div>
+                <RowActions
+                  primary={{ icon: 'pencil', label: 'Editar', onClick: () => setEditing(e.id), hidden: !can('represented.update') }}
+                  actions={[
+                    { icon: e.ativo ? 'x' : 'check', label: e.ativo ? 'Desativar' : 'Ativar', onClick: () => toggleAtivo(e), hidden: !can('represented.update') },
+                    { icon: 'trash', label: 'Excluir', onClick: () => remove(e.id), tone: 'danger', hidden: !can('represented.delete') },
+                  ]} />
               </div>
             ))}
           </div>

@@ -74,30 +74,38 @@ function RequireOffice({ children }: { children: ReactNode }): React.JSX.Element
 type NavItem = { to: string; label: string; icon: IconName; requires?: string; officeOnly?: boolean };
 type NavGroup = { label?: string; items: NavItem[] };
 
-// Menu agrupado por intenção (chunking): reduz carga cognitiva e aproxima
-// itens do mesmo fluxo de trabalho. Dashboard fica solto no topo; grupos e
-// itens em ordem alfabética (pt-BR, ignora acento) — ver sortNav abaixo.
-const NAV_GROUPS_RAW: NavGroup[] = [
+// Menu agrupado por intenção (chunking) e ordenado por FREQUÊNCIA DE USO, não
+// por alfabeto. A ordenação alfabética anterior espalhava o dia a dia do
+// vendedor: "Agenda" caía antes de "Buscar Empresas", e o grupo "Financeiro"
+// (uso mensal) subia acima de "Vendas" (uso diário) só por causa do F.
+// Agora a lista desce da tarefa de todo dia para a de todo mês:
+//   Dia   → Vendas    (prospectar, mover o funil, falar, agendar, vender)
+//   Semana→ Cadastros (a base que alimenta a venda)
+//   Campo → Logística (planejar a viagem)
+//   Mês   → Financeiro e Sistema (fechar as contas, administrar)
+// Dentro de cada grupo vale o mesmo critério. Mexer aqui é mexer na ordem real
+// da tela — não há mais sort, esta lista É a ordem.
+const NAV_GROUPS: NavGroup[] = [
   { items: [{ to: '/', label: 'Dashboard', icon: 'gauge' }] },
   { label: 'Vendas', items: [
     { to: '/prospeccao', label: 'Buscar Empresas', icon: 'target', requires: 'prospeccao.view' },
     { to: '/funil', label: 'Funil', icon: 'columns', requires: 'relationships.list' },
-    { to: '/pedidos', label: 'Pedidos', icon: 'list', requires: 'orders.list' },
     { to: '/whatsapp', label: 'WhatsApp', icon: 'phone', requires: 'whatsapp.view' },
-    { to: '/email', label: 'E-mail', icon: 'mail', requires: 'email_schedules.list' },
     { to: '/agenda', label: 'Agenda', icon: 'calendar', requires: 'activities.list' },
+    { to: '/pedidos', label: 'Pedidos', icon: 'list', requires: 'orders.list' },
+    { to: '/email', label: 'E-mail', icon: 'mail', requires: 'email_schedules.list' },
   ] },
   { label: 'Cadastros', items: [
     { to: '/clientes', label: 'Clientes', icon: 'briefcase', requires: 'relationships.list' },
     { to: '/contatos', label: 'Contatos', icon: 'idCard', requires: 'contacts.list' },
-    { to: '/private-labels', label: 'Private Labels', icon: 'sparkles', requires: 'private_labels.list' },
-    { to: '/carteiras', label: 'Carteiras', icon: 'layers', requires: 'carteiras.view', officeOnly: true },
     { to: '/catalogo', label: 'Mostruário', icon: 'box', requires: 'catalog.list' },
     { to: '/representadas', label: 'Representadas', icon: 'building', requires: 'represented.list' },
+    { to: '/private-labels', label: 'Private Labels', icon: 'sparkles', requires: 'private_labels.list' },
+    { to: '/carteiras', label: 'Carteiras', icon: 'layers', requires: 'carteiras.view', officeOnly: true },
   ] },
   { label: 'Logística', items: [
-    { to: '/transportadoras', label: 'Transportadoras', icon: 'car', requires: 'carriers.list' },
     { to: '/rotas', label: 'Rotas', icon: 'route', requires: 'routes.list' },
+    { to: '/transportadoras', label: 'Transportadoras', icon: 'car', requires: 'carriers.list' },
   ] },
   { label: 'Financeiro', items: [
     { to: '/comissoes', label: 'Comissões', icon: 'percent', requires: 'commissions.list' },
@@ -105,24 +113,12 @@ const NAV_GROUPS_RAW: NavGroup[] = [
     { to: '/relatorios', label: 'Relatórios', icon: 'barChart', requires: 'reports.sales' },
   ] },
   { label: 'Sistema', items: [
+    { to: '/config', label: 'Config', icon: 'settings' },
     { to: '/equipe', label: 'Vendedores', icon: 'users', requires: 'users.list', officeOnly: true },
     { to: '/grupos', label: 'Grupos Usuários', icon: 'shield', requires: 'groups.list', officeOnly: true },
     { to: '/logs', label: 'Logs', icon: 'clock', requires: 'audit.read' },
-    { to: '/config', label: 'Config', icon: 'settings' },
   ] },
 ];
-
-// Ordena grupos e itens por label (pt-BR, insensível a acento/caixa). Grupo sem
-// label flutua pro topo (Dashboard); os rotulados abaixo, em ordem alfabética.
-const byLabel = (a: string, b: string): number => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' });
-const groupRank = (g: NavGroup): number => (g.label == null ? 0 : 1);
-const NAV_GROUPS: NavGroup[] = NAV_GROUPS_RAW
-  .map((g) => ({ ...g, items: [...g.items].sort((a, b) => byLabel(a.label, b.label)) }))
-  .sort((a, b) => {
-    const ra = groupRank(a), rb = groupRank(b);
-    if (ra !== rb) return ra - rb;
-    return ra === 1 ? byLabel(a.label!, b.label!) : 0; // rotulados: alfabético; topo: ordem de definição
-  });
 
 // Lista achatada — mobile (barra + folha "Mais") e título da página usam ordem linear.
 const NAV: NavItem[] = NAV_GROUPS.flatMap((g) => g.items);

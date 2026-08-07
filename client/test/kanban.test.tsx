@@ -152,7 +152,7 @@ describe('Kanban', () => {
     await waitFor(() => expect(screen.queryByText('Solicitar amostra')).not.toBeInTheDocument());
     await userEvent.click(screen.getAllByRole('button', { name: /\+Amostra/ })[0]!);
     const sm2 = (await screen.findByText('Solicitar amostra')).closest('.fixed') as HTMLElement;
-    await userEvent.selectOptions(within(sm2).getByLabelText('Produto do catálogo *'), '1');
+    await userEvent.selectOptions(within(sm2).getByLabelText('Produto do mostruário *'), '1');
     m.post.mockResolvedValueOnce({ sample: { id: 1 } });
     await userEvent.click(within(sm2).getByRole('button', { name: 'Solicitar' }));
     await waitFor(() => expect(m.post).toHaveBeenCalledWith('/api/sample-requests', expect.objectContaining({ catalog_item_id: 1 })));
@@ -386,7 +386,7 @@ describe('Kanban', () => {
     await userEvent.selectOptions(within(d).getByRole('option', { name: /Adicionar contato/ }).closest('select')!, '2');
     await userEvent.click(within(d).getAllByRole('button', { name: 'Remover' })[0]!);
     // catálogo: adiciona Prod B e remove um item selecionado
-    await userEvent.selectOptions(within(d).getByRole('option', { name: /Adicionar item do catálogo/ }).closest('select')!, '2');
+    await userEvent.selectOptions(within(d).getByRole('option', { name: /Adicionar item do mostruário/ }).closest('select')!, '2');
     const remCat = within(d).getAllByRole('button', { name: 'Remover' });
     await userEvent.click(remCat[remCat.length - 1]!); // remove item do catálogo (onClick catálogo)
     await userEvent.type(within(d).getByLabelText('Notas'), 'observação livre');

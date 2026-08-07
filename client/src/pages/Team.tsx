@@ -165,8 +165,8 @@ function Usuarios(): React.JSX.Element {
           // min-w: sem ele a tabela obedece ao container estreito e espreme as
           // colunas até quebrar letra a letra — o overflow-x do Card nunca rola.
           <table className="w-full min-w-[720px] text-sm">
-            <thead className="sticky top-0 z-10 bg-surface">
-              <tr className="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
+            <thead className="sticky top-0 z-10 [&>tr>th]:bg-surface">
+              <tr className="border-b border-ink-200 text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
                 <th className="px-4 py-3">Nome</th>
                 <th className="px-4 py-3">E-mail</th>
                 <th className="px-4 py-3">Papel</th>
@@ -179,7 +179,7 @@ function Usuarios(): React.JSX.Element {
               {users.map((u) => {
                 const self = Number(u.id) === Number(me?.id);
                 return (
-                  <tr key={u.id} className={cn('border-b border-ink-50 last:border-0', !u.ativo && 'opacity-60')}>
+                  <tr key={u.id} className={cn('border-b border-hairline last:border-0', !u.ativo && 'opacity-60')}>
                     <td className="px-4 py-3 font-medium text-ink-900">
                       <NameCell u={u} self={self} onSave={(nome) => patch(u.id, { nome })} />
                     </td>
@@ -352,7 +352,7 @@ function TransferModal({ from, users, onClose, onDone }: {
     <Modal onClose={onClose} width="md">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-bold text-ink-900">Transferir carteira</h3>
-        <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
+        <button onClick={onClose} aria-label="Fechar" className="grid h-11 w-11 place-items-center rounded-xl text-ink-500 hover:bg-ink-100 hover:text-ink-800 sm:h-8 sm:w-8 sm:rounded-lg">
           <Icon name="x" size={17} />
         </button>
       </div>
@@ -492,7 +492,7 @@ function Metas(): React.JSX.Element {
                     </div>
                     {can('goals.delete') && (
                       <SafeButton onClick={() => remove(g.id)} aria-label="Excluir meta"
-                        className="grid h-8 w-8 place-items-center rounded-lg text-ink-300 hover:bg-rose-50 hover:text-rose-500"><Icon name="trash" size={16} /></SafeButton>
+                        className="grid h-11 w-11 place-items-center rounded-xl text-ink-500 hover:bg-rose-50 hover:text-rose-500 sm:h-8 sm:w-8 sm:rounded-lg"><Icon name="trash" size={16} /></SafeButton>
                     )}
                   </div>
                 </div>

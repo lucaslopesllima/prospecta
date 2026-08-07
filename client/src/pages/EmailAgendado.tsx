@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api.ts';
 import type { CompanyHit, EmailSchedule, EmailScheduleStatus, EmailTemplate } from '../lib/types.ts';
-import { Badge, Btn, Card, cn, EmptyState, inputCls, Modal, PageHeader, SafeButton, Segmented, Spinner, StatCard, type Tone } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, EmptyState, inputCls, Modal, PageHeader, SafeButton, Segmented, Spinner, StatRow, type Tone } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { CompanySearch } from '../lib/companySearch.tsx';
 import { useAuth } from '../lib/auth.tsx';
@@ -123,11 +123,11 @@ function SchedulesTab(): React.JSX.Element {
 
   return (
     <>
-      <div className="grid gap-3 sm:grid-cols-3">
-        <StatCard label="Total agendados" value={list.length} icon="mail" />
-        <StatCard label="Pendentes" value={pendentes} icon="clock" tone="info" />
-        <StatCard label="Enviados" value={enviados} icon="check" tone="success" />
-      </div>
+      <StatRow cols={3} items={[
+        { label: 'Total agendados', value: list.length, icon: 'mail' },
+        { label: 'Pendentes', value: pendentes, icon: 'clock', tone: 'info' },
+        { label: 'Enviados', value: enviados, icon: 'check', tone: 'success' },
+      ]} />
 
       <Card className="p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -154,7 +154,7 @@ function SchedulesTab(): React.JSX.Element {
           {filtered.map((e) => {
             const meta = STATUS_META[e.status];
             return (
-              <div key={e.id} className="flex items-start gap-3 rounded-xl border border-ink-200/70 bg-surface p-3">
+              <div key={e.id} className="flex items-start gap-3 rounded-xl border border-hairline bg-surface p-3">
                 <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600"><Icon name="mail" size={18} /></span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
@@ -175,15 +175,15 @@ function SchedulesTab(): React.JSX.Element {
                 <div className="flex shrink-0 items-center gap-1">
                   {(e.status === 'pendente' || e.status === 'cancelado') && can('email_schedules.update') && (
                     <button onClick={() => setEditing(e)} aria-label="Editar agendamento"
-                      className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100"><Icon name="pencil" size={16} /></button>
+                      className="grid h-11 w-11 place-items-center rounded-xl text-ink-500 hover:bg-ink-100 hover:text-ink-800 sm:h-8 sm:w-8 sm:rounded-lg"><Icon name="pencil" size={16} /></button>
                   )}
                   {e.status === 'pendente' && can('email_schedules.delete') && (
                     <SafeButton onClick={() => cancelar(e)} title="Cancelar envio"
-                      className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100"><Icon name="x" size={16} /></SafeButton>
+                      className="grid h-11 w-11 place-items-center rounded-xl text-ink-500 hover:bg-ink-100 hover:text-ink-800 sm:h-8 sm:w-8 sm:rounded-lg"><Icon name="x" size={16} /></SafeButton>
                   )}
                   {can('email_schedules.delete') && (
                     <SafeButton onClick={() => remove(e)} aria-label="Remover agendamento"
-                      className="grid h-8 w-8 place-items-center rounded-lg text-ink-300 hover:bg-rose-50 hover:text-rose-500"><Icon name="trash" size={16} /></SafeButton>
+                      className="grid h-11 w-11 place-items-center rounded-xl text-ink-500 hover:bg-rose-50 hover:text-rose-500 sm:h-8 sm:w-8 sm:rounded-lg"><Icon name="trash" size={16} /></SafeButton>
                   )}
                 </div>
               </div>
@@ -441,7 +441,7 @@ function TemplatesTab(): React.JSX.Element {
           <EmptyState icon="mail" title="Nenhum modelo ainda" hint="Crie modelos reutilizáveis para agilizar os agendamentos." />
         )}
         {list.map((t) => (
-          <div key={t.id} className="flex items-start gap-3 rounded-xl border border-ink-200/70 bg-surface p-3">
+          <div key={t.id} className="flex items-start gap-3 rounded-xl border border-hairline bg-surface p-3">
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600"><Icon name="mail" size={18} /></span>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold text-ink-800">{t.nome}</p>
@@ -450,11 +450,11 @@ function TemplatesTab(): React.JSX.Element {
             <div className="flex shrink-0 items-center gap-1">
               {can('email_templates.update') && (
                 <button onClick={() => setEditing(t)} aria-label="Editar modelo"
-                  className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100"><Icon name="pencil" size={16} /></button>
+                  className="grid h-11 w-11 place-items-center rounded-xl text-ink-500 hover:bg-ink-100 hover:text-ink-800 sm:h-8 sm:w-8 sm:rounded-lg"><Icon name="pencil" size={16} /></button>
               )}
               {can('email_templates.delete') && (
                 <SafeButton onClick={() => remove(t)} aria-label="Remover modelo"
-                  className="grid h-8 w-8 place-items-center rounded-lg text-ink-300 hover:bg-rose-50 hover:text-rose-500"><Icon name="trash" size={16} /></SafeButton>
+                  className="grid h-11 w-11 place-items-center rounded-xl text-ink-500 hover:bg-rose-50 hover:text-rose-500 sm:h-8 sm:w-8 sm:rounded-lg"><Icon name="trash" size={16} /></SafeButton>
               )}
             </div>
           </div>

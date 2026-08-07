@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import type { Brand, CatalogItem, Contact, KanbanCard, NamedItem, PrivateLabel, RepresentedCompany, Stage } from '../lib/types.ts';
-import { Badge, Btn, cn, Collapse, inputCls, Modal, PageHeader, Popover, SafeButton, Spinner, StatCard, useCollapseOnOutside, type Tone } from '../lib/ui.tsx';
+import { Badge, Btn, cn, Collapse, FilterPanel, inputCls, Modal, PageHeader, Popover, SafeButton, Spinner, StatRow, useCollapseOnOutside, type Tone } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { CompanyFilterBar, useCompanyFilter } from '../lib/companyFilter.tsx';
 import { useSellers, SellerFilter } from '../lib/sellers.tsx';
@@ -221,7 +221,7 @@ export function Kanban(): React.JSX.Element {
       <div className="space-y-4 p-4 sm:p-6">
         <PageHeader title="Funil de vendas" subtitle="Arraste os cards ou use o botão → para mover entre etapas."
           actions={
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Btn variant={filter.filtroAtivo || filtrosAtivos(ff) ? 'primary' : 'soft'} icon="search"
                 data-filtros-toggle
                 aria-expanded={filtersOpen} title={filtersOpen ? 'Recolher filtros' : 'Expandir filtros'}
@@ -241,14 +241,18 @@ export function Kanban(): React.JSX.Element {
             </div>
           } />
 
-        <Collapse open={filtersOpen} duration={200}>
+        {/* No desktop é acordeão inline; no celular vira folha pelo rodapé, para
+            o painel COBRIR o board em vez de empurrá-lo para fora da tela. */}
+        <FilterPanel open={filtersOpen} onClose={fecharFiltros} onLimpar={limparTudo}
+          titulo="Filtros do funil"
+          acao={{ label: `Ver ${visibleCards.length} negócio(s)`, onClick: buscar }}>
           <div ref={filtrosRef}>
             <CompanyFilterBar f={filter} onBuscar={buscar} buscando={buscando}
               onLimpar={limparTudo}
               extra={<FunilFiltroCampos v={ff} onChange={setFf} stages={stages}
                 scenarios={scenarios} actions={actions} labels={labels} />} />
           </div>
-        </Collapse>
+        </FilterPanel>
 
         <Collapse open={kpisOpen} duration={200}>
           <StatRow items={[
@@ -260,7 +264,10 @@ export function Kanban(): React.JSX.Element {
         </Collapse>
       </div>
 
-      <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto px-4 pb-4 sm:px-6 sm:pb-6">
+      {/* No celular as colunas w-72 mostravam 1 e um naco da seguinte, e o
+          arrasto parava em qualquer lugar. Uma coluna por vez ocupando 88vw,
+          com snap: o polegar desliza e cada etapa para centrada. */}
+      <div className="flex min-h-0 flex-1 snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-4 sm:snap-none sm:px-6 sm:pb-6">
         {columns.map((col) => {
           const colCards = cardsByColumn.get(col.key) ?? [];
           const valor = colCards.reduce((s, c) => s + Number(c.valor_estimado ?? 0), 0);
@@ -273,8 +280,8 @@ export function Kanban(): React.JSX.Element {
               onDragOver={(e) => { e.preventDefault(); setOver((p) => (p === col.key ? p : col.key)); }}
               onDragLeave={() => setOver((o) => (o === col.key ? null : o))}
               onDrop={() => { if (dragId !== null) void move(dragId, target); setDragId(null); setOver(null); }}
-              className={cn('flex w-72 shrink-0 flex-col rounded-2xl border p-2 transition-colors',
-                active ? 'border-brand-300 bg-brand-50/60' : 'border-ink-200/70 bg-ink-100/50')}>
+              className={cn('flex w-[88vw] max-w-[22rem] shrink-0 snap-center flex-col rounded-2xl border p-2 transition-colors sm:w-72 sm:max-w-none sm:snap-align-none',
+                active ? 'border-brand-300 bg-brand-50/60' : 'border-hairline bg-ink-100/50')}>
               <div className="flex items-center justify-between px-2 py-1.5">
                 <span className="text-sm font-semibold text-ink-700">{col.nome}</span>
                 <span className="tabnums rounded-full bg-surface px-2 py-0.5 text-xs font-medium text-ink-500 shadow-card">{colCards.length}</span>
@@ -399,7 +406,7 @@ const CardItem = memo(function CardItem({ c, stages, dragging, menuOpen, onDragS
     <div draggable={can('relationships.update')}
       onDragStart={() => onDragStartCard(c.id)}
       onDragEnd={onDragEndCard}
-      className={cn('group relative cursor-grab rounded-xl border border-ink-200/70 bg-surface p-3 shadow-card transition active:cursor-grabbing',
+      className={cn('group relative cursor-grab rounded-xl border border-hairline bg-surface p-3 shadow-card transition active:cursor-grabbing',
         dragging && 'opacity-50')}>
       <div className="absolute right-2 top-2 flex items-center gap-0.5">
         {can('relationships.update') && (

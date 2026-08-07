@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import type { CatalogItem, RepresentedCompany } from '../lib/types.ts';
-import { Badge, Btn, Card, cn, EmptyState, inputCls, PageHeader, SafeButton, Segmented, Spinner } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, EmptyState, inputCls, PageHeader, RowActions, Segmented, Spinner } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { brl, dec, maskMoney, numStr } from '../lib/format.ts';
 import { toast } from '../lib/toast.tsx';
@@ -147,7 +147,7 @@ export function Catalog(): React.JSX.Element {
                 <ItemForm reps={reps} initial={toForm(i)} onSave={(f) => update(i.id, f)} onCancel={() => setEditing(null)} />
               </Card>
             ) : (
-              <div key={i.id} className={cn('flex items-start gap-3 rounded-xl border border-ink-200/70 bg-surface p-3', !i.ativo && 'opacity-60')}>
+              <div key={i.id} className={cn('flex items-start gap-3 rounded-xl border border-hairline bg-surface p-3', !i.ativo && 'opacity-60')}>
                 <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-ink-100 text-ink-500"><Icon name="box" size={18} /></span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
@@ -160,20 +160,12 @@ export function Catalog(): React.JSX.Element {
                     {[i.preco != null ? brl(Number(i.preco)) + (i.unidade_medida ? ` / ${i.unidade_medida}` : '') : i.unidade_medida, i.descricao].filter(Boolean).join(' · ') || 'sem detalhes'}
                   </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  {can('catalog.update') && (
-                    <SafeButton onClick={() => toggleAtivo(i)} title={i.ativo ? 'Desativar' : 'Ativar'}
-                      className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100"><Icon name={i.ativo ? 'check' : 'x'} size={16} /></SafeButton>
-                  )}
-                  {can('catalog.update') && (
-                    <button onClick={() => setEditing(i.id)} aria-label="Editar"
-                      className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100"><Icon name="pencil" size={16} /></button>
-                  )}
-                  {can('catalog.delete') && (
-                    <SafeButton onClick={() => remove(i.id)} aria-label="Excluir"
-                      className="grid h-8 w-8 place-items-center rounded-lg text-ink-300 hover:bg-rose-50 hover:text-rose-500"><Icon name="trash" size={16} /></SafeButton>
-                  )}
-                </div>
+                <RowActions
+                  primary={{ icon: 'pencil', label: 'Editar', onClick: () => setEditing(i.id), hidden: !can('catalog.update') }}
+                  actions={[
+                    { icon: i.ativo ? 'x' : 'check', label: i.ativo ? 'Desativar' : 'Ativar', onClick: () => toggleAtivo(i), hidden: !can('catalog.update') },
+                    { icon: 'trash', label: 'Excluir', onClick: () => remove(i.id), tone: 'danger', hidden: !can('catalog.delete') },
+                  ]} />
               </div>
             ))}
           </div>

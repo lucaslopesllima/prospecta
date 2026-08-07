@@ -116,7 +116,7 @@ describe('Orders', () => {
     await userEvent.selectOptions(screen.getByLabelText('Representada *'), '5');
     expect(await screen.findByText('Tabela 2026')).toBeInTheDocument(); // tabela vigente carregada
 
-    await userEvent.selectOptions(screen.getByLabelText('Adicionar item do catálogo'), '9');
+    await userEvent.selectOptions(screen.getByLabelText('Adicionar item do mostruário'), '9');
     // preço pré-preenchido vem da tabela (90), não do catálogo (100)
     expect(screen.getByLabelText('Preço * item 1')).toHaveValue('90');
 
@@ -245,7 +245,7 @@ describe('Orders', () => {
     await screen.findByText('Tabela 2026');
 
     // item do catálogo (imposto do produto) + item livre e remoção
-    await userEvent.selectOptions(screen.getByLabelText('Adicionar item do catálogo'), '9');
+    await userEvent.selectOptions(screen.getByLabelText('Adicionar item do mostruário'), '9');
     await userEvent.click(screen.getByRole('button', { name: /Item livre/ }));
     await userEvent.click(screen.getByLabelText('Remover item 2'));
 
@@ -413,7 +413,7 @@ describe('Orders', () => {
     mount('/pedidos?company_id=999');
     expect(await screen.findByText('Novo pedido', { selector: 'h3' })).toBeInTheDocument();
     await userEvent.selectOptions(screen.getByLabelText('Representada *'), '5');
-    await userEvent.selectOptions(screen.getByLabelText('Adicionar item do catálogo'), '9');
+    await userEvent.selectOptions(screen.getByLabelText('Adicionar item do mostruário'), '9');
     await userEvent.click(screen.getByRole('button', { name: 'Salvar pedido' }));
     await waitFor(() => expect(m.post).toHaveBeenCalledWith('/api/orders', expect.objectContaining({ relationship_id: null })));
   });
@@ -425,7 +425,7 @@ describe('Orders', () => {
     await userEvent.click(screen.getByRole('button', { name: /Novo pedido/ }));
     await userEvent.selectOptions(screen.getByLabelText('Cliente (funil) *'), '100');
     await userEvent.selectOptions(screen.getByLabelText('Representada *'), '5');
-    await userEvent.selectOptions(screen.getByLabelText('Adicionar item do catálogo'), '9');
+    await userEvent.selectOptions(screen.getByLabelText('Adicionar item do mostruário'), '9');
     await userEvent.click(screen.getByRole('button', { name: 'Salvar pedido' }));
     await waitFor(() => expect(m.post).toHaveBeenCalled());
   });

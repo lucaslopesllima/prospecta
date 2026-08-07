@@ -369,8 +369,11 @@ export function CompanyFilterBar({ f, recommend = false, onBuscar, buscando = fa
   // adicionava cliques. No recommend, território/pesos ficam no topo e os campos
   // básicos logo abaixo — tudo visível de uma vez. No funil só vão os campos:
   // endereço de partida é da prospecção/planejador de rota, não filtra nada lá.
+  // No celular a barra vive DENTRO da folha do FilterPanel, que já dá moldura,
+  // padding e rodapé — então aqui o cartão e a linha de ações somem para não
+  // desenhar quadro dentro de quadro nem repetir Limpar/Buscar.
   return (
-    <div className="rounded-2xl border border-ink-200/70 bg-surface p-3 shadow-card">
+    <div className="rounded-2xl border border-hairline bg-surface p-3 shadow-card max-sm:rounded-none max-sm:border-0 max-sm:bg-transparent max-sm:p-0 max-sm:shadow-none">
       {recommend && <RecommendConfig f={f} />}
 
       <div className={cn('grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3',
@@ -406,7 +409,7 @@ export function CompanyFilterBar({ f, recommend = false, onBuscar, buscando = fa
         )}
         {extra}
       </div>
-      <div className="mt-3 flex items-center justify-end gap-2 border-t border-ink-100 pt-3">
+      <div className="mt-3 flex items-center justify-end gap-2 border-t border-ink-100 pt-3 max-sm:hidden">
         <Btn variant="ghost" type="button" onClick={onLimpar ?? f.limpar}>Limpar filtros</Btn>
         {onBuscar && (
           <Btn type="button" icon="search" onClick={onBuscar} disabled={buscando}>
@@ -522,8 +525,14 @@ function RecommendConfig({ f }: { f: CompanyFilter }): React.JSX.Element {
   return (
     <div className="grid gap-3 lg:grid-cols-2">
       {/* Território */}
-      <div className="rounded-2xl border border-ink-200/70 bg-surface p-3 shadow-card">
-        <h4 className="text-sm font-semibold text-ink-900">Território</h4>
+      <div className="rounded-2xl border border-hairline bg-surface p-3 shadow-card">
+        {/* Único critério obrigatório da tela: sem município a busca nem sai
+            (ver `semTerritorio` no Recommend). Marca o `*` da app, e o asterisco
+            fica fora do texto lido em voz alta — o aria-label já diz. */}
+        <h4 className="text-sm font-semibold text-ink-900">
+          Território <span aria-hidden className="text-rose-500">*</span>
+          <span className="sr-only">(obrigatório)</span>
+        </h4>
         <p className="mb-1.5 mt-3 text-[11px] font-semibold uppercase tracking-wider text-ink-400">Por estado</p>
         <div className="flex flex-wrap gap-1">
           {ufs.map((u) => {
@@ -594,7 +603,7 @@ function RecommendConfig({ f }: { f: CompanyFilter }): React.JSX.Element {
       </div>
 
       {/* Pesos do score */}
-      <div className="rounded-2xl border border-ink-200/70 bg-surface p-3 shadow-card">
+      <div className="rounded-2xl border border-hairline bg-surface p-3 shadow-card">
         <h4 className="flex items-center gap-1.5 text-sm font-semibold text-ink-900">
           Pesos do score <Hint text={PESO_SLIDER_HINT} />
         </h4>

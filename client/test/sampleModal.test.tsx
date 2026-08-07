@@ -45,7 +45,7 @@ describe('SampleRequestModal — criar', () => {
   it('só lista produtos ativos e exige escolher um produto', async () => {
     const onSaved = vi.fn();
     render(<SampleRequestModal card={CARD} catalog={CATALOG} onClose={vi.fn()} onSaved={onSaved} />);
-    const sel = screen.getByRole('combobox', { name: /Produto do catálogo/ });
+    const sel = screen.getByRole('combobox', { name: /Produto do mostruário/ });
     expect(within(sel).queryByRole('option', { name: 'Produto Inativo' })).not.toBeInTheDocument();
     expect(within(sel).getByRole('option', { name: 'Produto A (A-1)' })).toBeInTheDocument();
 
@@ -58,7 +58,7 @@ describe('SampleRequestModal — criar', () => {
     const onSaved = vi.fn();
     render(<SampleRequestModal card={CARD} catalog={CATALOG} onClose={vi.fn()} onSaved={onSaved} />);
 
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: /Produto do catálogo/ }), '9');
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: /Produto do mostruário/ }), '9');
     await userEvent.type(screen.getByRole('spinbutton', { name: 'Quantidade' }), '3');
     await userEvent.click(screen.getByRole('button', { name: 'Solicitar' }));
 
@@ -72,7 +72,7 @@ describe('SampleRequestModal — criar', () => {
     m.post.mockResolvedValueOnce({ sample: sample({ id: 9 }) });
     render(<SampleRequestModal card={CARD} catalog={CATALOG} onClose={vi.fn()} onSaved={vi.fn()} />);
 
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: /Produto do catálogo/ }), '9');
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: /Produto do mostruário/ }), '9');
     await userEvent.click(screen.getByRole('checkbox'));
     // título sugerido a partir do produto
     expect(screen.getByDisplayValue('Amostra: Produto A')).toBeInTheDocument();
@@ -89,7 +89,7 @@ describe('SampleRequestModal — criar', () => {
       .mockResolvedValueOnce({ sample: sample({ id: 9, contact_id: 77 }) });
     render(<SampleRequestModal card={CARD} catalog={CATALOG} onClose={vi.fn()} onSaved={vi.fn()} />);
 
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: /Produto do catálogo/ }), '9');
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: /Produto do mostruário/ }), '9');
     await userEvent.click(screen.getByRole('button', { name: '+ Novo contato' }));
     await userEvent.type(screen.getByPlaceholderText('Nome *'), 'Maria');
     await userEvent.click(screen.getByRole('button', { name: 'Solicitar' }));
@@ -101,7 +101,7 @@ describe('SampleRequestModal — criar', () => {
   it('preenche previsão, contato existente, agenda e notas', async () => {
     m.post.mockResolvedValueOnce({ sample: sample({ id: 9 }) });
     render(<SampleRequestModal card={CARD} catalog={CATALOG} onClose={vi.fn()} onSaved={vi.fn()} />);
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: /Produto do catálogo/ }), '9');
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: /Produto do mostruário/ }), '9');
     fireEvent.change(screen.getByLabelText('Previsão de envio'), { target: { value: '2026-07-01' } });
     const combos = screen.getAllByRole('combobox');
     await userEvent.selectOptions(combos[1]!, '50');
@@ -118,7 +118,7 @@ describe('SampleRequestModal — criar', () => {
       .mockResolvedValueOnce({ contact: { id: 77, nome: 'Maria', company_id: 100 } })
       .mockResolvedValueOnce({ sample: sample({ id: 9 }) });
     render(<SampleRequestModal card={CARD} catalog={CATALOG} onClose={vi.fn()} onSaved={vi.fn()} />);
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: /Produto do catálogo/ }), '9');
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: /Produto do mostruário/ }), '9');
     await userEvent.click(screen.getByRole('button', { name: '+ Novo contato' }));
     await userEvent.type(screen.getByPlaceholderText('Nome *'), 'Maria');
     await userEvent.type(screen.getByPlaceholderText('Telefone'), '11999990000');
@@ -129,7 +129,7 @@ describe('SampleRequestModal — criar', () => {
   it('erro ao salvar exibe toast', async () => {
     m.post.mockRejectedValueOnce(new Error('falhou'));
     render(<SampleRequestModal card={CARD} catalog={CATALOG} onClose={vi.fn()} onSaved={vi.fn()} />);
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: /Produto do catálogo/ }), '9');
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: /Produto do mostruário/ }), '9');
     await userEvent.click(screen.getByRole('button', { name: 'Solicitar' }));
     await waitFor(() => expect(m.post).toHaveBeenCalled());
   });
