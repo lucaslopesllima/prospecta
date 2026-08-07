@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from './api.ts';
-import { Badge, Btn, SafeButton, Spinner, cn, type Tone } from './ui.tsx';
+import { Badge, Btn, cn, inputCls, Modal, SafeButton, Spinner, type Tone } from './ui.tsx';
 import { Icon } from './icons.tsx';
 import { toast } from './toast.tsx';
 import { dec, maskPhone } from './format.ts';
@@ -10,7 +10,6 @@ import { confirmDialog } from './confirm.ts';
 // Modais de amostra do funil: criar/editar uma solicitação e listar as da
 // prospecção. Amostra escolhe um produto do catálogo, opcionalmente um contato
 // (criado na hora) e um follow-up na agenda.
-const inputCls = 'w-full rounded-xl border border-ink-200 bg-surface px-3 py-2.5 text-sm text-ink-800 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-200';
 const txt = (s: string): string | null => (s.trim() === '' ? null : s.trim());
 
 const STATUS: SampleStatus[] = ['solicitada', 'enviada', 'recebida', 'cancelada'];
@@ -106,22 +105,10 @@ export function SampleRequestModal({ card, catalog, sample, onClose, onSaved }: 
   };
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 p-4" onClick={onClose}>
-      <div className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-2xl border border-ink-200 bg-surface shadow-pop"
-        onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start justify-between gap-3 border-b border-ink-100 p-5">
-          <div>
-            <h2 className="text-base font-semibold text-ink-800">{editando ? 'Editar amostra' : 'Solicitar amostra'}</h2>
-            <p className="truncate text-xs text-ink-400">{card.label}</p>
-          </div>
-          <button type="button" onClick={onClose}
-            className="rounded-lg p-1 text-ink-400 transition hover:bg-ink-100 hover:text-ink-700">
-            <Icon name="x" size={18} />
-          </button>
-        </div>
-
+    <Modal onClose={onClose} width="lg" level={2}
+      title={editando ? 'Editar amostra' : 'Solicitar amostra'} subtitle={card.label}>
         <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
-          <div className="space-y-3 overflow-y-auto p-5">
+          <div className="space-y-3 py-1">
             {editando ? (
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
@@ -212,13 +199,12 @@ export function SampleRequestModal({ card, catalog, sample, onClose, onSaved }: 
                 placeholder="Observações livres" className={cn(inputCls, 'resize-y')} />
             </label>
           </div>
-          <div className="flex justify-end gap-2 border-t border-ink-100 p-4">
+          <div className="sticky bottom-0 -mx-4 flex justify-end gap-2 border-t border-hairline bg-glass px-4 py-3 backdrop-blur-xl">
             <Btn variant="ghost" type="button" onClick={onClose}>Cancelar</Btn>
             <Btn icon="check" type="submit" disabled={busy}>{busy ? '…' : (editando ? 'Salvar' : 'Solicitar')}</Btn>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -250,20 +236,8 @@ export function SampleListModal({ card, catalog, onClose, onChanged }: {
 
   return (
     <>
-      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 p-4" onClick={onClose}>
-        <div className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-2xl border border-ink-200 bg-surface shadow-pop"
-          onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-start justify-between gap-3 border-b border-ink-100 p-5">
-            <div>
-              <h2 className="text-base font-semibold text-ink-800">Amostras</h2>
-              <p className="truncate text-xs text-ink-400">{card.label}</p>
-            </div>
-            <button type="button" onClick={onClose}
-              className="rounded-lg p-1 text-ink-400 transition hover:bg-ink-100 hover:text-ink-700">
-              <Icon name="x" size={18} />
-            </button>
-          </div>
-          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
+      <Modal onClose={onClose} width="lg" level={1} title="Amostras" subtitle={card.label}>
+          <div className="space-y-2 py-1">
             {samples === null ? (
               <div className="grid place-items-center py-8"><Spinner /></div>
             ) : samples.length === 0 ? (
@@ -290,8 +264,7 @@ export function SampleListModal({ card, catalog, onClose, onChanged }: {
               </div>
             ))}
           </div>
-        </div>
-      </div>
+      </Modal>
       {editing && (
         <SampleRequestModal card={card} catalog={catalog} sample={editing}
           onClose={() => setEditing(null)}

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api.ts';
 import type { CompanyHit, EmailSchedule, EmailScheduleStatus, EmailTemplate } from '../lib/types.ts';
-import { Badge, Btn, Card, EmptyState, PageHeader, SafeButton, Segmented, Spinner, StatCard, cn, type Tone } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, EmptyState, inputCls, Modal, PageHeader, SafeButton, Segmented, Spinner, StatCard, type Tone } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { CompanySearch } from '../lib/companySearch.tsx';
 import { useAuth } from '../lib/auth.tsx';
@@ -9,7 +9,6 @@ import { toast } from '../lib/toast.tsx';
 import { confirmDialog, serieScopeDialog } from '../lib/confirm.ts';
 import { EMAIL_RE, isEmail } from '../lib/format.ts';
 
-const inputCls = 'w-full rounded-xl border border-ink-200 bg-surface px-3 py-2.5 text-sm text-ink-800 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-200';
 
 // Status do envio → rótulo/cor do badge.
 const STATUS_META: Record<EmailScheduleStatus, { label: string; tone: Tone }> = {
@@ -298,14 +297,8 @@ function ScheduleModal({ schedule, templates, onClose, onSaved }: {
   };
 
   return (
-    <div className="fixed inset-0 z-[2000] grid place-items-center bg-black/45 p-4" onClick={onClose}>
-      <Card className="w-full max-w-lg p-0" >
-        <div onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center justify-between border-b border-ink-100 px-4 py-3">
-            <h2 className="text-sm font-bold text-ink-800">{schedule ? 'Editar agendamento' : 'Novo agendamento'}</h2>
-            <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100"><Icon name="x" size={16} /></button>
-          </div>
-          <form onSubmit={submit} className="max-h-[70vh] space-y-3 overflow-auto p-4">
+    <Modal onClose={onClose} width="lg" title={schedule ? 'Editar agendamento' : 'Novo agendamento'}>
+          <form onSubmit={submit} className="space-y-3 py-1">
             {!schedule && (
               <div>
                 <label className="mb-1 block text-xs font-semibold text-ink-500">Empresa <span className="font-normal text-ink-400">(opcional — carrega o e-mail)</span></label>
@@ -365,7 +358,7 @@ function ScheduleModal({ schedule, templates, onClose, onSaved }: {
                 </select>
               </div>
             )}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs font-semibold text-ink-500">Enviar em</label>
                 <input type="datetime-local" value={agendadoPara} onChange={(e) => setAgendadoPara(e.target.value)} className={inputCls} />
@@ -402,14 +395,12 @@ function ScheduleModal({ schedule, templates, onClose, onSaved }: {
               </div>
             )}
 
-            <div className="flex justify-end gap-2 pt-1">
+            <div className="sticky bottom-0 -mx-4 flex justify-end gap-2 border-t border-hairline bg-glass px-4 py-3 backdrop-blur-xl">
               <Btn variant="ghost" type="button" onClick={onClose}>Cancelar</Btn>
               <Btn icon="check" type="submit" disabled={busy}>{busy ? '…' : 'Salvar'}</Btn>
             </div>
           </form>
-        </div>
-      </Card>
-    </div>
+    </Modal>
   );
 }
 
@@ -508,14 +499,8 @@ function TemplateModal({ template, onClose, onSaved }: {
   };
 
   return (
-    <div className="fixed inset-0 z-[2000] grid place-items-center bg-black/45 p-4" onClick={onClose}>
-      <Card className="w-full max-w-lg p-0">
-        <div onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center justify-between border-b border-ink-100 px-4 py-3">
-            <h2 className="text-sm font-bold text-ink-800">{template ? 'Editar modelo' : 'Novo modelo'}</h2>
-            <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100"><Icon name="x" size={16} /></button>
-          </div>
-          <form onSubmit={submit} className="max-h-[70vh] space-y-3 overflow-auto p-4">
+    <Modal onClose={onClose} width="lg" title={template ? 'Editar modelo' : 'Novo modelo'}>
+          <form onSubmit={submit} className="space-y-3 py-1">
             <div>
               <label className="mb-1 block text-xs font-semibold text-ink-500">Nome do modelo</label>
               <input value={nome} onChange={(e) => setNome(e.target.value)} maxLength={120} placeholder="Ex.: Apresentação inicial" className={inputCls} />
@@ -528,13 +513,11 @@ function TemplateModal({ template, onClose, onSaved }: {
               <label className="mb-1 block text-xs font-semibold text-ink-500">Corpo</label>
               <textarea value={corpo} onChange={(e) => setCorpo(e.target.value)} rows={8} maxLength={20000} placeholder="Conteúdo do e-mail" className={cn(inputCls, 'resize-y')} />
             </div>
-            <div className="flex justify-end gap-2 pt-1">
+            <div className="sticky bottom-0 -mx-4 flex justify-end gap-2 border-t border-hairline bg-glass px-4 py-3 backdrop-blur-xl">
               <Btn variant="ghost" type="button" onClick={onClose}>Cancelar</Btn>
               <Btn icon="check" type="submit" disabled={busy}>{busy ? '…' : 'Salvar'}</Btn>
             </div>
           </form>
-        </div>
-      </Card>
-    </div>
+    </Modal>
   );
 }

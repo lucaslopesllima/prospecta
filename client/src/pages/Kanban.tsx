@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import type { Brand, CatalogItem, Contact, KanbanCard, NamedItem, PrivateLabel, RepresentedCompany, Stage } from '../lib/types.ts';
-import { Badge, Btn, Collapse, PageHeader, Popover, SafeButton, Spinner, StatCard, cn, useCollapseOnOutside, type Tone } from '../lib/ui.tsx';
+import { Badge, Btn, cn, Collapse, inputCls, Modal, PageHeader, Popover, SafeButton, Spinner, StatCard, useCollapseOnOutside, type Tone } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { CompanyFilterBar, useCompanyFilter } from '../lib/companyFilter.tsx';
 import { useSellers, SellerFilter } from '../lib/sellers.tsx';
@@ -20,7 +20,6 @@ const STATUS_LABEL: Record<string, string> = {
   prospect: 'Prospect', cliente: 'Cliente', descartado: 'Descartado',
 };
 const STATUS_OPTS = ['prospect', 'cliente', 'descartado'] as const;
-const inputCls = 'w-full rounded-xl border border-ink-200 bg-surface px-3 py-2.5 text-sm text-ink-800 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-200';
 const FILTERS_OPEN_KEY = 'funil:filtersOpen';
 const KPIS_OPEN_KEY = 'funil:kpisOpen';
 const FILTROS_KEY = 'funil:filtros';
@@ -242,7 +241,7 @@ export function Kanban(): React.JSX.Element {
             </div>
           } />
 
-        <Collapse open={filtersOpen} duration={1500}>
+        <Collapse open={filtersOpen} duration={200}>
           <div ref={filtrosRef}>
             <CompanyFilterBar f={filter} onBuscar={buscar} buscando={buscando}
               onLimpar={limparTudo}
@@ -251,13 +250,13 @@ export function Kanban(): React.JSX.Element {
           </div>
         </Collapse>
 
-        <Collapse open={kpisOpen} duration={1000}>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <StatCard label={oculto > 0 ? 'Negócios (filtrados)' : 'Negócios'} value={visibleCards.length} icon="layers" tone="brand" />
-            <StatCard label="Valor em funil" value={brl(totalValor)} icon="trendingUp" tone="success" />
-            <StatCard label="Clientes" value={clientes} icon="users" tone="info" />
-            <StatCard label="Etapas" value={stages.length} icon="columns" tone="neutral" />
-          </div>
+        <Collapse open={kpisOpen} duration={200}>
+          <StatRow items={[
+            { label: oculto > 0 ? 'Negócios (filtrados)' : 'Negócios', value: visibleCards.length, icon: 'layers', tone: 'brand' },
+            { label: 'Valor em funil', value: brl(totalValor), icon: 'trendingUp', tone: 'success' },
+            { label: 'Clientes', value: clientes, icon: 'users', tone: 'info' },
+            { label: 'Etapas', value: stages.length, icon: 'columns', tone: 'neutral' },
+          ]} />
         </Collapse>
       </div>
 
@@ -407,7 +406,7 @@ const CardItem = memo(function CardItem({ c, stages, dragging, menuOpen, onDragS
           <button type="button"
             onClick={() => onEdit(c)}
             title="Editar prospecção"
-            className="rounded-lg p-1 text-ink-300 transition hover:bg-ink-100 hover:text-ink-600 focus:opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
+            className="rounded-lg p-2.5 text-ink-300 transition hover:bg-ink-100 hover:text-ink-600 focus:opacity-100 sm:p-1 sm:opacity-40 sm:group-hover:opacity-100">
             <Icon name="pencil" size={14} />
           </button>
         )}
@@ -416,7 +415,7 @@ const CardItem = memo(function CardItem({ c, stages, dragging, menuOpen, onDragS
             onClick={() => onToggleMenu(c.id)}
             aria-label="Mover para outra etapa" aria-haspopup="menu" aria-expanded={menuOpen}
             title="Mover para…"
-            className="rounded-lg p-1 text-ink-300 transition hover:bg-ink-100 hover:text-ink-600 focus:opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
+            className="rounded-lg p-2.5 text-ink-300 transition hover:bg-ink-100 hover:text-ink-600 focus:opacity-100 sm:p-1 sm:opacity-40 sm:group-hover:opacity-100">
             <Icon name="arrowRight" size={14} />
           </button>
         )}
@@ -655,28 +654,16 @@ function EditModal({ card, stages, reps, brands, scenarios, actions, catalog, on
 
   return (
    <>
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"
-      onClick={onClose}>
-      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl border border-ink-200 bg-surface shadow-pop"
-        onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start justify-between gap-3 border-b border-ink-100 p-5">
-          <div>
-            <h2 className="text-base font-semibold text-ink-800">{card.nome_fantasia || card.razao_social}</h2>
-            <p className="truncate text-xs text-ink-400">{card.razao_social}</p>
-            {(card.cidade || card.uf) && (
-              <p className="mt-0.5 inline-flex items-center gap-1 text-xs text-ink-400">
-                <Icon name="mapPin" size={12} />{[card.cidade, card.uf].filter(Boolean).join(' · ')}
-              </p>
-            )}
-          </div>
-          <button type="button" onClick={onClose}
-            className="rounded-lg p-1 text-ink-400 transition hover:bg-ink-100 hover:text-ink-700">
-            <Icon name="x" size={18} />
-          </button>
-        </div>
-
+    <Modal onClose={onClose} width="2xl"
+      title={card.nome_fantasia || card.razao_social}
+      subtitle={
+        <>
+          {card.razao_social}
+          {(card.cidade || card.uf) && ` · ${[card.cidade, card.uf].filter(Boolean).join(' · ')}`}
+        </>
+      }>
         <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
-          <div className="space-y-3 overflow-y-auto p-5">
+          <div className="space-y-3 py-1">
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Etapa do funil">
                 <select value={stageId ?? ''} onChange={(e) => setStageId(numOrNull(e.target.value))} className={inputCls}>
@@ -828,7 +815,7 @@ function EditModal({ card, stages, reps, brands, scenarios, actions, catalog, on
                 placeholder="Observações livres" className={cn(inputCls, 'resize-y')} />
             </Field>
           </div>
-          <div className="flex flex-wrap items-center gap-2 border-t border-ink-100 p-4">
+          <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center gap-2 border-t border-hairline bg-glass px-4 py-3 backdrop-blur-xl">
             {can('relationships.delete') && (
               <Btn variant="danger" type="button" icon="x"
                 onClick={() => confirmDialog('Remover esta empresa do funil?').then((ok) => { if (ok) return onRemove(card.id); })}>
@@ -846,8 +833,7 @@ function EditModal({ card, stages, reps, brands, scenarios, actions, catalog, on
             </div>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
     {creating && (
       <NovoContato companyId={card.company_id} onCreated={onCreatedContato} onCancel={() => setCreating(false)} />
     )}
@@ -905,16 +891,14 @@ function NovaPrivateLabel({ onCreated, onCancel }: {
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 p-4" onClick={onCancel}>
-      <div className="w-full max-w-md rounded-2xl border border-ink-200 bg-surface shadow-pop" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between gap-3 border-b border-ink-100 p-5">
-          <h2 className="text-base font-semibold text-ink-800">Criar nova private label</h2>
-          <button type="button" onClick={onCancel}
-            className="rounded-lg p-1 text-ink-400 transition hover:bg-ink-100 hover:text-ink-700">
-            <Icon name="x" size={18} />
-          </button>
-        </div>
-        <div className="space-y-2.5 p-5">
+    <Modal onClose={onCancel} width="md" level={1} title="Criar nova private label"
+      footer={<>
+        <Btn variant="ghost" type="button" onClick={onCancel}>Cancelar</Btn>
+        <Btn icon="check" type="button" onClick={() => void save()} disabled={busy || !nome.trim()}>
+          {busy ? '…' : 'Criar'}
+        </Btn>
+      </>}>
+        <div className="space-y-2.5 py-1">
           <input autoFocus value={nome} onChange={(e) => setNome(e.target.value)} maxLength={120}
             placeholder="Nome *" className={inputCls} />
           <input value={descricao} onChange={(e) => setDescricao(e.target.value)} maxLength={500}
@@ -928,14 +912,7 @@ function NovaPrivateLabel({ onCreated, onCancel }: {
             ))}
           </div>
         </div>
-        <div className="flex justify-end gap-2 border-t border-ink-100 p-4">
-          <Btn variant="ghost" type="button" onClick={onCancel}>Cancelar</Btn>
-          <Btn icon="check" type="button" onClick={() => void save()} disabled={busy || !nome.trim()}>
-            {busy ? '…' : 'Criar'}
-          </Btn>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -964,16 +941,12 @@ function NovoContato({ companyId, onCreated, onCancel }: {
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 p-4" onClick={onCancel}>
-      <div className="w-full max-w-md rounded-2xl border border-ink-200 bg-surface shadow-pop" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between gap-3 border-b border-ink-100 p-5">
-          <h2 className="text-base font-semibold text-ink-800">Criar novo contato</h2>
-          <button type="button" onClick={onCancel}
-            className="rounded-lg p-1 text-ink-400 transition hover:bg-ink-100 hover:text-ink-700">
-            <Icon name="x" size={18} />
-          </button>
-        </div>
-        <div className="space-y-2.5 p-5">
+    <Modal onClose={onCancel} width="md" level={1} title="Criar novo contato"
+      footer={<>
+        <Btn variant="ghost" type="button" onClick={onCancel}>Cancelar</Btn>
+        <Btn icon="check" type="button" onClick={() => save()} disabled={busy || !nome.trim()}>{busy ? '…' : 'Criar'}</Btn>
+      </>}>
+        <div className="space-y-2.5 py-1">
           <input autoFocus value={nome} onChange={(e) => setNome(e.target.value)} maxLength={120} placeholder="Nome *" className={inputCls} />
           <div className="grid gap-2.5 sm:grid-cols-2">
             <input value={cargo} onChange={(e) => setCargo(e.target.value)} maxLength={120} placeholder="Cargo" className={inputCls} />
@@ -981,12 +954,7 @@ function NovoContato({ companyId, onCreated, onCancel }: {
           </div>
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={160} placeholder="E-mail" className={inputCls} />
         </div>
-        <div className="flex justify-end gap-2 border-t border-ink-100 p-4">
-          <Btn variant="ghost" type="button" onClick={onCancel}>Cancelar</Btn>
-          <Btn icon="check" type="button" onClick={() => save()} disabled={busy || !nome.trim()}>{busy ? '…' : 'Criar'}</Btn>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -1016,16 +984,12 @@ function NovoProduto({ reps, onCreated, onCancel }: {
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 p-4" onClick={onCancel}>
-      <div className="w-full max-w-md rounded-2xl border border-ink-200 bg-surface shadow-pop" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between gap-3 border-b border-ink-100 p-5">
-          <h2 className="text-base font-semibold text-ink-800">Criar novo produto</h2>
-          <button type="button" onClick={onCancel}
-            className="rounded-lg p-1 text-ink-400 transition hover:bg-ink-100 hover:text-ink-700">
-            <Icon name="x" size={18} />
-          </button>
-        </div>
-        <div className="space-y-2.5 p-5">
+    <Modal onClose={onCancel} width="md" level={1} title="Criar novo produto"
+      footer={<>
+        <Btn variant="ghost" type="button" onClick={onCancel}>Cancelar</Btn>
+        <Btn icon="check" type="button" onClick={() => save()} disabled={busy || !nome.trim()}>{busy ? '…' : 'Criar'}</Btn>
+      </>}>
+        <div className="space-y-2.5 py-1">
           <input autoFocus value={nome} onChange={(e) => setNome(e.target.value)} maxLength={120} placeholder="Nome *" className={inputCls} />
           <div className="grid gap-2.5 sm:grid-cols-2">
             <input value={codigo} onChange={(e) => setCodigo(e.target.value)} maxLength={120} placeholder="Código / SKU" className={inputCls} />
@@ -1036,12 +1000,7 @@ function NovoProduto({ reps, onCreated, onCancel }: {
             {reps.map((r) => <option key={r.id} value={r.id}>{r.nome}</option>)}
           </select>
         </div>
-        <div className="flex justify-end gap-2 border-t border-ink-100 p-4">
-          <Btn variant="ghost" type="button" onClick={onCancel}>Cancelar</Btn>
-          <Btn icon="check" type="button" onClick={() => save()} disabled={busy || !nome.trim()}>{busy ? '…' : 'Criar'}</Btn>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 

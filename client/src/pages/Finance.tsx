@@ -2,13 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import type { Activity, FinanceCategory, FinanceEntry, KanbanCard, RepresentedCompany } from '../lib/types.ts';
-import { Badge, Btn, Card, EmptyState, PageHeader, SafeButton, Segmented, Spinner, StatCard, cn, type Tone } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, EmptyState, inputCls, Modal, PageHeader, SafeButton, Segmented, Spinner, StatCard, type Tone } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { brl, fmtDate, numStr, todayStr, maskMoney, clampNum } from '../lib/format.ts';
 import { toast } from '../lib/toast.tsx';
 import { confirmDialog } from '../lib/confirm.ts';
 
-const inputCls = 'w-full rounded-xl border border-ink-200 bg-surface px-3 py-2.5 text-sm text-ink-800 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-200';
 
 const mesLabel = (ym: string): string => {
   const [y, m] = ym.split('-').map(Number);
@@ -405,7 +404,7 @@ function DreView(): React.JSX.Element {
           {[anoAtual, anoAtual - 1, anoAtual - 2].map((y) => <option key={y} value={y}>{y}</option>)}
         </select>
       </div>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatCard label="Receita (ano)" value={brl(tot.receita)} icon="arrowDown" tone="success" />
         <StatCard label="Despesa (ano)" value={brl(tot.despesa)} icon="arrowUp" tone="danger" />
         <StatCard label="Resultado" value={brl(tot.resultado)} icon="trendingUp" tone={tot.resultado >= 0 ? 'brand' : 'danger'} />
@@ -467,50 +466,46 @@ function CategoriesModal({ categories, onClose, onChanged }: {
   };
 
   return (
-    <div className="fixed inset-0 z-[2000] grid place-items-center bg-black/45 p-4" onClick={onClose}>
-      <Card className="w-full max-w-md p-4 shadow-pop">
-        <div onClick={(e) => e.stopPropagation()}>
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-ink-900">Categorias financeiras</h3>
-            <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
-              <Icon name="x" size={17} />
-            </button>
+    <Modal onClose={onClose} width="md">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-sm font-bold text-ink-900">Categorias financeiras</h3>
+        <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
+          <Icon name="x" size={17} />
+        </button>
+      </div>
+      {can('finance_categories.create') && (
+        <form onSubmit={add} className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <input autoFocus value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome *" maxLength={120} className={inputCls} />
+          <input value={grupo} onChange={(e) => setGrupo(e.target.value)} placeholder="Grupo DRE (ex.: Operacional)" maxLength={120} className={inputCls} />
+          <select value={kind} onChange={(e) => setKind(e.target.value as typeof kind)} className={inputCls}>
+            <option value="">Pagar e receber</option>
+            <option value="pagar">Só a pagar</option>
+            <option value="receber">Só a receber</option>
+          </select>
+          <Btn icon="plus" type="submit" disabled={busy}>{busy ? '…' : 'Adicionar'}</Btn>
+        </form>
+      )}
+      <div className="max-h-[55vh] space-y-1.5 overflow-auto">
+        {categories.length === 0 ? (
+          <p className="py-6 text-center text-sm text-ink-400">Nenhuma categoria cadastrada.</p>
+        ) : categories.map((c) => (
+          <div key={c.id} className="flex items-center gap-2 rounded-lg border border-ink-100 px-2.5 py-2">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-ink-800">{c.nome}</p>
+              <p className="truncate text-[11px] text-ink-400">
+                {c.grupo_dre}{c.kind ? ` · só ${c.kind}` : ''}
+              </p>
+            </div>
+            {can('finance_categories.delete') && (
+            <SafeButton onClick={() => remove(c)} aria-label={`Excluir ${c.nome}`}
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ink-300 hover:bg-rose-50 hover:text-rose-500">
+              <Icon name="trash" size={16} />
+            </SafeButton>
+            )}
           </div>
-          {can('finance_categories.create') && (
-            <form onSubmit={add} className="mb-3 grid grid-cols-2 gap-2">
-              <input autoFocus value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome *" maxLength={120} className={inputCls} />
-              <input value={grupo} onChange={(e) => setGrupo(e.target.value)} placeholder="Grupo DRE (ex.: Operacional)" maxLength={120} className={inputCls} />
-              <select value={kind} onChange={(e) => setKind(e.target.value as typeof kind)} className={inputCls}>
-                <option value="">Pagar e receber</option>
-                <option value="pagar">Só a pagar</option>
-                <option value="receber">Só a receber</option>
-              </select>
-              <Btn icon="plus" type="submit" disabled={busy}>{busy ? '…' : 'Adicionar'}</Btn>
-            </form>
-          )}
-          <div className="max-h-[55vh] space-y-1.5 overflow-auto">
-            {categories.length === 0 ? (
-              <p className="py-6 text-center text-sm text-ink-400">Nenhuma categoria cadastrada.</p>
-            ) : categories.map((c) => (
-              <div key={c.id} className="flex items-center gap-2 rounded-lg border border-ink-100 px-2.5 py-2">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-ink-800">{c.nome}</p>
-                  <p className="truncate text-[11px] text-ink-400">
-                    {c.grupo_dre}{c.kind ? ` · só ${c.kind}` : ''}
-                  </p>
-                </div>
-                {can('finance_categories.delete') && (
-                <SafeButton onClick={() => remove(c)} aria-label={`Excluir ${c.nome}`}
-                  className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ink-300 hover:bg-rose-50 hover:text-rose-500">
-                  <Icon name="trash" size={16} />
-                </SafeButton>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </Card>
-    </div>
+        ))}
+      </div>
+    </Modal>
   );
 }
 
@@ -570,92 +565,88 @@ function FinanceModal({ entry, companies, represented, activities, categories, o
   );
 
   return (
-    <div className="fixed inset-0 z-[2000] grid place-items-center bg-black/45 p-4" onClick={onClose}>
-      <Card className="w-full max-w-md p-4 shadow-pop">
-        <div onClick={(e) => e.stopPropagation()}>
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-ink-900">{entry ? 'Editar lançamento' : 'Novo lançamento'}</h3>
-            <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
-              <Icon name="x" size={17} />
+    <Modal onClose={onClose} width="md">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-sm font-bold text-ink-900">{entry ? 'Editar lançamento' : 'Novo lançamento'}</h3>
+        <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
+          <Icon name="x" size={17} />
+        </button>
+      </div>
+      <form onSubmit={submit} className="max-h-[70vh] space-y-3 overflow-auto pr-1">
+        <div className="grid grid-cols-2 gap-1.5">
+          {(['receber', 'pagar'] as const).map((k) => (
+            <button key={k} type="button" onClick={() => setKind(k)}
+              className={cn('flex items-center justify-center gap-1.5 rounded-xl border px-2 py-2 text-xs font-semibold transition',
+                kind === k
+                  ? (k === 'receber' ? 'border-transparent bg-emerald-50 text-emerald-700' : 'border-transparent bg-rose-50 text-rose-600')
+                  : 'border-ink-200 text-ink-500 hover:bg-ink-50')}>
+              <Icon name={k === 'receber' ? 'arrowDown' : 'arrowUp'} size={15} />
+              {k === 'receber' ? 'A receber' : 'A pagar'}
             </button>
-          </div>
-          <form onSubmit={submit} className="max-h-[70vh] space-y-3 overflow-auto pr-1">
-            <div className="grid grid-cols-2 gap-1.5">
-              {(['receber', 'pagar'] as const).map((k) => (
-                <button key={k} type="button" onClick={() => setKind(k)}
-                  className={cn('flex items-center justify-center gap-1.5 rounded-xl border px-2 py-2 text-xs font-semibold transition',
-                    kind === k
-                      ? (k === 'receber' ? 'border-transparent bg-emerald-50 text-emerald-700' : 'border-transparent bg-rose-50 text-rose-600')
-                      : 'border-ink-200 text-ink-500 hover:bg-ink-50')}>
-                  <Icon name={k === 'receber' ? 'arrowDown' : 'arrowUp'} size={15} />
-                  {k === 'receber' ? 'A receber' : 'A pagar'}
-                </button>
-              ))}
-            </div>
-            <input autoFocus value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Descrição" maxLength={120} className={inputCls} />
-            <div className="grid grid-cols-2 gap-2">
-              <label className="block">
-                <span className="text-xs font-semibold text-ink-600">Valor (R$)</span>
-                <input inputMode="decimal" value={valor} onChange={(e) => setValor(maskMoney(e.target.value))} placeholder="0,00" className={cn(inputCls, 'mt-1')} />
-              </label>
-              <label className="block">
-                <span className="text-xs font-semibold text-ink-600">Vencimento</span>
-                <input type="date" value={vencimento} onChange={(e) => setVencimento(e.target.value)} className={cn(inputCls, 'mt-1')} />
-              </label>
-            </div>
+          ))}
+        </div>
+        <input autoFocus value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Descrição" maxLength={120} className={inputCls} />
+        <div className="grid grid-cols-2 gap-2">
+          <label className="block">
+            <span className="text-xs font-semibold text-ink-600">Valor (R$)</span>
+            <input inputMode="decimal" value={valor} onChange={(e) => setValor(maskMoney(e.target.value))} placeholder="0,00" className={cn(inputCls, 'mt-1')} />
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold text-ink-600">Vencimento</span>
+            <input type="date" value={vencimento} onChange={(e) => setVencimento(e.target.value)} className={cn(inputCls, 'mt-1')} />
+          </label>
+        </div>
+        <label className="block">
+          <span className="text-xs font-semibold text-ink-600">Categoria</span>
+          <select value={categoriaId ?? ''} onChange={(e) => setCategoriaId(e.target.value === '' ? null : Number(e.target.value))} className={cn(inputCls, 'mt-1')}>
+            <option value="">Sem categoria / livre</option>
+            {categories.filter((c) => c.ativo && (c.kind == null || c.kind === kind)).map((c) => (
+              <option key={c.id} value={c.id}>{c.nome} · {c.grupo_dre}</option>
+            ))}
+            {/* categoria desativada já vinculada ao lançamento — mantém a opção */}
+            {entry?.categoria_id != null && !categories.some((c) => c.id === entry.categoria_id) && (
+              <option value={entry.categoria_id}>{entry.categoria_nome ?? `#${entry.categoria_id}`}</option>
+            )}
+          </select>
+        </label>
+        {categoriaId == null && (
+          <input value={categoria} onChange={(e) => setCategoria(e.target.value)} placeholder="Categoria livre (opcional)" maxLength={120} className={inputCls} />
+        )}
+        {showRecorrencia && (
+          <div className="grid grid-cols-2 gap-2">
             <label className="block">
-              <span className="text-xs font-semibold text-ink-600">Categoria</span>
-              <select value={categoriaId ?? ''} onChange={(e) => setCategoriaId(e.target.value === '' ? null : Number(e.target.value))} className={cn(inputCls, 'mt-1')}>
-                <option value="">Sem categoria / livre</option>
-                {categories.filter((c) => c.ativo && (c.kind == null || c.kind === kind)).map((c) => (
-                  <option key={c.id} value={c.id}>{c.nome} · {c.grupo_dre}</option>
-                ))}
-                {/* categoria desativada já vinculada ao lançamento — mantém a opção */}
-                {entry?.categoria_id != null && !categories.some((c) => c.id === entry.categoria_id) && (
-                  <option value={entry.categoria_id}>{entry.categoria_nome ?? `#${entry.categoria_id}`}</option>
-                )}
+              <span className="text-xs font-semibold text-ink-600">Recorrência</span>
+              <select value={recorrencia} onChange={(e) => setRecorrencia(e.target.value as typeof recorrencia)} className={cn(inputCls, 'mt-1')}>
+                <option value="nenhuma">Sem recorrência</option>
+                <option value="mensal">Mensal</option>
               </select>
             </label>
-            {categoriaId == null && (
-              <input value={categoria} onChange={(e) => setCategoria(e.target.value)} placeholder="Categoria livre (opcional)" maxLength={120} className={inputCls} />
+            {recorrencia === 'mensal' && (
+              <label className="block">
+                <span className="text-xs font-semibold text-ink-600">Repetir até (opcional)</span>
+                <input type="date" value={recorrenciaFim} onChange={(e) => setRecorrenciaFim(e.target.value)} className={cn(inputCls, 'mt-1')} />
+              </label>
             )}
-            {showRecorrencia && (
-              <div className="grid grid-cols-2 gap-2">
-                <label className="block">
-                  <span className="text-xs font-semibold text-ink-600">Recorrência</span>
-                  <select value={recorrencia} onChange={(e) => setRecorrencia(e.target.value as typeof recorrencia)} className={cn(inputCls, 'mt-1')}>
-                    <option value="nenhuma">Sem recorrência</option>
-                    <option value="mensal">Mensal</option>
-                  </select>
-                </label>
-                {recorrencia === 'mensal' && (
-                  <label className="block">
-                    <span className="text-xs font-semibold text-ink-600">Repetir até (opcional)</span>
-                    <input type="date" value={recorrenciaFim} onChange={(e) => setRecorrenciaFim(e.target.value)} className={cn(inputCls, 'mt-1')} />
-                  </label>
-                )}
-              </div>
-            )}
-            <label className="block">
-              <span className="text-xs font-semibold text-ink-600">Empresa prospect</span>
-              {sel(companyId, setCompanyId, companies, 'Sem vínculo')}
-            </label>
-            <label className="block">
-              <span className="text-xs font-semibold text-ink-600">Empresa representada</span>
-              {sel(representedId, setRepresentedId, represented, 'Sem vínculo')}
-            </label>
-            <label className="block">
-              <span className="text-xs font-semibold text-ink-600">Compromisso</span>
-              {sel(activityId, setActivityId, activities, 'Sem vínculo')}
-            </label>
-            <textarea value={notas} onChange={(e) => setNotas(e.target.value)} placeholder="Notas (opcional)" rows={2} maxLength={2000} className={inputCls} />
-            <div className="flex justify-end gap-2 pt-1">
-              <Btn variant="ghost" type="button" onClick={onClose}>Cancelar</Btn>
-              <Btn icon="check" type="submit" disabled={busy}>{busy ? '…' : 'Salvar'}</Btn>
-            </div>
-          </form>
+          </div>
+        )}
+        <label className="block">
+          <span className="text-xs font-semibold text-ink-600">Empresa prospect</span>
+          {sel(companyId, setCompanyId, companies, 'Sem vínculo')}
+        </label>
+        <label className="block">
+          <span className="text-xs font-semibold text-ink-600">Empresa representada</span>
+          {sel(representedId, setRepresentedId, represented, 'Sem vínculo')}
+        </label>
+        <label className="block">
+          <span className="text-xs font-semibold text-ink-600">Compromisso</span>
+          {sel(activityId, setActivityId, activities, 'Sem vínculo')}
+        </label>
+        <textarea value={notas} onChange={(e) => setNotas(e.target.value)} placeholder="Notas (opcional)" rows={2} maxLength={2000} className={inputCls} />
+        <div className="flex justify-end gap-2 pt-1">
+          <Btn variant="ghost" type="button" onClick={onClose}>Cancelar</Btn>
+          <Btn icon="check" type="submit" disabled={busy}>{busy ? '…' : 'Salvar'}</Btn>
         </div>
-      </Card>
-    </div>
+      </form>
+    </Modal>
   );
 }

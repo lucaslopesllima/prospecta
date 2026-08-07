@@ -352,15 +352,15 @@ describe('CompanyModal', () => {
       if (p === '/api/companies/1') return { company: company(), socios: [] };
       return {};
     });
-    const { container } = render(<CompanyModal companyId={1} onClose={onClose} />);
+    render(<CompanyModal companyId={1} onClose={onClose} />);
     await screen.findByText('Alvo Comercio LTDA');
     // clique no corpo interno não fecha (stopPropagation)
     await userEvent.click(screen.getByText('Alvo Comercio LTDA'));
     expect(onClose).not.toHaveBeenCalled();
-    // X fecha
-    await userEvent.click(screen.getByRole('button', { name: '' }).closest('button')!);
-    // backdrop fecha
-    await userEvent.click(container.firstChild as Element);
+    // X fecha (o Modal compartilhado dá aria-label ao botão — antes era anônimo)
+    await userEvent.click(screen.getByRole('button', { name: 'Fechar' }));
+    // backdrop fecha (o véu é o nó com role=dialog — o Modal sai em portal)
+    await userEvent.click(screen.getByRole('dialog'));
     expect(onClose).toHaveBeenCalled();
   });
 });

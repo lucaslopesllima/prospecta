@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { api } from './api.ts';
 import type { CompanyHit, Contact, RepresentedCompany } from './types.ts';
-import { Btn } from './ui.tsx';
+import { Btn, inputCls, Modal } from './ui.tsx';
 import { Icon } from './icons.tsx';
 import { CompanySearch } from './companySearch.tsx';
 import { toast } from './toast.tsx';
 import { isEmail, maskPhone } from './format.ts';
 
-export const contactInputCls = 'w-full rounded-xl border border-ink-200 bg-surface px-3 py-2.5 text-sm text-ink-800 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-200';
+// Alias histórico do campo padrão — mantido para não quebrar quem importa daqui.
+export const contactInputCls = inputCls;
 
 export type ContactForm = {
   nome: string; cargo: string; email: string; telefone: string; represented_id: string;
@@ -102,22 +103,12 @@ export function NewContactModal({ initial, onClose, onCreated }: {
   };
 
   return (
-    <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/45 p-4" onClick={onClose}>
-      <div className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-2xl border border-ink-200 bg-surface shadow-pop"
-        onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between gap-3 border-b border-ink-100 p-5">
-          <h2 className="inline-flex items-center gap-2 text-base font-semibold text-ink-800">
-            <Icon name="users" size={18} className="text-ink-400" /> Novo contato
-          </h2>
-          <button type="button" onClick={onClose}
-            className="rounded-lg p-1 text-ink-400 transition hover:bg-ink-100 hover:text-ink-700">
-            <Icon name="x" size={18} />
-          </button>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">
-          <ContatoForm inputCls={contactInputCls} reps={reps} initial={initial} onSave={save} onCancel={onClose} />
-        </div>
+    // level 1: costuma abrir POR CIMA do modal da empresa.
+    <Modal onClose={onClose} width="lg" level={1}
+      title={<span className="inline-flex items-center gap-2"><Icon name="users" size={17} className="text-ink-400" /> Novo contato</span>}>
+      <div className="py-1">
+        <ContatoForm inputCls={contactInputCls} reps={reps} initial={initial} onSave={save} onCancel={onClose} />
       </div>
-    </div>
+    </Modal>
   );
 }

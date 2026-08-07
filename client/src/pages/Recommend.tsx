@@ -417,12 +417,15 @@ export function Recommend(): React.JSX.Element {
       </Collapse>
 
       <Collapse open={kpisOpen} duration={200}>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <StatCard label={filter.filtroAtivo ? 'Resultados (filtrados)' : 'Recomendações'} value={kpi.n} icon="building" tone="brand" />
-          <StatCard label="Score médio" value={(kpi.avg * 100).toFixed(0)} sub="de 100" icon="trendingUp" tone="success" />
-          <StatCard label="CNAE exato" value={kpi.exact} sub="match de classe" icon="target" tone="info" />
-          <StatCard label="Mais próxima" value={`${kpi.near.toFixed(0)} km`} icon="mapPin" tone="warn" />
-        </div>
+        {/* `sub` diz "nos N carregados" porque o kpi deriva de visibleRecs — a
+            página já buscada, não o total da busca. Sem isso o score médio muda
+            a cada "Carregar mais" e parece estatística do resultado inteiro. */}
+        <StatRow items={[
+          { label: filter.filtroAtivo ? 'Resultados (filtrados)' : 'Recomendações', value: kpi.n, icon: 'building', tone: 'brand' },
+          { label: 'Score médio', value: (kpi.avg * 100).toFixed(0), sub: `de 100 · nos ${kpi.n} carregados`, icon: 'trendingUp', tone: 'success' },
+          { label: 'CNAE exato', value: kpi.exact, sub: 'match de classe', icon: 'target', tone: 'info' },
+          { label: 'Mais próxima', value: `${kpi.near.toFixed(0)} km`, icon: 'mapPin', tone: 'warn' },
+        ]} />
       </Collapse>
     </div>
   );

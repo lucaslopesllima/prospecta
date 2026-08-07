@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError, setToken } from '../lib/api.ts';
 import type { AccountOrg, AccountUser } from '../lib/types.ts';
-import { Btn, Card, PageHeader, Spinner, cn } from '../lib/ui.tsx';
+import { Btn, Card, cn, inputCls, PageHeader, Spinner } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { invalidCNPJ, isEmail, maskCNPJ, maskPhone, maskCEP, maskUF } from '../lib/format.ts';
 import { toast } from '../lib/toast.tsx';
 import { useAuth } from '../lib/auth.tsx';
 
-const inputCls = 'w-full rounded-xl border border-ink-200 bg-surface px-3 py-2.5 text-sm text-ink-800 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-200';
 const t = (s: string): string | null => (s.trim() === '' ? null : s.trim());
 
 function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }): React.JSX.Element {

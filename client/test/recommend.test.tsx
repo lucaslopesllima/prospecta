@@ -461,7 +461,7 @@ describe('Recommend — cobertura extra', () => {
     await screen.findByText('Loja Alvo', undefined, { timeout: 2000 });
     await userEvent.click(screen.getByTitle('Ver dados da empresa')); // botão de olho (onView)
     expect(await screen.findByText('Dados da empresa')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Dados da empresa').closest('.fixed')!); // backdrop → onClose
+    await userEvent.click(screen.getByText('Dados da empresa').closest('.fixed')!); // backdrop → onClose
     await waitFor(() => expect(screen.queryByText('Dados da empresa')).not.toBeInTheDocument());
   });
 });
@@ -547,7 +547,7 @@ describe('Recommend — adicionar aos contatos', () => {
     await userEvent.click(screen.getByRole('button', { name: /Adicionar aos contatos/ }));
     expect(await screen.findByText('Novo contato')).toBeInTheDocument();
     // fecha pelo backdrop (onClose)
-    fireEvent.click(screen.getByText('Novo contato').closest('.fixed')!);
+    await userEvent.click(screen.getByText('Novo contato').closest('.fixed')!);
     await waitFor(() => expect(screen.queryByText('Novo contato')).not.toBeInTheDocument());
   });
 });

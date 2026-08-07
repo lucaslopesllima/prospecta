@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from './api.ts';
 import { postField } from './offline.ts';
-import { Btn, Card, cn } from './ui.tsx';
+import { Btn, cn, inputCls, Modal } from './ui.tsx';
 import { Icon, type IconName } from './icons.tsx';
 import { toast } from './toast.tsx';
 import { useAuth } from './auth.tsx';
@@ -9,7 +9,6 @@ import type { Activity } from './types.ts';
 import { EMAIL_RE, maskPhone } from './format.ts';
 
 // Modal de criação de atividade/compromisso. Reutilizado na Agenda e no Funil.
-const inputCls = 'w-full rounded-xl border border-ink-200 bg-surface px-3 py-2.5 text-sm text-ink-800 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-200';
 
 type TipoOpt = { v: string; label: string; icon: IconName; chip: string };
 // Tipos base = compromissos simples (só título/quando). whatsapp e email são
@@ -150,130 +149,126 @@ export function ActivityCreateModal({ preset, funnel, represented, presetCompany
   const semVinculo = companyId == null && representedId == null;
 
   return (
-    <div className="fixed inset-0 z-[2000] grid place-items-center bg-black/45 p-4" onClick={onClose}>
-      <Card className="w-full max-w-md p-4 shadow-pop">
-        <div onClick={(e) => e.stopPropagation()}>
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-ink-900">{editando ? 'Editar atividade' : 'Nova atividade'}</h3>
-            <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
-              <Icon name="x" size={17} />
+    <Modal onClose={onClose} width="md">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-sm font-bold text-ink-900">{editando ? 'Editar atividade' : 'Nova atividade'}</h3>
+        <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
+          <Icon name="x" size={17} />
+        </button>
+      </div>
+      <form onSubmit={submit} className="max-h-[75vh] space-y-3 overflow-auto">
+        {!isSchedule && (
+          <input autoFocus value={titulo} maxLength={120} onChange={(e) => setTitulo(e.target.value)} placeholder="Ex.: Ligar para cliente" className={inputCls} />
+        )}
+        <div className="grid grid-cols-3 gap-1.5">
+          {tipos.map((t) => (
+            <button key={t.v} type="button" onClick={() => setTipo(t.v)}
+              className={cn('flex flex-col items-center gap-1 rounded-xl border px-2 py-2 text-[11px] font-semibold transition',
+                tipo === t.v ? 'border-transparent ' + t.chip : 'border-ink-200 text-ink-500 hover:bg-ink-50')}>
+              <Icon name={t.icon} size={16} />{t.label}
             </button>
-          </div>
-          <form onSubmit={submit} className="max-h-[75vh] space-y-3 overflow-auto">
-            {!isSchedule && (
-              <input autoFocus value={titulo} maxLength={120} onChange={(e) => setTitulo(e.target.value)} placeholder="Ex.: Ligar para cliente" className={inputCls} />
-            )}
-            <div className="grid grid-cols-3 gap-1.5">
-              {tipos.map((t) => (
-                <button key={t.v} type="button" onClick={() => setTipo(t.v)}
-                  className={cn('flex flex-col items-center gap-1 rounded-xl border px-2 py-2 text-[11px] font-semibold transition',
-                    tipo === t.v ? 'border-transparent ' + t.chip : 'border-ink-200 text-ink-500 hover:bg-ink-50')}>
-                  <Icon name={t.icon} size={16} />{t.label}
-                </button>
-              ))}
-            </div>
-            <label className="block">
-              <span className="text-xs font-semibold text-ink-600">{isSchedule ? 'Enviar em' : 'Quando'}</span>
-              <input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} className={cn(inputCls, 'mt-1')} />
-            </label>
-
-            {/* vínculos: empresa/representada/contato (contato do WhatsApp puxa o número) */}
-            {!isEmail && (
-              <>
-                <label className="block">
-                  <span className="text-xs font-semibold text-ink-600">Empresa do funil</span>
-                  <select value={companyId ?? ''} onChange={(e) => { setCompanyId(e.target.value === '' ? null : Number(e.target.value)); setContactId(null); }} className={cn(inputCls, 'mt-1')}>
-                    <option value="">Sem vínculo</option>
-                    {funnel.map((f) => <option key={f.company_id} value={f.company_id}>{f.label}</option>)}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="text-xs font-semibold text-ink-600">Representada</span>
-                  <select value={representedId ?? ''}
-                    onChange={(e) => { const v = e.target.value === '' ? null : Number(e.target.value); setRepresentedId(v); setContactId(null); }}
-                    className={cn(inputCls, 'mt-1')}>
-                    <option value="">Sem vínculo</option>
-                    {represented.map((r) => <option key={r.id} value={r.id}>{r.nome}</option>)}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="text-xs font-semibold text-ink-600">Contato</span>
-                  <select value={contactId ?? ''} disabled={semVinculo}
-                    onChange={(e) => pickContact(e.target.value === '' ? null : Number(e.target.value))}
-                    className={cn(inputCls, 'mt-1', semVinculo && 'opacity-50')}>
-                    <option value="">{semVinculo ? 'Escolha empresa ou representada' : contacts.length ? 'Sem vínculo' : 'Nenhum contato'}</option>
-                    {contacts.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                  </select>
-                </label>
-              </>
-            )}
-
-            {/* agendamento de WhatsApp: número livre + mensagem */}
-            {isWhats && (
-              <>
-                <label className="block">
-                  <span className="text-xs font-semibold text-ink-600">Número de WhatsApp</span>
-                  <input value={numero} onChange={(e) => setNumero(maskPhone(e.target.value))} maxLength={20} inputMode="tel"
-                    placeholder="Ex.: (11) 91234-5678" className={cn(inputCls, 'mt-1')} />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-semibold text-ink-600">Mensagem</span>
-                  <textarea value={mensagem} onChange={(e) => setMensagem(e.target.value)} rows={3} maxLength={4000}
-                    placeholder="Texto da mensagem…" className={cn(inputCls, 'mt-1 resize-none')} />
-                </label>
-              </>
-            )}
-
-            {/* agendamento de e-mail: mesmos campos da tela de Agendamento de e-mail */}
-            {isEmail && (
-              <>
-                <label className="block">
-                  <span className="text-xs font-semibold text-ink-600">Empresa do funil</span>
-                  <select value={companyId ?? ''} onChange={(e) => setCompanyId(e.target.value === '' ? null : Number(e.target.value))} className={cn(inputCls, 'mt-1')}>
-                    <option value="">Sem vínculo</option>
-                    {funnel.map((f) => <option key={f.company_id} value={f.company_id}>{f.label}</option>)}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="text-xs font-semibold text-ink-600">Remetente</span>
-                  <input type="email" value={remetente} onChange={(e) => setRemetente(e.target.value)} maxLength={160}
-                    placeholder="seu@email.com" className={cn(inputCls, 'mt-1')} />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-semibold text-ink-600">Destinatários</span>
-                  <input value={destinatario} onChange={(e) => setDestinatario(e.target.value)} maxLength={800}
-                    placeholder="contato@empresa.com, outro@empresa.com" className={cn(inputCls, 'mt-1')} />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-semibold text-ink-600">Assunto</span>
-                  <input value={assunto} onChange={(e) => setAssunto(e.target.value)} maxLength={200}
-                    placeholder="Assunto do e-mail" className={cn(inputCls, 'mt-1')} />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-semibold text-ink-600">Corpo</span>
-                  <textarea value={corpo} onChange={(e) => setCorpo(e.target.value)} rows={5} maxLength={20000}
-                    placeholder="Conteúdo do e-mail" className={cn(inputCls, 'mt-1 resize-y')} />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-semibold text-ink-600">Repetição</span>
-                  <select value={recorrencia} onChange={(e) => setRecorrencia(e.target.value)} className={cn(inputCls, 'mt-1')}>
-                    <option value="nenhuma">Não repetir</option>
-                    <option value="diaria">Diária</option>
-                    <option value="semanal">Semanal</option>
-                    <option value="mensal">Mensal</option>
-                  </select>
-                </label>
-              </>
-            )}
-
-            <div className="flex justify-end gap-2 pt-1">
-              <Btn variant="ghost" type="button" onClick={onClose}>Cancelar</Btn>
-              <Btn icon="check" type="submit" disabled={busy}>{busy ? '…' : 'Salvar'}</Btn>
-            </div>
-          </form>
+          ))}
         </div>
-      </Card>
-    </div>
+        <label className="block">
+          <span className="text-xs font-semibold text-ink-600">{isSchedule ? 'Enviar em' : 'Quando'}</span>
+          <input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} className={cn(inputCls, 'mt-1')} />
+        </label>
+
+        {/* vínculos: empresa/representada/contato (contato do WhatsApp puxa o número) */}
+        {!isEmail && (
+          <>
+            <label className="block">
+              <span className="text-xs font-semibold text-ink-600">Empresa do funil</span>
+              <select value={companyId ?? ''} onChange={(e) => { setCompanyId(e.target.value === '' ? null : Number(e.target.value)); setContactId(null); }} className={cn(inputCls, 'mt-1')}>
+                <option value="">Sem vínculo</option>
+                {funnel.map((f) => <option key={f.company_id} value={f.company_id}>{f.label}</option>)}
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-xs font-semibold text-ink-600">Representada</span>
+              <select value={representedId ?? ''}
+                onChange={(e) => { const v = e.target.value === '' ? null : Number(e.target.value); setRepresentedId(v); setContactId(null); }}
+                className={cn(inputCls, 'mt-1')}>
+                <option value="">Sem vínculo</option>
+                {represented.map((r) => <option key={r.id} value={r.id}>{r.nome}</option>)}
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-xs font-semibold text-ink-600">Contato</span>
+              <select value={contactId ?? ''} disabled={semVinculo}
+                onChange={(e) => pickContact(e.target.value === '' ? null : Number(e.target.value))}
+                className={cn(inputCls, 'mt-1', semVinculo && 'opacity-50')}>
+                <option value="">{semVinculo ? 'Escolha empresa ou representada' : contacts.length ? 'Sem vínculo' : 'Nenhum contato'}</option>
+                {contacts.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              </select>
+            </label>
+          </>
+        )}
+
+        {/* agendamento de WhatsApp: número livre + mensagem */}
+        {isWhats && (
+          <>
+            <label className="block">
+              <span className="text-xs font-semibold text-ink-600">Número de WhatsApp</span>
+              <input value={numero} onChange={(e) => setNumero(maskPhone(e.target.value))} maxLength={20} inputMode="tel"
+                placeholder="Ex.: (11) 91234-5678" className={cn(inputCls, 'mt-1')} />
+            </label>
+            <label className="block">
+              <span className="text-xs font-semibold text-ink-600">Mensagem</span>
+              <textarea value={mensagem} onChange={(e) => setMensagem(e.target.value)} rows={3} maxLength={4000}
+                placeholder="Texto da mensagem…" className={cn(inputCls, 'mt-1 resize-none')} />
+            </label>
+          </>
+        )}
+
+        {/* agendamento de e-mail: mesmos campos da tela de Agendamento de e-mail */}
+        {isEmail && (
+          <>
+            <label className="block">
+              <span className="text-xs font-semibold text-ink-600">Empresa do funil</span>
+              <select value={companyId ?? ''} onChange={(e) => setCompanyId(e.target.value === '' ? null : Number(e.target.value))} className={cn(inputCls, 'mt-1')}>
+                <option value="">Sem vínculo</option>
+                {funnel.map((f) => <option key={f.company_id} value={f.company_id}>{f.label}</option>)}
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-xs font-semibold text-ink-600">Remetente</span>
+              <input type="email" value={remetente} onChange={(e) => setRemetente(e.target.value)} maxLength={160}
+                placeholder="seu@email.com" className={cn(inputCls, 'mt-1')} />
+            </label>
+            <label className="block">
+              <span className="text-xs font-semibold text-ink-600">Destinatários</span>
+              <input value={destinatario} onChange={(e) => setDestinatario(e.target.value)} maxLength={800}
+                placeholder="contato@empresa.com, outro@empresa.com" className={cn(inputCls, 'mt-1')} />
+            </label>
+            <label className="block">
+              <span className="text-xs font-semibold text-ink-600">Assunto</span>
+              <input value={assunto} onChange={(e) => setAssunto(e.target.value)} maxLength={200}
+                placeholder="Assunto do e-mail" className={cn(inputCls, 'mt-1')} />
+            </label>
+            <label className="block">
+              <span className="text-xs font-semibold text-ink-600">Corpo</span>
+              <textarea value={corpo} onChange={(e) => setCorpo(e.target.value)} rows={5} maxLength={20000}
+                placeholder="Conteúdo do e-mail" className={cn(inputCls, 'mt-1 resize-y')} />
+            </label>
+            <label className="block">
+              <span className="text-xs font-semibold text-ink-600">Repetição</span>
+              <select value={recorrencia} onChange={(e) => setRecorrencia(e.target.value)} className={cn(inputCls, 'mt-1')}>
+                <option value="nenhuma">Não repetir</option>
+                <option value="diaria">Diária</option>
+                <option value="semanal">Semanal</option>
+                <option value="mensal">Mensal</option>
+              </select>
+            </label>
+          </>
+        )}
+
+        <div className="flex justify-end gap-2 pt-1">
+          <Btn variant="ghost" type="button" onClick={onClose}>Cancelar</Btn>
+          <Btn icon="check" type="submit" disabled={busy}>{busy ? '…' : 'Salvar'}</Btn>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -320,60 +315,56 @@ export function VisitModal({ activity, onClose, onSaved }: {
   };
 
   return (
-    <div className="fixed inset-0 z-[2000] grid place-items-center bg-black/45 p-4" onClick={onClose}>
-      <Card className="w-full max-w-md p-4 shadow-pop">
-        <div onClick={(e) => e.stopPropagation()}>
-          <div className="mb-3 flex items-center justify-between">
-            <div className="min-w-0">
-              <h3 className="truncate text-sm font-bold text-ink-900">Visita</h3>
-              {activity.razao_social && <p className="truncate text-xs text-ink-400">{activity.razao_social}</p>}
-            </div>
-            <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
-              <Icon name="x" size={17} />
-            </button>
-          </div>
-
-          {/* check-in */}
-          <div className="mb-3 flex items-center gap-2 rounded-xl border border-ink-200 p-2.5">
-            <span className={cn('grid h-9 w-9 shrink-0 place-items-center rounded-lg',
-              checkedAt ? 'bg-emerald-100 text-emerald-700' : 'bg-ink-100 text-ink-500')}>
-              <Icon name="mapPin" size={18} />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-ink-800">Check-in</p>
-              <p className="truncate text-[11px] text-ink-400">
-                {checkedAt ? `Registrado ${new Date(checkedAt).toLocaleString('pt-BR')}` : 'Marque sua chegada no cliente.'}
-              </p>
-            </div>
-            <Btn size="sm" variant={checkedAt ? 'soft' : 'primary'} icon="mapPin" disabled={geoBusy} onClick={doCheckin}>
-              {geoBusy ? '…' : checkedAt ? 'Refazer' : 'Check-in'}
-            </Btn>
-          </div>
-
-          {/* relatório */}
-          <form onSubmit={submit} className="space-y-3">
-            <label className="block">
-              <span className="text-xs font-semibold text-ink-600">Resultado</span>
-              <select value={resultado} onChange={(e) => setResultado(e.target.value)} className={cn(inputCls, 'mt-1')}>
-                {RESULTADOS.map((r) => <option key={r} value={r}>{r}</option>)}
-              </select>
-            </label>
-            <label className="block">
-              <span className="text-xs font-semibold text-ink-600">Próximo passo</span>
-              <input value={proximo} maxLength={120} onChange={(e) => setProximo(e.target.value)} placeholder="Ex.: enviar proposta até sexta" className={cn(inputCls, 'mt-1')} />
-            </label>
-            <label className="block">
-              <span className="text-xs font-semibold text-ink-600">Observações</span>
-              <textarea value={texto} maxLength={2000} onChange={(e) => setTexto(e.target.value)} rows={3} placeholder="Como foi a visita?" className={cn(inputCls, 'mt-1 resize-none')} />
-            </label>
-            {msg && <p className="text-xs text-amber-600">{msg}</p>}
-            <div className="flex justify-end gap-2 pt-1">
-              <Btn variant="ghost" type="button" onClick={onClose}>Fechar</Btn>
-              <Btn icon="check" type="submit" disabled={busy}>{busy ? '…' : 'Salvar visita'}</Btn>
-            </div>
-          </form>
+    <Modal onClose={onClose} width="md">
+      <div className="mb-3 flex items-center justify-between">
+        <div className="min-w-0">
+          <h3 className="truncate text-sm font-bold text-ink-900">Visita</h3>
+          {activity.razao_social && <p className="truncate text-xs text-ink-400">{activity.razao_social}</p>}
         </div>
-      </Card>
-    </div>
+        <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
+          <Icon name="x" size={17} />
+        </button>
+      </div>
+
+      {/* check-in */}
+      <div className="mb-3 flex items-center gap-2 rounded-xl border border-ink-200 p-2.5">
+        <span className={cn('grid h-9 w-9 shrink-0 place-items-center rounded-lg',
+          checkedAt ? 'bg-emerald-100 text-emerald-700' : 'bg-ink-100 text-ink-500')}>
+          <Icon name="mapPin" size={18} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-ink-800">Check-in</p>
+          <p className="truncate text-[11px] text-ink-400">
+            {checkedAt ? `Registrado ${new Date(checkedAt).toLocaleString('pt-BR')}` : 'Marque sua chegada no cliente.'}
+          </p>
+        </div>
+        <Btn size="sm" variant={checkedAt ? 'soft' : 'primary'} icon="mapPin" disabled={geoBusy} onClick={doCheckin}>
+          {geoBusy ? '…' : checkedAt ? 'Refazer' : 'Check-in'}
+        </Btn>
+      </div>
+
+      {/* relatório */}
+      <form onSubmit={submit} className="space-y-3">
+        <label className="block">
+          <span className="text-xs font-semibold text-ink-600">Resultado</span>
+          <select value={resultado} onChange={(e) => setResultado(e.target.value)} className={cn(inputCls, 'mt-1')}>
+            {RESULTADOS.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </label>
+        <label className="block">
+          <span className="text-xs font-semibold text-ink-600">Próximo passo</span>
+          <input value={proximo} maxLength={120} onChange={(e) => setProximo(e.target.value)} placeholder="Ex.: enviar proposta até sexta" className={cn(inputCls, 'mt-1')} />
+        </label>
+        <label className="block">
+          <span className="text-xs font-semibold text-ink-600">Observações</span>
+          <textarea value={texto} maxLength={2000} onChange={(e) => setTexto(e.target.value)} rows={3} placeholder="Como foi a visita?" className={cn(inputCls, 'mt-1 resize-none')} />
+        </label>
+        {msg && <p className="text-xs text-amber-600">{msg}</p>}
+        <div className="flex justify-end gap-2 pt-1">
+          <Btn variant="ghost" type="button" onClick={onClose}>Fechar</Btn>
+          <Btn icon="check" type="submit" disabled={busy}>{busy ? '…' : 'Salvar visita'}</Btn>
+        </div>
+      </form>
+    </Modal>
   );
 }

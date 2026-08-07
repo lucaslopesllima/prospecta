@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.ts';
 import type { Contact, CompanyHit, PrivateLabel, PrivateLabelCompany } from '../lib/types.ts';
-import { Badge, Btn, Card, EmptyState, PageHeader, SafeButton, Spinner } from '../lib/ui.tsx';
+import { Badge, Btn, Card, EmptyState, inputCls, PageHeader, SafeButton, Spinner } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { useAuth } from '../lib/auth.tsx';
 import { toast } from '../lib/toast.tsx';
 import { confirmDialog } from '../lib/confirm.ts';
 import { CompanySearch } from '../lib/companySearch.tsx';
 
-const inputCls = 'w-full rounded-xl border border-ink-200 bg-surface px-3 py-2.5 text-sm text-ink-800 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-200';
 const PALETTE = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6', '#64748b'];
 
 type LabelForm = { nome: string; descricao: string; cor: string | null };

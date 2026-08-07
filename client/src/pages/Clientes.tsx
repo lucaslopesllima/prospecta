@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import type { Cliente, CompanyHit } from '../lib/types.ts';
-import { Badge, Btn, Card, EmptyState, PageHeader, SafeButton, Spinner, StatCard, cn } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, EmptyState, inputCls, PageHeader, SafeButton, Spinner, StatCard } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { CompanySearch } from '../lib/companySearch.tsx';
 import { CompanyModal } from '../lib/companyModal.tsx';
@@ -10,7 +10,6 @@ import { toast } from '../lib/toast.tsx';
 import { brl0, dec, maskCNPJ, maskMoney, maskSearchCNPJ, numStr } from '../lib/format.ts';
 import { confirmDialog } from '../lib/confirm.ts';
 
-const inputCls = 'w-full rounded-xl border border-ink-200 bg-surface px-3 py-2.5 text-sm text-ink-800 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-200';
 
 // Tela de Clientes. Um cliente é um company_relationships com status='cliente':
 // NÃO copia dados da empresa, só referencia (company_id). Os campos da empresa

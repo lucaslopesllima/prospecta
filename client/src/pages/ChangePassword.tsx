@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, ApiError, setToken } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
-import { Btn, Card, cn } from '../lib/ui.tsx';
+import { Btn, Card, cn, inputCls as baseInputCls } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { LogoMark } from '../lib/logo.tsx';
 
@@ -18,7 +18,7 @@ function Rule({ ok, children }: { ok: boolean; children: React.ReactNode }): Rea
   );
 }
 
-const inputCls = 'mt-1 w-full rounded-xl border border-ink-200 bg-surface px-3 py-2.5 text-sm text-ink-900 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-200';
+const inputCls = cn(baseInputCls, 'mt-1');
 
 // Tela bloqueante do primeiro acesso: usuário criado pelo admin entra com a
 // senha provisória e só segue depois de definir a senha definitiva.

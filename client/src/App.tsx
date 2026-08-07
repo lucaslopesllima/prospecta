@@ -1,11 +1,11 @@
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import { Suspense, lazy, useEffect, useState, type ReactNode } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from './lib/auth.tsx';
 import { api } from './lib/api.ts';
 import type { Notification } from './lib/types.ts';
 import { Icon, type IconName } from './lib/icons.tsx';
 import { LogoMark, LogoWord } from './lib/logo.tsx';
-import { SafeButton, cn } from './lib/ui.tsx';
+import { Popover, SafeButton, cn } from './lib/ui.tsx';
 import { ThemeToggle } from './lib/theme.tsx';
 import { onQueueChange, queued } from './lib/offline.ts';
 
@@ -282,6 +282,7 @@ export function NotificationBell({ variant }: { variant: 'light' | 'dark' }): Re
   const [items, setItems] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
   const navigate = useNavigate();
 
   const load = (): void => {
@@ -303,7 +304,7 @@ export function NotificationBell({ variant }: { variant: 'light' | 'dark' }): Re
 
   return (
     <div className="relative">
-      <button onClick={() => setOpen((o) => !o)} aria-label="Notificações"
+      <button ref={btnRef} onClick={() => setOpen((o) => !o)} aria-label="Notificações"
         className={cn('relative grid h-8 w-8 place-items-center rounded-lg transition',
           variant === 'dark' ? 'text-ink-300 hover:bg-white/10 hover:text-white' : 'text-ink-400 hover:bg-ink-100 hover:text-ink-700')}>
         <Icon name="bell" size={18} />
@@ -313,33 +314,30 @@ export function NotificationBell({ variant }: { variant: 'light' | 'dark' }): Re
           </span>
         )}
       </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-[1500]" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-10 z-[1600] w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-ink-200 bg-surface shadow-pop">
-            <div className="flex items-center justify-between border-b border-ink-100 px-3 py-2">
-              <span className="text-sm font-bold text-ink-800">Notificações</span>
-              {unread > 0 && (
-                <SafeButton onClick={() => markAll()} className="text-xs font-semibold text-brand-600 hover:underline">
-                  Marcar todas
-                </SafeButton>
-              )}
-            </div>
-            <div className="max-h-96 overflow-auto">
-              {items.length === 0 ? (
-                <p className="px-3 py-6 text-center text-sm text-ink-400">Nada por aqui.</p>
-              ) : items.map((n) => (
-                <SafeButton key={n.id} onClick={() => onClick(n)}
-                  className={cn('flex w-full items-start gap-2.5 border-b border-ink-50 px-3 py-2.5 text-left transition hover:bg-ink-50',
-                    !n.lida && 'bg-brand-50/40')}>
-                  <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', n.lida ? 'bg-ink-200' : 'bg-brand-500')} />
-                  <span className="min-w-0 flex-1 text-xs text-ink-700">{n.titulo}</span>
-                </SafeButton>
-              ))}
-            </div>
-          </div>
-        </>
-      )}
+      {/* Popover em portal: a versão anterior era um dropdown `absolute` com
+          backdrop próprio, sem flip quando não cabia embaixo e sem
+          reposicionar no scroll. O Popover de ui.tsx já resolve os três. */}
+      <Popover open={open} anchorRef={btnRef} onClose={() => setOpen(false)} width={320} z={1600}
+        className="p-0">
+        <div className="flex items-center justify-between border-b border-hairline px-3 py-2">
+          <span className="text-sm font-bold text-ink-800">Notificações</span>
+          {unread > 0 && (
+            <SafeButton onClick={() => markAll()} className="text-xs font-semibold text-brand-600 hover:underline">
+              Marcar todas
+            </SafeButton>
+          )}
+        </div>
+        {items.length === 0 ? (
+          <p className="px-3 py-6 text-center text-sm text-ink-400">Nada por aqui.</p>
+        ) : items.map((n) => (
+          <SafeButton key={n.id} onClick={() => onClick(n)}
+            className={cn('flex w-full items-start gap-2.5 border-b border-ink-100 px-3 py-3 text-left transition hover:bg-ink-50',
+              !n.lida && 'bg-brand-50/40')}>
+            <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', n.lida ? 'bg-ink-200' : 'bg-brand-500')} />
+            <span className="min-w-0 flex-1 text-xs text-ink-700">{n.titulo}</span>
+          </SafeButton>
+        ))}
+      </Popover>
     </div>
   );
 }

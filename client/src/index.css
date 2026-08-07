@@ -46,11 +46,24 @@
      no escuro. Substitui `bg-white` para virar tema-aware automaticamente. */
   --color-surface: #ffffff;
 
-  --radius-xl: 0.875rem;
-  --radius-2xl: 1.125rem;
+  /* raios: escala suavizada (era 0.875/1.125). Sobe junto em toda a app porque
+     rounded-xl/2xl saem daqui — cartões, campos, botões e modais de uma vez. */
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
 
   --shadow-card: 0 1px 2px 0 rgb(16 24 40 / 0.04), 0 1px 3px 0 rgb(16 24 40 / 0.06);
   --shadow-pop: 0 10px 30px -12px rgb(16 24 40 / 0.25);
+
+  /* ── Camada translúcida ────────────────────────────────────
+     `surface` é opaco (cartão dentro do fluxo). O que FLUTUA acima do conteúdo
+     — modal, folha, popover, cabeçalho fixo — usa `glass`: a mesma cor com
+     alpha + backdrop-blur, então o que está atrás sangra de leve e o elemento
+     lê como camada, não como bloco colado. `hairline` é a borda dessas camadas:
+     mais fraca que ink-200 pra o contorno não competir com o desfoque. */
+  --color-glass: color-mix(in srgb, #ffffff 78%, transparent);
+  --color-hairline: color-mix(in srgb, #d9dde9 55%, transparent);
+  --color-scrim: color-mix(in srgb, #0c0f1a 42%, transparent);
 
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
@@ -103,6 +116,12 @@
   /* sombra rende pouco no escuro: aprofunda + serve de separador */
   --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.40);
   --shadow-pop:  0 12px 32px -12px rgb(0 0 0 / 0.65);
+
+  /* camada translúcida no escuro: alpha um pouco maior (o blur sobre fundo
+     escuro some rápido) e hairline clareando em vez de escurecendo. */
+  --color-glass: color-mix(in srgb, #181c2b 82%, transparent);
+  --color-hairline: color-mix(in srgb, #59637f 45%, transparent);
+  --color-scrim: color-mix(in srgb, #05070d 60%, transparent);
 }
 
 /* `ink-100` é fundo elevado/hover no escuro — como cor de BORDA ele encosta no
@@ -181,4 +200,36 @@ select:-webkit-autofill {
 @keyframes toastIn {
   from { opacity: 0; transform: translateY(-8px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Foco de teclado global ─────────────────────────────────
+   Só o Btn tinha anel de foco; Segmented, chips, ícones de ação e os botões
+   de UF navegavam às cegas no Tab. Um default para tudo que é focável, que
+   componentes ainda podem sobrescrever com a própria classe focus-visible. */
+:where(button, [role='button'], a[href], input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+  border-radius: var(--radius-lg);
+}
+
+/* ── Camadas flutuantes (modal / folha / popover) ───────────
+   Entradas curtas e direcionais: diálogo cresce do centro, folha sobe do
+   rodapé, véu só desvanece. */
+@keyframes scrimIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dialogIn {
+  from { opacity: 0; transform: translateY(8px) scale(.98); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes sheetIn {
+  from { transform: translateY(100%); }
+  to   { transform: none; }
+}
+
+/* Quem pediu menos movimento recebe o estado final, sem o percurso. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
 }

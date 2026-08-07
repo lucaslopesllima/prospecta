@@ -106,8 +106,8 @@ describe('ActivityCreateModal', () => {
 
   it('fecha ao clicar no backdrop', async () => {
     const onClose = vi.fn();
-    const { container } = render(<ActivityCreateModal preset={preset} funnel={funnel} represented={represented} onClose={onClose} onSaved={vi.fn()} />);
-    await userEvent.click(container.firstChild as Element);
+    render(<ActivityCreateModal preset={preset} funnel={funnel} represented={represented} onClose={onClose} onSaved={vi.fn()} />);
+    await userEvent.click(screen.getByRole('dialog'));
     expect(onClose).toHaveBeenCalled();
     await userEvent.click(screen.getByLabelText('Fechar'));
     expect(onClose).toHaveBeenCalledTimes(2);
@@ -264,8 +264,8 @@ describe('VisitModal', () => {
 
   it('fecha no backdrop e no botão fechar', async () => {
     const onClose = vi.fn();
-    const { container } = render(<VisitModal activity={activity()} onClose={onClose} onSaved={vi.fn()} />);
-    await userEvent.click(container.firstChild as Element);
+    render(<VisitModal activity={activity()} onClose={onClose} onSaved={vi.fn()} />);
+    await userEvent.click(screen.getByRole('dialog'));
     for (const b of screen.getAllByRole('button', { name: 'Fechar' })) await userEvent.click(b);
     expect(onClose).toHaveBeenCalledTimes(3);
   });

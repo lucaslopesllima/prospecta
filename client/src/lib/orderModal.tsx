@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from './api.ts';
 import { useAuth } from './auth.tsx';
 import type { Carrier, CatalogItem, CommissionEntry, Contact, KanbanCard, Order, PriceTable, RepresentedCompany, TaxDefaults } from './types.ts';
-import { Btn, Card, cn } from './ui.tsx';
+import { Btn, cn, inputCls, Modal } from './ui.tsx';
 import { Icon } from './icons.tsx';
 import { brl, dec, maskMoney, maskPct, numStr, todayStr } from './format.ts';
 import { toast } from './toast.tsx';
@@ -12,7 +12,6 @@ import { toast } from './toast.tsx';
 // Auto-suficiente — carrega representadas/clientes/catálogo/transportadoras
 // sozinho, então quem usa só passa order (edição) ou prefill (novo).
 
-const inputCls = 'w-full rounded-xl border border-ink-200 bg-surface px-3 py-2.5 text-sm text-ink-800 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-200';
 
 type Opt = { id: number; label: string };
 
@@ -248,176 +247,172 @@ export function OrderModal({ order = null, prefill = null, onClose, onSaved }: {
   };
 
   return (
-    <div className="fixed inset-0 z-[2000] grid place-items-center bg-black/45 p-4" onClick={onClose}>
-      <Card className="w-full max-w-2xl p-4 shadow-pop">
-        <div onClick={(e) => e.stopPropagation()}>
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-ink-900">
-              {order ? `Pedido #${order.numero}` : 'Novo pedido'}
-              {readOnly && <span className="ml-2 text-xs font-medium text-ink-400">(somente leitura)</span>}
-            </h3>
-            <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
-              <Icon name="x" size={17} />
-            </button>
-          </div>
-          <form onSubmit={submit} className="max-h-[75vh] space-y-3 overflow-auto pr-1">
-            <div className="grid gap-2 sm:grid-cols-2">
-              <label className="block">
-                <span className="text-xs font-semibold text-ink-600">Cliente (funil) *</span>
-                <select value={companyId ?? ''} disabled={readOnly}
-                  onChange={(e) => setCompanyId(e.target.value === '' ? null : Number(e.target.value))} className={cn(inputCls, 'mt-1')}>
-                  <option value="">Escolha o cliente</option>
-                  {companyMissing && <option value={companyId!}>{prefill?.company_label ?? order?.company_nome ?? 'Empresa vinculada'}</option>}
-                  {companies.map((c) => <option key={c.relationship_id} value={c.id}>{c.label}</option>)}
-                </select>
-              </label>
-              <label className="block">
-                <span className="text-xs font-semibold text-ink-600">Representada *</span>
-                <select value={representedId ?? ''} disabled={readOnly}
-                  onChange={(e) => setRepresentedId(e.target.value === '' ? null : Number(e.target.value))} className={cn(inputCls, 'mt-1')}>
-                  <option value="">Escolha a representada</option>
-                  {reps.map((r) => <option key={r.id} value={r.id}>{r.nome}</option>)}
-                </select>
-              </label>
-            </div>
-            {representedId != null && (
-              <p className="text-xs text-ink-400">
-                {table ? <>Tabela de preço vigente: <span className="font-semibold text-ink-600">{table.nome}</span></> : 'Sem tabela de preço vigente — preços do mostruário.'}
-              </p>
-            )}
+    <Modal onClose={onClose} width="2xl">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-sm font-bold text-ink-900">
+          {order ? `Pedido #${order.numero}` : 'Novo pedido'}
+          {readOnly && <span className="ml-2 text-xs font-medium text-ink-400">(somente leitura)</span>}
+        </h3>
+        <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
+          <Icon name="x" size={17} />
+        </button>
+      </div>
+      <form onSubmit={submit} className="max-h-[75vh] space-y-3 overflow-auto pr-1">
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className="block">
+            <span className="text-xs font-semibold text-ink-600">Cliente (funil) *</span>
+            <select value={companyId ?? ''} disabled={readOnly}
+              onChange={(e) => setCompanyId(e.target.value === '' ? null : Number(e.target.value))} className={cn(inputCls, 'mt-1')}>
+              <option value="">Escolha o cliente</option>
+              {companyMissing && <option value={companyId!}>{prefill?.company_label ?? order?.company_nome ?? 'Empresa vinculada'}</option>}
+              {companies.map((c) => <option key={c.relationship_id} value={c.id}>{c.label}</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold text-ink-600">Representada *</span>
+            <select value={representedId ?? ''} disabled={readOnly}
+              onChange={(e) => setRepresentedId(e.target.value === '' ? null : Number(e.target.value))} className={cn(inputCls, 'mt-1')}>
+              <option value="">Escolha a representada</option>
+              {reps.map((r) => <option key={r.id} value={r.id}>{r.nome}</option>)}
+            </select>
+          </label>
+        </div>
+        {representedId != null && (
+          <p className="text-xs text-ink-400">
+            {table ? <>Tabela de preço vigente: <span className="font-semibold text-ink-600">{table.nome}</span></> : 'Sem tabela de preço vigente — preços do mostruário.'}
+          </p>
+        )}
 
-            <div className="space-y-1.5">
-              <span className="text-xs font-semibold text-ink-600">Itens *</span>
-              {items.map((i, idx) => {
-                const err = tried ? itemErr(i) : { desc: false, qtd: false, preco: false };
-                const fieldCls = (bad: boolean): string => cn('rounded-lg border bg-surface px-2 py-1.5 text-sm',
-                  bad ? 'border-rose-400 ring-1 ring-rose-200' : 'border-ink-200');
-                return (
-                <div key={idx} className="space-y-1.5 rounded-xl border border-ink-200/70 bg-ink-50/50 p-2">
-                  <div className="flex items-center gap-2">
-                    <input value={i.descricao} disabled={readOnly} maxLength={120} aria-label={`Descrição item ${idx + 1}`} aria-invalid={err.desc}
-                      onChange={(e) => setItem(idx, { descricao: e.target.value })} placeholder="Descrição *"
-                      className={cn('min-w-0 flex-1', fieldCls(err.desc))} />
-                    {!readOnly && (
-                      <button type="button" aria-label={`Remover item ${idx + 1}`} onClick={() => setItems((xs) => xs.filter((_, j) => j !== idx))}
-                        className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ink-300 hover:bg-rose-50 hover:text-rose-500"><Icon name="x" size={15} /></button>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4">
-                    {([['qtd', 'Qtd *'], ['preco_unit', 'Preço *'], ['desconto_pct', 'Desc %']] as const).map(([k, ph]) => {
-                      const bad = (k === 'qtd' && err.qtd) || (k === 'preco_unit' && err.preco);
-                      // qtd herda a unidade do produto (snapshot) — rótulo "Qtd (KG)".
-                      const lbl = k === 'qtd' && i.unidade_medida ? `Qtd * (${i.unidade_medida})` : ph;
-                      return (
-                      <label key={k} className="block">
-                        <span className="mb-0.5 block truncate text-[10px] font-semibold text-ink-500">{lbl}</span>
-                        <input type="text" inputMode="decimal" value={i[k]} disabled={readOnly} aria-label={`${ph} item ${idx + 1}`} aria-invalid={bad}
-                          onChange={(e) => setItem(idx, { [k]: k.endsWith('_pct') ? maskPct(e.target.value) : k === 'qtd' ? maskMoney(e.target.value, 6) : maskMoney(e.target.value) })} placeholder={ph}
-                          className={cn(fieldCls(bad), 'w-full')} />
-                      </label>
-                      );
-                    })}
-                    <div className="col-span-3 sm:col-span-1">
-                      <span className="mb-0.5 block text-[10px] font-semibold text-ink-500">Total</span>
-                      <span className="tabnums grid h-[34px] place-items-center text-xs font-bold text-ink-700">{brl(itemTotal(i))}</span>
-                    </div>
-                  </div>
-                </div>
-                );
-              })}
-              {!readOnly && (
-                <div className="grid gap-1.5 sm:grid-cols-2">
-                  <select value="" aria-label="Adicionar item do mostruário"
-                    onChange={(e) => { if (e.target.value !== '') addCatalogItem(Number(e.target.value)); }} className={inputCls}>
-                    <option value="">+ Item do mostruário…</option>
-                    {catalog.map((c) => {
-                      const p = tablePrice(c.id) ?? (c.preco || null);
-                      return <option key={c.id} value={c.id}>{c.nome}{p != null ? ` (${brl(Number(p))})` : ' — sem preço'}</option>;
-                    })}
-                  </select>
-                  <Btn variant="ghost" type="button" icon="plus" onClick={() => setItems((xs) => [...xs, { ...EMPTY_ITEM, ...taxDraft(taxDef) }])}>
-                    Item livre
-                  </Btn>
-                </div>
-              )}
-            </div>
-
-            <label className="block">
-              <span className="text-xs font-semibold text-ink-600">Contato do pedido</span>
-              <select value={contactId ?? ''} disabled={readOnly || contactBusy}
-                onChange={(e) => changeContact(e.target.value === '' ? null : Number(e.target.value))} className={cn(inputCls, 'mt-1')}>
-                <option value="">Sem contato</option>
-                {/* pedido pode apontar p/ contato fora da lista atual da empresa — mantém a opção */}
-                {order?.contact_id != null && !contacts.some((c) => Number(c.id) === Number(order.contact_id)) && (
-                  <option value={order.contact_id}>{order.contact_nome ?? `#${order.contact_id}`}</option>
+        <div className="space-y-1.5">
+          <span className="text-xs font-semibold text-ink-600">Itens *</span>
+          {items.map((i, idx) => {
+            const err = tried ? itemErr(i) : { desc: false, qtd: false, preco: false };
+            const fieldCls = (bad: boolean): string => cn('rounded-lg border bg-surface px-2 py-1.5 text-sm',
+              bad ? 'border-rose-400 ring-1 ring-rose-200' : 'border-ink-200');
+            return (
+            <div key={idx} className="space-y-1.5 rounded-xl border border-ink-200/70 bg-ink-50/50 p-2">
+              <div className="flex items-center gap-2">
+                <input value={i.descricao} disabled={readOnly} maxLength={120} aria-label={`Descrição item ${idx + 1}`} aria-invalid={err.desc}
+                  onChange={(e) => setItem(idx, { descricao: e.target.value })} placeholder="Descrição *"
+                  className={cn('min-w-0 flex-1', fieldCls(err.desc))} />
+                {!readOnly && (
+                  <button type="button" aria-label={`Remover item ${idx + 1}`} onClick={() => setItems((xs) => xs.filter((_, j) => j !== idx))}
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ink-300 hover:bg-rose-50 hover:text-rose-500"><Icon name="x" size={15} /></button>
                 )}
-                {contacts.map((c) => <option key={c.id} value={c.id}>{c.nome}{c.cargo ? ` · ${c.cargo}` : ''}</option>)}
-              </select>
-              {companyId == null && <span className="mt-1 block text-[11px] text-ink-400">Escolha o cliente para listar contatos.</span>}
-            </label>
-
-            <div className="grid gap-2 sm:grid-cols-3">
-              <label className="block">
-                <span className="text-xs font-semibold text-ink-600">Frete (R$)</span>
-                <input type="text" inputMode="decimal" value={frete} disabled={readOnly}
-                  onChange={(e) => setFrete(maskMoney(e.target.value))} className={cn(inputCls, 'mt-1')} />
-              </label>
-              <label className="block">
-                <span className="text-xs font-semibold text-ink-600">Cond. pagamento</span>
-                <input value={condicao} disabled={readOnly} maxLength={120} onChange={(e) => setCondicao(e.target.value)}
-                  placeholder="ex.: 28/56 dias" className={cn(inputCls, 'mt-1')} />
-              </label>
-              <label className="block">
-                <span className="text-xs font-semibold text-ink-600">Transportadora</span>
-                <select value={carrierId ?? ''} disabled={readOnly}
-                  onChange={(e) => setCarrierId(e.target.value === '' ? null : Number(e.target.value))} className={cn(inputCls, 'mt-1')}>
-                  <option value="">Sem transportadora</option>
-                  {/* pedido antigo pode apontar para transportadora desativada — mantém a opção */}
-                  {order?.carrier_id != null && !carriers.some((c) => c.id === order.carrier_id) && (
-                    <option value={order.carrier_id}>{order.carrier_nome ?? `#${order.carrier_id}`}</option>
-                  )}
-                  {carriers.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                </select>
-              </label>
-            </div>
-
-            <div className="grid items-end gap-2 sm:grid-cols-3">
-              <label className="flex h-[42px] items-center gap-2 text-sm font-medium text-ink-700">
-                <input type="checkbox" checked={cotacao} disabled={readOnly || order != null}
-                  onChange={(e) => { setCotacao(e.target.checked); if (e.target.checked && !validade) setValidade(todayStr()); }}
-                  className="h-4 w-4 rounded border-ink-300 accent-brand-600" />
-                É cotação
-              </label>
-              {cotacao && (
-                <label className="block">
-                  <span className="text-xs font-semibold text-ink-600">Válida até</span>
-                  <input type="date" value={validade} disabled={readOnly} onChange={(e) => setValidade(e.target.value)} className={cn(inputCls, 'mt-1')} />
-                </label>
-              )}
-            </div>
-
-            <textarea value={observacoes} disabled={readOnly} maxLength={2000} onChange={(e) => setObservacoes(e.target.value)}
-              placeholder="Observações" rows={2} className={inputCls} />
-
-            {comissao && comissao.status !== 'cancelada' && (
-              <p className="rounded-xl bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
-                {user?.role === 'admin'
-                  ? <>Comissão prevista: <span className="tabnums font-bold">{brl(Number(comissao.valor_previsto))}</span> ({Number(comissao.percent_aplicado)}%) · vendedor {brl(Number(comissao.valor_vendedor))}</>
-                  : <>Sua comissão prevista: <span className="tabnums font-bold">{brl(Number(comissao.valor_vendedor))}</span></>}
-                {comissao.status === 'recebida' ? ' · recebida' : comissao.status === 'divergente' ? ' · divergente' : ''}
-              </p>
-            )}
-
-            <div className="flex items-center justify-between gap-2 pt-1">
-              <span className="tabnums text-sm font-bold text-ink-900">Total: {brl(total)}</span>
-              <div className="flex gap-2">
-                <Btn variant="ghost" type="button" onClick={onClose}>{readOnly ? 'Fechar' : 'Cancelar'}</Btn>
-                {!readOnly && <Btn icon="check" type="submit" disabled={busy}>{busy ? '…' : 'Salvar pedido'}</Btn>}
+              </div>
+              <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4">
+                {([['qtd', 'Qtd *'], ['preco_unit', 'Preço *'], ['desconto_pct', 'Desc %']] as const).map(([k, ph]) => {
+                  const bad = (k === 'qtd' && err.qtd) || (k === 'preco_unit' && err.preco);
+                  // qtd herda a unidade do produto (snapshot) — rótulo "Qtd (KG)".
+                  const lbl = k === 'qtd' && i.unidade_medida ? `Qtd * (${i.unidade_medida})` : ph;
+                  return (
+                  <label key={k} className="block">
+                    <span className="mb-0.5 block truncate text-[10px] font-semibold text-ink-500">{lbl}</span>
+                    <input type="text" inputMode="decimal" value={i[k]} disabled={readOnly} aria-label={`${ph} item ${idx + 1}`} aria-invalid={bad}
+                      onChange={(e) => setItem(idx, { [k]: k.endsWith('_pct') ? maskPct(e.target.value) : k === 'qtd' ? maskMoney(e.target.value, 6) : maskMoney(e.target.value) })} placeholder={ph}
+                      className={cn(fieldCls(bad), 'w-full')} />
+                  </label>
+                  );
+                })}
+                <div className="col-span-3 sm:col-span-1">
+                  <span className="mb-0.5 block text-[10px] font-semibold text-ink-500">Total</span>
+                  <span className="tabnums grid h-[34px] place-items-center text-xs font-bold text-ink-700">{brl(itemTotal(i))}</span>
+                </div>
               </div>
             </div>
-          </form>
+            );
+          })}
+          {!readOnly && (
+            <div className="grid gap-1.5 sm:grid-cols-2">
+              <select value="" aria-label="Adicionar item do mostruário"
+                onChange={(e) => { if (e.target.value !== '') addCatalogItem(Number(e.target.value)); }} className={inputCls}>
+                <option value="">+ Item do mostruário…</option>
+                {catalog.map((c) => {
+                  const p = tablePrice(c.id) ?? (c.preco || null);
+                  return <option key={c.id} value={c.id}>{c.nome}{p != null ? ` (${brl(Number(p))})` : ' — sem preço'}</option>;
+                })}
+              </select>
+              <Btn variant="ghost" type="button" icon="plus" onClick={() => setItems((xs) => [...xs, { ...EMPTY_ITEM, ...taxDraft(taxDef) }])}>
+                Item livre
+              </Btn>
+            </div>
+          )}
         </div>
-      </Card>
-    </div>
+
+        <label className="block">
+          <span className="text-xs font-semibold text-ink-600">Contato do pedido</span>
+          <select value={contactId ?? ''} disabled={readOnly || contactBusy}
+            onChange={(e) => changeContact(e.target.value === '' ? null : Number(e.target.value))} className={cn(inputCls, 'mt-1')}>
+            <option value="">Sem contato</option>
+            {/* pedido pode apontar p/ contato fora da lista atual da empresa — mantém a opção */}
+            {order?.contact_id != null && !contacts.some((c) => Number(c.id) === Number(order.contact_id)) && (
+              <option value={order.contact_id}>{order.contact_nome ?? `#${order.contact_id}`}</option>
+            )}
+            {contacts.map((c) => <option key={c.id} value={c.id}>{c.nome}{c.cargo ? ` · ${c.cargo}` : ''}</option>)}
+          </select>
+          {companyId == null && <span className="mt-1 block text-[11px] text-ink-400">Escolha o cliente para listar contatos.</span>}
+        </label>
+
+        <div className="grid gap-2 sm:grid-cols-3">
+          <label className="block">
+            <span className="text-xs font-semibold text-ink-600">Frete (R$)</span>
+            <input type="text" inputMode="decimal" value={frete} disabled={readOnly}
+              onChange={(e) => setFrete(maskMoney(e.target.value))} className={cn(inputCls, 'mt-1')} />
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold text-ink-600">Cond. pagamento</span>
+            <input value={condicao} disabled={readOnly} maxLength={120} onChange={(e) => setCondicao(e.target.value)}
+              placeholder="ex.: 28/56 dias" className={cn(inputCls, 'mt-1')} />
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold text-ink-600">Transportadora</span>
+            <select value={carrierId ?? ''} disabled={readOnly}
+              onChange={(e) => setCarrierId(e.target.value === '' ? null : Number(e.target.value))} className={cn(inputCls, 'mt-1')}>
+              <option value="">Sem transportadora</option>
+              {/* pedido antigo pode apontar para transportadora desativada — mantém a opção */}
+              {order?.carrier_id != null && !carriers.some((c) => c.id === order.carrier_id) && (
+                <option value={order.carrier_id}>{order.carrier_nome ?? `#${order.carrier_id}`}</option>
+              )}
+              {carriers.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            </select>
+          </label>
+        </div>
+
+        <div className="grid items-end gap-2 sm:grid-cols-3">
+          <label className="flex h-[42px] items-center gap-2 text-sm font-medium text-ink-700">
+            <input type="checkbox" checked={cotacao} disabled={readOnly || order != null}
+              onChange={(e) => { setCotacao(e.target.checked); if (e.target.checked && !validade) setValidade(todayStr()); }}
+              className="h-4 w-4 rounded border-ink-300 accent-brand-600" />
+            É cotação
+          </label>
+          {cotacao && (
+            <label className="block">
+              <span className="text-xs font-semibold text-ink-600">Válida até</span>
+              <input type="date" value={validade} disabled={readOnly} onChange={(e) => setValidade(e.target.value)} className={cn(inputCls, 'mt-1')} />
+            </label>
+          )}
+        </div>
+
+        <textarea value={observacoes} disabled={readOnly} maxLength={2000} onChange={(e) => setObservacoes(e.target.value)}
+          placeholder="Observações" rows={2} className={inputCls} />
+
+        {comissao && comissao.status !== 'cancelada' && (
+          <p className="rounded-xl bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+            {user?.role === 'admin'
+              ? <>Comissão prevista: <span className="tabnums font-bold">{brl(Number(comissao.valor_previsto))}</span> ({Number(comissao.percent_aplicado)}%) · vendedor {brl(Number(comissao.valor_vendedor))}</>
+              : <>Sua comissão prevista: <span className="tabnums font-bold">{brl(Number(comissao.valor_vendedor))}</span></>}
+            {comissao.status === 'recebida' ? ' · recebida' : comissao.status === 'divergente' ? ' · divergente' : ''}
+          </p>
+        )}
+
+        <div className="flex items-center justify-between gap-2 pt-1">
+          <span className="tabnums text-sm font-bold text-ink-900">Total: {brl(total)}</span>
+          <div className="flex gap-2">
+            <Btn variant="ghost" type="button" onClick={onClose}>{readOnly ? 'Fechar' : 'Cancelar'}</Btn>
+            {!readOnly && <Btn icon="check" type="submit" disabled={busy}>{busy ? '…' : 'Salvar pedido'}</Btn>}
+          </div>
+        </div>
+      </form>
+    </Modal>
   );
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, BUSCA_DEBOUNCE_MS } from './api.ts';
 import type { Municipio } from './types.ts';
 import { maskSearchCNPJ, maskCEP, maskMoneyBR, dec, decBR } from './format.ts';
-import { Btn, SafeButton, Hint, cn } from './ui.tsx';
+import { Btn, cn, Hint, inputCls, SafeButton } from './ui.tsx';
 import { Icon } from './icons.tsx';
 import { Cnae, seedCnae } from './cnae.tsx';
 
@@ -11,7 +11,6 @@ import { Cnae, seedCnae } from './cnae.tsx';
 // (território, partida e pesos do score) — que antes vinha do perfil-alvo e agora
 // vive aqui, persistida no navegador e enviada ao /api/recommend a cada busca.
 
-const inputCls = 'w-full rounded-xl border border-ink-200 bg-surface px-3 py-2.5 text-sm text-ink-800 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-200';
 const onlyDigits = (s: string): string => s.replace(/\D/g, '');
 const parseCodes = (s: string): number[] => s.split(/[,\s]+/).map((x) => onlyDigits(x)).filter(Boolean).map(Number);
 // anos inteiros (tempo de vida): só dígitos, máx. 3 casas (999 anos)

@@ -2,13 +2,12 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import type { CatalogItem, PriceTable, RepresentedCompany } from '../lib/types.ts';
-import { Badge, Btn, Card, EmptyState, SafeButton, Spinner, cn } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, EmptyState, inputCls, SafeButton, Spinner } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { brl, dec, fmtDate, maskMoney, maskPct, numStr } from '../lib/format.ts';
 import { toast } from '../lib/toast.tsx';
 import { confirmDialog } from '../lib/confirm.ts';
 
-const inputCls = 'w-full rounded-xl border border-ink-200 bg-surface px-3 py-2.5 text-sm text-ink-800 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-200';
 
 // Aba "Tabelas de preço" do Catálogo: uma tabela por representada/vigência;
 // os itens apontam para o catálogo com preço acordado e teto de desconto.

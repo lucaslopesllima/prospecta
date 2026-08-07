@@ -182,8 +182,10 @@ describe('App shell: sino, offline, sidebar', () => {
     const bells = await screen.findAllByLabelText('Notificações');
     await userEvent.click(bells[0]!);
     expect(screen.getByText('Nada por aqui.')).toBeInTheDocument();
-    const overlay = [...document.querySelectorAll('div')].find((d) => d.className.includes('z-[1500]'));
-    fireEvent.click(overlay!);
+    // O sino passou a usar o Popover compartilhado: o backdrop é o irmão
+    // `fixed inset-0` que fica imediatamente antes do menu (role=menu).
+    const menu = document.querySelector('[role="menu"]')!;
+    fireEvent.click(menu.previousElementSibling!);
     await waitFor(() => expect(screen.queryByText('Nada por aqui.')).not.toBeInTheDocument());
   });
 

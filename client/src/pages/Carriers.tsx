@@ -2,14 +2,13 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import type { Carrier, CompanyHit } from '../lib/types.ts';
-import { Badge, Btn, Card, EmptyState, PageHeader, SafeButton, Spinner, cn } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, EmptyState, inputCls, PageHeader, SafeButton, Spinner } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { CompanySearch } from '../lib/companySearch.tsx';
 import { toast } from '../lib/toast.tsx';
 import { invalidCNPJ, isEmail, maskCNPJ, maskPhone } from '../lib/format.ts';
 import { confirmDialog } from '../lib/confirm.ts';
 
-const inputCls = 'w-full rounded-xl border border-ink-200 bg-surface px-3 py-2.5 text-sm text-ink-800 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-200';
 
 type Form = { nome: string; cnpj: string; telefone: string; email: string; contato: string; observacoes: string };
 const EMPTY: Form = { nome: '', cnpj: '', telefone: '', email: '', contato: '', observacoes: '' };

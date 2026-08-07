@@ -170,7 +170,7 @@ describe('Kanban', () => {
     await screen.findByText('Amostra Z');
     await userEvent.click(screen.getByTitle('Excluir')); // exclui → onChanged
     await waitFor(() => expect(m.del).toHaveBeenCalledWith('/api/sample-requests/5'));
-    fireEvent.click(screen.getByText('Amostras').closest('.fixed')!); // backdrop → onClose
+    await userEvent.click(screen.getByText('Amostras').closest('.fixed')!); // backdrop → onClose
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Amostras' })).not.toBeInTheDocument());
   });
 
@@ -334,7 +334,7 @@ describe('Kanban', () => {
     await screen.findByText('Loja Um');
     await userEvent.click(screen.getAllByTitle('Ver dados da empresa')[0]!);
     expect(await screen.findByText('Dados da empresa')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Dados da empresa').closest('.fixed')!);
+    await userEvent.click(screen.getByText('Dados da empresa').closest('.fixed')!);
     await waitFor(() => expect(screen.queryByText('Dados da empresa')).not.toBeInTheDocument());
   });
 
@@ -483,9 +483,10 @@ describe('Kanban', () => {
     editMock();
     const d = await openEdit();
     await userEvent.click(within(d).getByRole('button', { name: /Criar compromisso/ }));
-    // fecha (onClose)
-    expect(await screen.findByText('Nova atividade')).toBeInTheDocument();
-    await userEvent.click(screen.getByLabelText('Fechar'));
+    // fecha (onClose). Escopado no modal de atividade: o EditModal por baixo
+    // também tem um X "Fechar", então a busca global acha dois.
+    const av = (await screen.findByText('Nova atividade')).closest('.fixed') as HTMLElement;
+    await userEvent.click(within(av).getByLabelText('Fechar'));
     await waitFor(() => expect(screen.queryByText('Nova atividade')).not.toBeInTheDocument());
     // reabre e salva (onSaved)
     await userEvent.click(within(d).getByRole('button', { name: /Criar compromisso/ }));

@@ -3,7 +3,7 @@ import './whatsapp-theme.css';
 import { useSearchParams } from 'react-router-dom';
 import { api, getToken, ApiError } from '../lib/api.ts';
 import { toast } from '../lib/toast.tsx';
-import { Btn, Card, Popover, SafeButton, Spinner, cn } from '../lib/ui.tsx';
+import { Btn, Card, cn, inputCls, Popover, SafeButton, Spinner } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { isEmail, maskPhone } from '../lib/format.ts';
 import { CompanySearch } from '../lib/companySearch.tsx';
@@ -387,7 +387,6 @@ function MediaThumb({ m, onImage }: { m: WaMessage; onImage: (url: string) => vo
   );
 }
 
-const inputCls = 'w-full rounded-xl border border-ink-200 bg-surface px-3 py-2.5 text-sm text-ink-800 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-200';
 
 // Shell de modal (mesmo padrão de sampleModal): overlay + card centralizado.
 function Overlay({ title, onClose, children, bodyClassName }: { title: string; onClose: () => void; children: ReactNode; bodyClassName?: string }): React.JSX.Element {
@@ -626,7 +625,7 @@ function ScheduleModal({ chat, onClose, onChanged }: { chat: WaChat; onClose: ()
       </label>
       {repete && (
         <>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs font-semibold text-ink-500">Frequência</label>
               <select value={recorrencia} onChange={(e) => setRecorrencia(e.target.value as WaRecorrencia)} className={inputCls}>

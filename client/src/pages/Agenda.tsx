@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '../lib/api.ts';
 import type { Activity, KanbanCard, OptimizeResult } from '../lib/types.ts';
-import { Btn, Card, EmptyState, PageHeader, SafeButton, Segmented, Spinner, cn } from '../lib/ui.tsx';
+import { Btn, Card, cn, EmptyState, Modal, PageHeader, SafeButton, Segmented, Spinner } from '../lib/ui.tsx';
 import { Icon, type IconName } from '../lib/icons.tsx';
 import { ActivityCreateModal, VisitModal, type RepresentedOption } from '../lib/activityModal.tsx';
 import { toast } from '../lib/toast.tsx';
@@ -56,7 +56,10 @@ export function Agenda(): React.JSX.Element {
   // escolheu "Lista" continua na lista ao reabrir sem rede).
   const [view, setView] = useState<'mes' | 'semana' | 'lista'>(() => {
     const saved = localStorage.getItem('rs_agenda_view');
-    return saved === 'mes' || saved === 'semana' || saved === 'lista' ? saved : 'mes';
+    if (saved === 'mes' || saved === 'semana' || saved === 'lista') return saved;
+    // Sem escolha salva: no celular a grade de 7 colunas fica ilegível (célula
+    // ~51px) — abre direto na lista; desktop mantém o mês.
+    return typeof matchMedia !== 'undefined' && matchMedia('(max-width: 640px)').matches ? 'lista' : 'mes';
   });
   const changeView = useCallback((v: 'mes' | 'semana' | 'lista'): void => {
     setView(v);
@@ -489,24 +492,9 @@ function Row({ a, onToggle, onRemove, onEdit, onVisit }: {
   );
 }
 
-/* ── modal shell ────────────────────────────────────────── */
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }): React.JSX.Element {
-  return (
-    <div className="fixed inset-0 z-[2000] grid place-items-center bg-black/45 p-4" onClick={onClose}>
-      <Card className="w-full max-w-md p-4 shadow-pop" >
-        <div onClick={(e) => e.stopPropagation()}>
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-bold capitalize text-ink-900">{title}</h3>
-            <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
-              <Icon name="x" size={17} />
-            </button>
-          </div>
-          {children}
-        </div>
-      </Card>
-    </div>
-  );
-}
+/* A casca de modal local virou o `Modal` de lib/ui.tsx — que traz Esc, trava do
+   scroll de fundo, altura máxima com corpo rolável e folha pelo rodapé no
+   celular. Só o `capitalize` do título (dia por extenso) segue aqui. */
 
 /* ── day-detail modal ───────────────────────────────────── */
 function DayModal({ date, events, onClose, onToggle, onRemove, onEdit, onVisit, onAdd, onGerarRota, rotaBusy }: {
@@ -518,7 +506,7 @@ function DayModal({ date, events, onClose, onToggle, onRemove, onEdit, onVisit, 
   const { can } = useAuth();
   const comEmpresa = events.filter((e) => e.company_id != null).length;
   return (
-    <Modal title={fmtDayLong(date)} onClose={onClose}>
+    <Modal title={<span className="capitalize">{fmtDayLong(date)}</span>} onClose={onClose}>
       <div className="space-y-2">
         {events.length === 0
           ? <p className="py-6 text-center text-sm text-ink-400">Nenhuma atividade neste dia.</p>

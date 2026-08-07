@@ -131,7 +131,7 @@ function Abc({ ownerId }: { ownerId: 'todos' | number }): React.JSX.Element {
         <p className="text-sm text-ink-500">{clientes.length} cliente(s) — últimos 12 meses</p>
         <Btn variant="soft" size="sm" icon="download" onClick={exportar}>Exportar CSV</Btn>
       </div>
-      <div className="grid grid-cols-3 gap-2 px-4 pb-3">
+      <div className="grid grid-cols-1 gap-2 px-4 pb-3 sm:grid-cols-3">
         {resumo.map((g) => (
           <div key={g.classe} className="flex items-center gap-2 rounded-xl border border-ink-100 px-3 py-2">
             <span className={cn('grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold text-white', ABC_TONE[g.classe])}>{g.classe}</span>
@@ -142,8 +142,10 @@ function Abc({ ownerId }: { ownerId: 'todos' | number }): React.JSX.Element {
           </div>
         ))}
       </div>
-      <table className="w-full text-sm">
-        <thead>
+      {/* min-w: sem ele a tabela obedece ao container estreito e espreme as
+          colunas até quebrar letra a letra — o overflow-x do Card nunca rola. */}
+      <table className="w-full min-w-[560px] text-sm">
+        <thead className="sticky top-0 z-10 bg-surface">
           <tr className="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
             <th className="px-4 py-2">Cliente</th>
             <th className="px-4 py-2 text-right">Faturamento</th>

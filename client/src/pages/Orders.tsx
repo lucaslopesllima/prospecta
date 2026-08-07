@@ -4,7 +4,7 @@ import { api, BUSCA_DEBOUNCE_MS } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import { useSellers, SellerFilter } from '../lib/sellers.tsx';
 import type { Order, OrderStatus, RepresentedCompany } from '../lib/types.ts';
-import { Badge, Btn, Card, Collapse, EmptyState, PageHeader, SafeButton, Spinner, StatCard, cn, type Tone } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, Collapse, EmptyState, inputCls, Modal, PageHeader, SafeButton, Spinner, StatCard, type Tone } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { brl, csvNum, fmtDate, maskSearchCNPJ } from '../lib/format.ts';
 import { downloadCsv } from '../lib/export.ts';
@@ -12,7 +12,6 @@ import { toast } from '../lib/toast.tsx';
 import { OrderModal } from '../lib/orderModal.tsx';
 import { confirmDialog } from '../lib/confirm.ts';
 
-const inputCls = 'w-full rounded-xl border border-ink-200 bg-surface px-3 py-2.5 text-sm text-ink-800 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-200';
 
 const STATUS_META: Record<OrderStatus, { label: string; tone: Tone }> = {
   cotacao: { label: 'Cotação', tone: 'info' },
@@ -235,7 +234,7 @@ export function Orders(): React.JSX.Element {
           </div>
         } />
 
-      <Collapse open={showFilters} duration={500}>
+      <Collapse open={showFilters} duration={200}>
         <Card className="flex flex-wrap items-center gap-3 p-3">
           <div className="relative min-w-[220px] flex-1">
             <Icon name="search" size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-400" />
@@ -259,7 +258,7 @@ export function Orders(): React.JSX.Element {
         </Card>
       </Collapse>
 
-      <Collapse open={showKpis} duration={500}>
+      <Collapse open={showKpis} duration={200}>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
           <StatCard label="Em aberto" value={brl(kpis.aberto)} icon="trendingUp" tone="info" />
           <StatCard label="Total faturado" value={brl(kpis.faturado)} icon="check" tone="success" />
@@ -322,22 +321,18 @@ function NfModal({ order, onClose, onConfirm }: { order: Order; onClose: () => v
   const [nf, setNf] = useState('');
   const submit = (e: React.FormEvent): void => { e.preventDefault(); onConfirm(nf.trim() || null); };
   return (
-    <div className="fixed inset-0 z-[2100] grid place-items-center bg-black/45 p-4" onClick={onClose}>
-      <Card className="w-full max-w-sm p-4 shadow-pop" >
-        <div onClick={(e) => e.stopPropagation()}>
-          <h3 className="mb-1 text-sm font-bold text-ink-900">Faturar pedido #{order.numero}</h3>
-          <p className="mb-3 text-xs text-ink-400">Informe o número da nota fiscal (opcional).</p>
-          <form onSubmit={submit} className="space-y-3">
-            <input value={nf} onChange={(e) => setNf(e.target.value)} autoFocus inputMode="numeric"
-              maxLength={20} placeholder="Número da NF" className={inputCls} />
-            <div className="flex justify-end gap-2">
-              <Btn variant="ghost" type="button" onClick={onClose}>Cancelar</Btn>
-              <Btn icon="check" type="submit">Faturar</Btn>
-            </div>
-          </form>
+    <Modal onClose={onClose} width="sm">
+      <h3 className="mb-1 text-sm font-bold text-ink-900">Faturar pedido #{order.numero}</h3>
+      <p className="mb-3 text-xs text-ink-400">Informe o número da nota fiscal (opcional).</p>
+      <form onSubmit={submit} className="space-y-3">
+        <input value={nf} onChange={(e) => setNf(e.target.value)} autoFocus inputMode="numeric"
+          maxLength={20} placeholder="Número da NF" className={inputCls} />
+        <div className="flex justify-end gap-2">
+          <Btn variant="ghost" type="button" onClick={onClose}>Cancelar</Btn>
+          <Btn icon="check" type="submit">Faturar</Btn>
         </div>
-      </Card>
-    </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -415,39 +410,35 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
   };
 
   return (
-    <div className="fixed inset-0 z-[2000] grid place-items-center bg-black/45 p-4" onClick={onClose}>
-      <Card className="w-full max-w-lg p-4 shadow-pop">
-        <div onClick={(e) => e.stopPropagation()}>
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-ink-900">Importar faturamento (CSV)</h3>
-            <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
-              <Icon name="x" size={17} />
-            </button>
-          </div>
-          {result ? (
-            <div className="space-y-3">
-              <p className="text-sm text-ink-700">
-                {result.faturadas} de {result.processadas} linha(s) faturada(s).
-              </p>
-              <div className="flex justify-end"><Btn onClick={onDone}>Concluir</Btn></div>
-            </div>
-          ) : (
-            <form onSubmit={submit} className="space-y-3">
-              <p className="text-xs text-ink-400">
-                Cabeçalho com colunas <code>nf, data, cnpj, valor</code> (separador vírgula ou ponto-e-vírgula).
-                Pedidos <strong>enviados</strong> com mesmo CNPJ e valor são marcados como faturados.
-              </p>
-              <textarea value={csv} onChange={(e) => setCsv(e.target.value)} rows={8} maxLength={1000000}
-                placeholder={'nf;data;cnpj;valor\n123;01/06/2026;00.000.000/0000-00;1.234,56'}
-                className={cn(inputCls, 'font-mono text-xs')} />
-              <div className="flex justify-end gap-2">
-                <Btn variant="ghost" type="button" onClick={onClose}>Cancelar</Btn>
-                <Btn icon="check" type="submit" disabled={busy}>{busy ? '…' : 'Importar'}</Btn>
-              </div>
-            </form>
-          )}
+    <Modal onClose={onClose} width="lg">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-sm font-bold text-ink-900">Importar faturamento (CSV)</h3>
+        <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
+          <Icon name="x" size={17} />
+        </button>
+      </div>
+      {result ? (
+        <div className="space-y-3">
+          <p className="text-sm text-ink-700">
+            {result.faturadas} de {result.processadas} linha(s) faturada(s).
+          </p>
+          <div className="flex justify-end"><Btn onClick={onDone}>Concluir</Btn></div>
         </div>
-      </Card>
-    </div>
+      ) : (
+        <form onSubmit={submit} className="space-y-3">
+          <p className="text-xs text-ink-400">
+            Cabeçalho com colunas <code>nf, data, cnpj, valor</code> (separador vírgula ou ponto-e-vírgula).
+            Pedidos <strong>enviados</strong> com mesmo CNPJ e valor são marcados como faturados.
+          </p>
+          <textarea value={csv} onChange={(e) => setCsv(e.target.value)} rows={8} maxLength={1000000}
+            placeholder={'nf;data;cnpj;valor\n123;01/06/2026;00.000.000/0000-00;1.234,56'}
+            className={cn(inputCls, 'font-mono text-xs')} />
+          <div className="flex justify-end gap-2">
+            <Btn variant="ghost" type="button" onClick={onClose}>Cancelar</Btn>
+            <Btn icon="check" type="submit" disabled={busy}>{busy ? '…' : 'Importar'}</Btn>
+          </div>
+        </form>
+      )}
+    </Modal>
   );
 }

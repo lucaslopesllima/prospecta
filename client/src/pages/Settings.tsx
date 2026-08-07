@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.ts';
 import type { NamedItem, Stage, TaxDefaults } from '../lib/types.ts';
-import { Btn, Card, PageHeader, SafeButton, Spinner, cn } from '../lib/ui.tsx';
+import { Btn, Card, cn, inputCls, PageHeader, SafeButton, Spinner } from '../lib/ui.tsx';
 import { Icon, type IconName } from '../lib/icons.tsx';
 import { useOptionalUser, useAuth } from '../lib/auth.tsx';
 import { toast } from '../lib/toast.tsx';
@@ -19,7 +19,6 @@ const SECTIONS: { key: Section; label: string; icon: IconName; desc: string; adm
   { key: 'smtp', label: 'E-mail (SMTP)', icon: 'mail', desc: 'Servidor de envio dos e-mails agendados', admin: true },
   { key: 'whatsapp', label: 'WhatsApp', icon: 'whatsapp', desc: 'Preferências de envio das mensagens', admin: true },
 ];
-const inputCls = 'w-full rounded-xl border border-ink-200 bg-surface px-3 py-2.5 text-sm text-ink-800 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-200';
 
 export function Settings(): React.JSX.Element {
   const user = useOptionalUser();
@@ -181,8 +180,8 @@ function SmtpEditor({ inputCls }: { inputCls: string }): React.JSX.Element {
       </p>
 
       <div className="mt-4 space-y-3">
-        <div className="grid grid-cols-3 gap-3">
-          <label className="col-span-2 block">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <label className="block sm:col-span-2">
             <span className="mb-1 block text-xs font-medium text-ink-500">Host</span>
             <input value={host} onChange={(e) => setHost(e.target.value)} maxLength={200} placeholder="smtp.seudominio.com" className={inputCls} />
           </label>
@@ -197,7 +196,7 @@ function SmtpEditor({ inputCls }: { inputCls: string }): React.JSX.Element {
           <span className="text-sm text-ink-700">Conexão segura (SSL/TLS — porta 465). Desmarcado usa STARTTLS (587).</span>
         </label>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="block">
             <span className="mb-1 block text-xs font-medium text-ink-500">Usuário</span>
             <input value={username} onChange={(e) => setUsername(e.target.value)} maxLength={200} placeholder="login do SMTP" className={inputCls} />
@@ -209,7 +208,7 @@ function SmtpEditor({ inputCls }: { inputCls: string }): React.JSX.Element {
           </label>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="block">
             <span className="mb-1 block text-xs font-medium text-ink-500">E-mail de origem</span>
             <input type="email" value={fromEmail} onChange={(e) => setFromEmail(e.target.value)} maxLength={160} placeholder="naoresponda@seudominio.com" className={inputCls} />

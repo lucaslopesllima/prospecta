@@ -2,13 +2,12 @@ import { useEffect, useState } from 'react';
 import { api, ApiError } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import type { GoalProgress, OrgUser, PermissionGroup, RepresentedCompany } from '../lib/types.ts';
-import { Badge, Btn, Card, EmptyState, PageHeader, SafeButton, Segmented, Spinner, cn } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, EmptyState, inputCls, Modal, PageHeader, SafeButton, Segmented, Spinner } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { brl, dec, isEmail, maskMoney, todayStr } from '../lib/format.ts';
 import { toast } from '../lib/toast.tsx';
 import { confirmDialog } from '../lib/confirm.ts';
 
-const inputCls = 'w-full rounded-xl border border-ink-200 bg-surface px-3 py-2.5 text-sm text-ink-800 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-200';
 
 function Field({ label, children }: { label: string; children: React.ReactNode }): React.JSX.Element {
   return (
@@ -163,8 +162,10 @@ function Usuarios(): React.JSX.Element {
         {users.length === 0 ? (
           <EmptyState icon="users" title="Nenhum usuário" hint="Crie o primeiro vendedor da sua equipe." />
         ) : (
-          <table className="w-full text-sm">
-            <thead>
+          // min-w: sem ele a tabela obedece ao container estreito e espreme as
+          // colunas até quebrar letra a letra — o overflow-x do Card nunca rola.
+          <table className="w-full min-w-[720px] text-sm">
+            <thead className="sticky top-0 z-10 bg-surface">
               <tr className="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
                 <th className="px-4 py-3">Nome</th>
                 <th className="px-4 py-3">E-mail</th>
@@ -262,25 +263,21 @@ function ResetPwdModal({ user, onClose, onConfirm }: { user: OrgUser; onClose: (
     try { await onConfirm(senha); } finally { setBusy(false); }
   };
   return (
-    <div className="fixed inset-0 z-[2000] grid place-items-center bg-black/45 p-4" onClick={onClose}>
-      <Card className="w-full max-w-sm p-4 shadow-pop">
-        <div onClick={(e) => e.stopPropagation()}>
-          <h3 className="mb-1 text-sm font-bold text-ink-900">Redefinir senha</h3>
-          <p className="mb-3 text-xs text-ink-400">Nova senha provisória para {user.nome ?? user.email}. O usuário troca no próximo acesso.</p>
-          <form onSubmit={submit} className="space-y-3">
-            <input type="text" value={senha} onChange={(e) => setSenha(e.target.value)} autoFocus minLength={6} maxLength={200}
-              placeholder="Nova senha provisória" className={inputCls} />
-            <span className={cn('block text-[11px]', senha.length === 0 ? 'text-ink-400' : ok ? 'text-emerald-600' : 'text-amber-600')}>
-              Mínimo 6 caracteres{senha.length > 0 && !ok ? ` (faltam ${6 - senha.length})` : ''}
-            </span>
-            <div className="flex justify-end gap-2">
-              <Btn variant="ghost" type="button" onClick={onClose}>Cancelar</Btn>
-              <Btn icon="check" type="submit" disabled={!ok || busy}>Redefinir</Btn>
-            </div>
-          </form>
+    <Modal onClose={onClose} width="sm">
+      <h3 className="mb-1 text-sm font-bold text-ink-900">Redefinir senha</h3>
+      <p className="mb-3 text-xs text-ink-400">Nova senha provisória para {user.nome ?? user.email}. O usuário troca no próximo acesso.</p>
+      <form onSubmit={submit} className="space-y-3">
+        <input type="text" value={senha} onChange={(e) => setSenha(e.target.value)} autoFocus minLength={6} maxLength={200}
+          placeholder="Nova senha provisória" className={inputCls} />
+        <span className={cn('block text-[11px]', senha.length === 0 ? 'text-ink-400' : ok ? 'text-emerald-600' : 'text-amber-600')}>
+          Mínimo 6 caracteres{senha.length > 0 && !ok ? ` (faltam ${6 - senha.length})` : ''}
+        </span>
+        <div className="flex justify-end gap-2">
+          <Btn variant="ghost" type="button" onClick={onClose}>Cancelar</Btn>
+          <Btn icon="check" type="submit" disabled={!ok || busy}>Redefinir</Btn>
         </div>
-      </Card>
-    </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -352,41 +349,37 @@ function TransferModal({ from, users, onClose, onDone }: {
   };
 
   return (
-    <div className="fixed inset-0 z-[2000] grid place-items-center bg-black/45 p-4" onClick={onClose}>
-      <Card className="w-full max-w-md p-4 shadow-pop">
-        <div onClick={(e) => e.stopPropagation()}>
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-ink-900">Transferir carteira</h3>
-            <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
-              <Icon name="x" size={17} />
-            </button>
-          </div>
-          {result !== null ? (
-            <div className="space-y-3">
-              <p className="text-sm text-ink-700">{result} registro(s) transferido(s) de {from.nome ?? from.email}.</p>
-              <div className="flex justify-end"><Btn onClick={onDone}>Concluir</Btn></div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <p className="text-xs text-ink-400">
-                Move toda a carteira (funil) de <strong>{from.nome ?? from.email}</strong> para outro vendedor.
-              </p>
-              <Field label="Transferir para">
-                <select value={toId} onChange={(e) => setToId(e.target.value === '' ? '' : Number(e.target.value))} className={inputCls}>
-                  <option value="">Escolha o vendedor…</option>
-                  {users.map((u) => <option key={u.id} value={u.id}>{u.nome ?? u.email}</option>)}
-                </select>
-              </Field>
-              {err && <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-600">{err}</p>}
-              <div className="flex justify-end gap-2">
-                <Btn variant="ghost" type="button" onClick={onClose}>Cancelar</Btn>
-                <Btn icon="check" disabled={busy || toId === ''} onClick={() => submit()}>{busy ? '…' : 'Transferir'}</Btn>
-              </div>
-            </div>
-          )}
+    <Modal onClose={onClose} width="md">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-sm font-bold text-ink-900">Transferir carteira</h3>
+        <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
+          <Icon name="x" size={17} />
+        </button>
+      </div>
+      {result !== null ? (
+        <div className="space-y-3">
+          <p className="text-sm text-ink-700">{result} registro(s) transferido(s) de {from.nome ?? from.email}.</p>
+          <div className="flex justify-end"><Btn onClick={onDone}>Concluir</Btn></div>
         </div>
-      </Card>
-    </div>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-xs text-ink-400">
+            Move toda a carteira (funil) de <strong>{from.nome ?? from.email}</strong> para outro vendedor.
+          </p>
+          <Field label="Transferir para">
+            <select value={toId} onChange={(e) => setToId(e.target.value === '' ? '' : Number(e.target.value))} className={inputCls}>
+              <option value="">Escolha o vendedor…</option>
+              {users.map((u) => <option key={u.id} value={u.id}>{u.nome ?? u.email}</option>)}
+            </select>
+          </Field>
+          {err && <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-600">{err}</p>}
+          <div className="flex justify-end gap-2">
+            <Btn variant="ghost" type="button" onClick={onClose}>Cancelar</Btn>
+            <Btn icon="check" disabled={busy || toId === ''} onClick={() => submit()}>{busy ? '…' : 'Transferir'}</Btn>
+          </div>
+        </div>
+      )}
+    </Modal>
   );
 }
 

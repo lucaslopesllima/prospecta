@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '../lib/api.ts';
 import type { PermissionGroup, PermissionCatalogItem } from '../lib/types.ts';
-import { Badge, Btn, Card, EmptyState, PageHeader, Spinner, cn } from '../lib/ui.tsx';
-import { Icon } from '../lib/icons.tsx';
+import { Badge, Btn, Card, cn, EmptyState, inputCls, Modal, PageHeader, Spinner } from '../lib/ui.tsx';
 import { toast } from '../lib/toast.tsx';
 import { confirmDialog } from '../lib/confirm.ts';
 
-const inputCls = 'w-full rounded-xl border border-ink-200 bg-surface px-3 py-2.5 text-sm text-ink-800 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-200';
 
 export function Groups(): React.JSX.Element {
   const [groups, setGroups] = useState<PermissionGroup[]>([]);
@@ -145,19 +143,17 @@ function GroupEditor({ group, catalog, onClose, onSaved }: {
   };
 
   return (
-    <div className="fixed inset-0 z-[2000] grid place-items-center bg-black/45 p-4" onClick={onClose}>
-      <Card className="flex max-h-[90vh] w-full max-w-3xl flex-col p-0 shadow-pop" >
-        <div className="flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center justify-between border-b border-ink-100 p-4">
-            <h3 className="text-sm font-bold text-ink-900">
-              {readOnly ? 'Grupo Administrador' : group ? 'Editar grupo' : 'Novo grupo'}
-            </h3>
-            <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
-              <Icon name="x" size={17} />
-            </button>
-          </div>
-
-          <div className="space-y-4 overflow-y-auto p-4">
+    <Modal onClose={onClose} width="4xl"
+      title={readOnly ? 'Grupo Administrador' : group ? 'Editar grupo' : 'Novo grupo'}
+      footer={<>
+        {group && !readOnly && (
+          <Btn variant="danger" size="sm" icon="trash" className="mr-auto" onClick={() => remove()}>Excluir grupo</Btn>
+        )}
+        {err && <span className="text-xs text-rose-600">{err}</span>}
+        <Btn variant="ghost" onClick={onClose}>Fechar</Btn>
+        {!readOnly && <Btn icon="check" disabled={busy} onClick={() => save()}>{busy ? '…' : 'Salvar'}</Btn>}
+      </>}>
+          <div className="space-y-4 py-1">
             {readOnly && (
               <p className="rounded-xl bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
                 O grupo Administrador tem acesso total e não é editável.
@@ -200,20 +196,6 @@ function GroupEditor({ group, catalog, onClose, onSaved }: {
             )}
           </div>
 
-          <div className="flex items-center justify-between gap-2 border-t border-ink-100 p-4">
-            <div>
-              {group && !readOnly && (
-                <Btn variant="danger" size="sm" icon="trash" onClick={() => remove()}>Excluir grupo</Btn>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {err && <span className="text-xs text-rose-600">{err}</span>}
-              <Btn variant="ghost" onClick={onClose}>Fechar</Btn>
-              {!readOnly && <Btn icon="check" disabled={busy} onClick={() => save()}>{busy ? '…' : 'Salvar'}</Btn>}
-            </div>
-          </div>
-        </div>
-      </Card>
-    </div>
+    </Modal>
   );
 }

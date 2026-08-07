@@ -5,7 +5,7 @@ import type {
   CatalogItem, CommissionEntry, CommissionRule, CommissionStatus,
   KanbanCard, OrgUser, RepresentedCompany,
 } from '../lib/types.ts';
-import { Badge, Btn, Card, EmptyState, PageHeader, SafeButton, Segmented, Spinner, StatCard, cn, type Tone } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, EmptyState, inputCls, Modal, PageHeader, SafeButton, Segmented, Spinner, StatCard, type Tone } from '../lib/ui.tsx';
 import { useSellers, SellerFilter } from '../lib/sellers.tsx';
 import { downloadCsv } from '../lib/export.ts';
 import { Icon } from '../lib/icons.tsx';
@@ -13,7 +13,6 @@ import { brl, csvNum, dec, fmtDate, maskMoney, maskPct, numStr, todayStr } from 
 import { toast } from '../lib/toast.tsx';
 import { confirmDialog } from '../lib/confirm.ts';
 
-const inputCls = 'w-full rounded-xl border border-ink-200 bg-surface px-3 py-2.5 text-sm text-ink-800 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-200';
 
 const STATUS_META: Record<CommissionStatus, { label: string; tone: Tone }> = {
   prevista: { label: 'Prevista', tone: 'info' },
@@ -242,41 +241,37 @@ function SettleModal({ entry, onClose, onSaved }: {
   };
 
   return (
-    <div className="fixed inset-0 z-[2000] grid place-items-center bg-black/45 p-4" onClick={onClose}>
-      <Card className="w-full max-w-md p-4 shadow-pop">
-        <div onClick={(e) => e.stopPropagation()}>
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-ink-900">Baixa da comissão · pedido #{entry.order_numero}</h3>
-            <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
-              <Icon name="x" size={17} />
-            </button>
-          </div>
-          <form onSubmit={submit} className="space-y-3">
-            <p className="text-xs text-ink-400">
-              Previsto: <span className="font-semibold text-ink-600">{brl(Number(entry.valor_previsto))}</span>.
-              Valor diferente do previsto marca a comissão como divergente.
-            </p>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <label className="block">
-                <span className="text-xs font-semibold text-ink-600">Valor recebido *</span>
-                <input type="text" inputMode="decimal" placeholder="0,00" value={valor} autoFocus
-                  onChange={(e) => setValor(maskMoney(e.target.value))} className={cn(inputCls, 'mt-1')} />
-              </label>
-              <label className="block">
-                <span className="text-xs font-semibold text-ink-600">Recebida em *</span>
-                <input type="date" value={data} onChange={(e) => setData(e.target.value)} className={cn(inputCls, 'mt-1')} />
-              </label>
-            </div>
-            <textarea value={observacao} onChange={(e) => setObservacao(e.target.value)} maxLength={2000}
-              placeholder="Observação" rows={2} className={inputCls} />
-            <div className="flex justify-end gap-2">
-              <Btn variant="ghost" type="button" onClick={onClose}>Cancelar</Btn>
-              <Btn icon="check" type="submit" disabled={busy}>{busy ? '…' : 'Confirmar baixa'}</Btn>
-            </div>
-          </form>
+    <Modal onClose={onClose} width="md">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-sm font-bold text-ink-900">Baixa da comissão · pedido #{entry.order_numero}</h3>
+        <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
+          <Icon name="x" size={17} />
+        </button>
+      </div>
+      <form onSubmit={submit} className="space-y-3">
+        <p className="text-xs text-ink-400">
+          Previsto: <span className="font-semibold text-ink-600">{brl(Number(entry.valor_previsto))}</span>.
+          Valor diferente do previsto marca a comissão como divergente.
+        </p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className="block">
+            <span className="text-xs font-semibold text-ink-600">Valor recebido *</span>
+            <input type="text" inputMode="decimal" placeholder="0,00" value={valor} autoFocus
+              onChange={(e) => setValor(maskMoney(e.target.value))} className={cn(inputCls, 'mt-1')} />
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold text-ink-600">Recebida em *</span>
+            <input type="date" value={data} onChange={(e) => setData(e.target.value)} className={cn(inputCls, 'mt-1')} />
+          </label>
         </div>
-      </Card>
-    </div>
+        <textarea value={observacao} onChange={(e) => setObservacao(e.target.value)} maxLength={2000}
+          placeholder="Observação" rows={2} className={inputCls} />
+        <div className="flex justify-end gap-2">
+          <Btn variant="ghost" type="button" onClick={onClose}>Cancelar</Btn>
+          <Btn icon="check" type="submit" disabled={busy}>{busy ? '…' : 'Confirmar baixa'}</Btn>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -300,42 +295,38 @@ function ReconcileModal({ onClose, onDone }: { onClose: () => void; onDone: () =
   };
 
   return (
-    <div className="fixed inset-0 z-[2000] grid place-items-center bg-black/45 p-4" onClick={onClose}>
-      <Card className="w-full max-w-lg p-4 shadow-pop">
-        <div onClick={(e) => e.stopPropagation()}>
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-ink-900">Conciliar pagamentos (CSV)</h3>
-            <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
-              <Icon name="x" size={17} />
-            </button>
-          </div>
-          {result ? (
-            <div className="space-y-3">
-              <p className="text-sm text-ink-700">
-                {result.baixadas} de {result.processadas} linha(s) baixada(s)
-                {result.divergentes > 0 ? `, ${result.divergentes} divergente(s).` : '.'}
-              </p>
-              <div className="flex justify-end"><Btn onClick={onDone}>Concluir</Btn></div>
-            </div>
-          ) : (
-            <form onSubmit={submit} className="space-y-3">
-              <p className="text-xs text-ink-400">
-                Cabeçalho com colunas <code>pedido</code> (ou <code>nf</code>) e <code>valor</code>, mais
-                <code> data</code> opcional. Cada linha dá baixa na comissão do pedido; valor fora da
-                tolerância marca divergência.
-              </p>
-              <textarea value={csv} onChange={(e) => setCsv(e.target.value)} rows={8} maxLength={1000000}
-                placeholder={'pedido;valor;data\n12;345,67;05/06/2026'}
-                className={cn(inputCls, 'font-mono text-xs')} />
-              <div className="flex justify-end gap-2">
-                <Btn variant="ghost" type="button" onClick={onClose}>Cancelar</Btn>
-                <Btn icon="check" type="submit" disabled={busy}>{busy ? '…' : 'Conciliar'}</Btn>
-              </div>
-            </form>
-          )}
+    <Modal onClose={onClose} width="lg">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-sm font-bold text-ink-900">Conciliar pagamentos (CSV)</h3>
+        <button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100">
+          <Icon name="x" size={17} />
+        </button>
+      </div>
+      {result ? (
+        <div className="space-y-3">
+          <p className="text-sm text-ink-700">
+            {result.baixadas} de {result.processadas} linha(s) baixada(s)
+            {result.divergentes > 0 ? `, ${result.divergentes} divergente(s).` : '.'}
+          </p>
+          <div className="flex justify-end"><Btn onClick={onDone}>Concluir</Btn></div>
         </div>
-      </Card>
-    </div>
+      ) : (
+        <form onSubmit={submit} className="space-y-3">
+          <p className="text-xs text-ink-400">
+            Cabeçalho com colunas <code>pedido</code> (ou <code>nf</code>) e <code>valor</code>, mais
+            <code> data</code> opcional. Cada linha dá baixa na comissão do pedido; valor fora da
+            tolerância marca divergência.
+          </p>
+          <textarea value={csv} onChange={(e) => setCsv(e.target.value)} rows={8} maxLength={1000000}
+            placeholder={'pedido;valor;data\n12;345,67;05/06/2026'}
+            className={cn(inputCls, 'font-mono text-xs')} />
+          <div className="flex justify-end gap-2">
+            <Btn variant="ghost" type="button" onClick={onClose}>Cancelar</Btn>
+            <Btn icon="check" type="submit" disabled={busy}>{busy ? '…' : 'Conciliar'}</Btn>
+          </div>
+        </form>
+      )}
+    </Modal>
   );
 }
 
