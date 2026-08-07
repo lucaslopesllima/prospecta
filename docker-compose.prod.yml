@@ -133,12 +133,7 @@ services:
       start_period: 40s
     restart: unless-stopped
 
-  # ── Reverse proxy + TLS (nginx + Let's Encrypt) ──────────────────────────────
-  # Única porta publicada na internet: 80/443. 80 só serve o desafio ACME e
-  # redireciona pra 443. O cert vive no volume certbot_conf, renovado pelo serviço
-  # certbot. Reload a cada 6h pra pegar cert renovado sem downtime.
-  # Primeira emissão do cert é feita pelo ./deploy.sh (idempotente).
-  # ── AutoPost (agendador de posts Facebook/Instagram) ─────────────────────────
+  # ── AutoPost (agendador de posts em redes sociais) ───────────────────────────
   # App separado do Rovva: FastAPI + SQLite, servido em autopost.${DOMAIN} pelo
   # mesmo nginx. UM worker só — o APScheduler vive no processo (AutoPost/app/main.py),
   # e mais de um worker publicaria cada post agendado várias vezes.
@@ -160,6 +155,11 @@ services:
     # Não publica porta no host: só o nginx alcança (autopost:8000).
     restart: unless-stopped
 
+  # ── Reverse proxy + TLS (nginx + Let's Encrypt) ──────────────────────────────
+  # Única porta publicada na internet: 80/443. 80 só serve o desafio ACME e
+  # redireciona pra 443. O cert vive no volume certbot_conf, renovado pelo serviço
+  # certbot. Reload a cada 6h pra pegar cert renovado sem downtime.
+  # Primeira emissão do cert é feita pelo ./deploy.sh (idempotente).
   nginx:
     image: nginx:1.27-alpine
     depends_on:
@@ -176,6 +176,9 @@ services:
     volumes:
       - ./nginx/templates:/etc/nginx/templates:ro
       - ./nginx/options-ssl.conf:/etc/nginx/snippets/options-ssl.conf:ro
+      # Landing page estática servida em ${DOMAIN}/www (a aplicação fica em
+      # app.${DOMAIN}). HTML puro — não passa por build.
+      - ./landing:/usr/share/nginx/landing:ro
       - certbot_conf:/etc/letsencrypt:ro
       - certbot_www:/var/www/certbot:ro
     # Como o command começa com `sh` (não `nginx`), o entrypoint oficial pula os
