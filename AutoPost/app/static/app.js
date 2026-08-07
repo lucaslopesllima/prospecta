@@ -450,9 +450,8 @@ async function renderContas() {
       <div class="account-body">
         <strong>${esc(a.name)}</strong>
         <small class="muted">${a.provider} · ${esc(a.external_id)}</small>
-        ${a.last_checked_at ? `<small class="muted">verificada em ${esc(a.last_checked_at)}</small>` : ''}
+        ${accountBadge(a.status)}
       </div>
-      ${accountBadge(a.status)}
       <div class="account-actions">
         <button class="btn btn-ghost btn-sm" data-act="validar-conta" data-id="${a.id}">Validar</button>
         <button class="icon-btn danger" data-act="excluir-conta" data-id="${a.id}" title="Remover">

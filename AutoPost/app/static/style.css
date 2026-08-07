@@ -91,6 +91,12 @@
 }
 
 * { box-sizing: border-box; }
+
+/* Regras de layout abaixo (display:grid/flex) vencem o [hidden] do user-agent
+   por especificidade — sem isto, .login-screen/.shell/.modal-backdrop ignoram
+   o atributo hidden. */
+[hidden] { display: none !important; }
+
 *::-webkit-scrollbar { width: 9px; height: 9px; }
 *::-webkit-scrollbar-thumb { background: var(--ink-200); border-radius: 999px; }
 *::-webkit-scrollbar-thumb:hover { background: var(--ink-300); }
@@ -311,8 +317,10 @@ svg { width: 1.15em; height: 1.15em; fill: none; stroke: currentColor;
 .field > span { font-size: 13px; font-weight: 600; color: var(--ink-600); }
 .field.grow { flex: 1; }
 
-input[type='text'], input[type='email'], input[type='password'],
-input[type='number'], input[type='datetime-local'], select, textarea {
+/* Casa também inputs sem atributo `type` (que são type=text por padrão) —
+   `input[type='text']` sozinho não os alcança. */
+input:not([type='checkbox']):not([type='radio']):not([type='file']),
+select, textarea {
   width: 100%;
   padding: 11px 14px;
   border: 1.5px solid var(--ink-200);
@@ -471,11 +479,12 @@ input::placeholder, textarea::placeholder { color: var(--ink-400); }
 /* ───────────────────────────── agenda ───────────────────────────── */
 
 .agenda-day { margin-bottom: 26px; }
+/* Só a primeira letra: `capitalize` viraria "Sexta-Feira, 07 De Agosto". */
 .agenda-date {
   font-size: 13px; font-weight: 650; color: var(--ink-500);
-  text-transform: capitalize;
   margin-bottom: 10px; padding-left: 4px;
 }
+.agenda-date::first-letter { text-transform: uppercase; }
 .agenda-row {
   display: flex; align-items: center; gap: 16px;
   padding: 15px 20px;
@@ -498,7 +507,7 @@ input::placeholder, textarea::placeholder { color: var(--ink-400); }
 
 /* ───────────────────────────── contas ───────────────────────────── */
 
-.account-card { flex-direction: row; align-items: center; gap: 14px; }
+.account-card { flex-direction: row; align-items: flex-start; gap: 14px; }
 .account-icon {
   display: grid; place-items: center;
   width: 44px; height: 44px; flex-shrink: 0;
@@ -506,10 +515,12 @@ input::placeholder, textarea::placeholder { color: var(--ink-400); }
   background: var(--brand-50);
   font-size: 20px;
 }
-.account-body { flex: 1; min-width: 0; line-height: 1.4; }
+/* O nome fica com a linha inteira; o badge vai abaixo, não ao lado — senão
+   nomes longos quebram em quatro linhas. */
+.account-body { flex: 1; min-width: 0; line-height: 1.45; }
 .account-body strong { display: block; font-size: 14.5px; }
-.account-body small { display: block; font-size: 12px; }
-.account-actions { display: flex; align-items: center; gap: 4px; }
+.account-body small { display: block; font-size: 12px; margin-bottom: 7px; }
+.account-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 
 /* ───────────────────────────── mídia ───────────────────────────── */
 

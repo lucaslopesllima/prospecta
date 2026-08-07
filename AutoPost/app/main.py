@@ -63,9 +63,25 @@ def health():
 
 # Front-end estático (HTML/CSS/JS próprios — não expõe uploads).
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
-app.mount("/app", StaticFiles(directory=STATIC_DIR), name="static")
+
+NO_CACHE = "no-cache"  # revalida sempre; o ETag ainda evita rebaixar o arquivo
+
+
+class RevalidatingStatic(StaticFiles):
+    """Sem isto o navegador segura CSS/JS antigos depois de uma edição."""
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = NO_CACHE
+        return response
+
+
+app.mount("/app", RevalidatingStatic(directory=STATIC_DIR), name="static")
 
 
 @app.get("/", include_in_schema=False)
 def index():
-    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+    return FileResponse(
+        os.path.join(STATIC_DIR, "index.html"),
+        headers={"Cache-Control": NO_CACHE},
+    )
