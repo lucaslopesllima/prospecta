@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AutoPost</title>
+<link rel="stylesheet" href="/app/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>📮</text></svg>">
+</head>
+<body>
+
+<!-- ───────────────────────────── login ───────────────────────────── -->
+<div id="login-screen" class="login-screen" hidden>
+  <form class="login-card" id="login-form">
+    <div class="login-brand">
+      <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="2" y="6" width="28" height="20" rx="6" fill="var(--brand)" opacity=".18"/>
+        <path d="M6 11.5 16 18l10-6.5" fill="none" stroke="var(--brand)" stroke-width="2.4"
+              stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="5" y="8.5" width="22" height="15" rx="4.5" fill="none"
+              stroke="var(--brand)" stroke-width="2.4"/>
+      </svg>
+      <div>
+        <h1>AutoPost</h1>
+        <p>Publicação e agendamento em redes sociais</p>
+      </div>
+    </div>
+    <label class="field">
+      <span>E-mail</span>
+      <input type="email" id="login-email" autocomplete="username" required>
+    </label>
+    <label class="field">
+      <span>Senha</span>
+      <input type="password" id="login-senha" autocomplete="current-password" required>
+    </label>
+    <p class="form-error" id="login-error" hidden></p>
+    <button class="btn btn-primary btn-block" type="submit">Entrar</button>
+    <p class="login-hint">Usuários são criados pelo CLI: <code>python manage.py create-user</code></p>
+  </form>
+</div>
+
+<!-- ───────────────────────────── app ───────────────────────────── -->
+<div id="app-shell" class="shell" hidden>
+
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="2" y="6" width="28" height="20" rx="6" fill="var(--brand)" opacity=".18"/>
+        <path d="M6 11.5 16 18l10-6.5" fill="none" stroke="var(--brand)" stroke-width="2.4"
+              stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="5" y="8.5" width="22" height="15" rx="4.5" fill="none"
+              stroke="var(--brand)" stroke-width="2.4"/>
+      </svg>
+      <span>AutoPost</span>
+    </div>
+
+    <nav class="nav">
+      <button class="nav-item is-active" data-view="posts">
+        <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+        Posts
+      </button>
+      <button class="nav-item" data-view="agenda">
+        <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+        Agenda
+      </button>
+      <button class="nav-item" data-view="contas">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg>
+        Contas
+      </button>
+      <button class="nav-item" data-view="midia">
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="m4 18 5-4 4 3 3-2 4 3"/></svg>
+        Mídia
+      </button>
+      <button class="nav-item" data-view="templates">
+        <svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+        Templates
+      </button>
+      <button class="nav-item" data-view="ia">
+        <svg viewBox="0 0 24 24"><path d="m12 3 2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/><path d="M18.5 15.5 19 17l1.5.5L19 18l-.5 1.5L18 18l-1.5-.5L18 17z"/></svg>
+        IA
+      </button>
+    </nav>
+
+    <div class="sidebar-foot">
+      <button class="theme-toggle" id="theme-toggle" title="Alternar tema">
+        <svg viewBox="0 0 24 24" class="i-sun"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></svg>
+        <svg viewBox="0 0 24 24" class="i-moon"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5"/></svg>
+      </button>
+      <div class="user-chip">
+        <span class="avatar" id="user-initial">–</span>
+        <div class="user-meta">
+          <strong id="user-name">–</strong>
+          <small id="user-email">–</small>
+        </div>
+        <button class="icon-btn" id="logout" title="Sair">
+          <svg viewBox="0 0 24 24"><path d="M15 17l5-5-5-5M20 12H9M12 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6"/></svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <h2 id="view-title">Posts</h2>
+        <p id="view-sub" class="muted">Rascunhos, agendados e publicados</p>
+      </div>
+      <div class="topbar-actions" id="topbar-actions"></div>
+    </header>
+
+    <div class="content" id="content"></div>
+  </main>
+</div>
+
+<!-- ───────────────────────────── modal ───────────────────────────── -->
+<div class="modal-backdrop" id="modal" hidden>
+  <div class="modal" role="dialog" aria-modal="true">
+    <header class="modal-head">
+      <h3 id="modal-title">–</h3>
+      <button class="icon-btn" id="modal-close" title="Fechar">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </header>
+    <div class="modal-body" id="modal-body"></div>
+    <footer class="modal-foot" id="modal-foot"></footer>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script src="/app/app.js" type="module"></script>
+</body>
+</html>

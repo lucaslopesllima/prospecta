@@ -1,0 +1,710 @@
+// AutoPost — SPA sem build step. Vanilla ES modules.
+
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => (
+  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+));
+
+// ─────────────────────────────────────────────────────────── api
+
+async function api(path, { method = 'GET', body, form } = {}) {
+  const opts = { method, headers: {} };
+  if (form) {
+    opts.body = form;
+  } else if (body !== undefined) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  const res = await fetch(path, opts);
+  if (res.status === 204) return null;
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    const detail = data?.detail;
+    throw new Error(
+      typeof detail === 'string' ? detail
+        : Array.isArray(detail) ? detail.map((d) => d.msg).join('; ')
+          : `Erro ${res.status}`,
+    );
+  }
+  return data;
+}
+
+// ─────────────────────────────────────────────────────────── ui utils
+
+function toast(msg, kind = 'ok') {
+  const el = document.createElement('div');
+  el.className = `toast toast-${kind}`;
+  el.textContent = msg;
+  $('#toasts').append(el);
+  setTimeout(() => el.classList.add('is-out'), 3200);
+  setTimeout(() => el.remove(), 3600);
+}
+
+function openModal(title, bodyHTML, footHTML) {
+  $('#modal-title').textContent = title;
+  $('#modal-body').innerHTML = bodyHTML;
+  $('#modal-foot').innerHTML = footHTML ?? '';
+  $('#modal').hidden = false;
+}
+const closeModal = () => { $('#modal').hidden = true; };
+
+function confirmDialog(title, message, onConfirm, { danger = true } = {}) {
+  openModal(title, `<p class="dialog-text">${esc(message)}</p>`,
+    `<button class="btn btn-ghost" data-act="cancel">Cancelar</button>
+     <button class="btn ${danger ? 'btn-danger' : 'btn-primary'}" data-act="ok">Confirmar</button>`);
+  $('[data-act="cancel"]', $('#modal-foot')).onclick = closeModal;
+  $('[data-act="ok"]', $('#modal-foot')).onclick = async () => {
+    closeModal();
+    await onConfirm();
+  };
+}
+
+const fmtDate = (iso) => (iso
+  ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+  : '—');
+
+const STATUS_LABEL = {
+  draft: 'Rascunho', scheduled: 'Agendado', publishing: 'Publicando',
+  published: 'Publicado', failed: 'Falhou', missed: 'Perdido', canceled: 'Cancelado',
+};
+
+const badge = (status) =>
+  `<span class="badge badge-${status}">${STATUS_LABEL[status] ?? status}</span>`;
+
+const accountBadge = (status) => {
+  const map = { connected: 'Conectada', expired: 'Token expirado', revoked: 'Revogada', error: 'Erro' };
+  return `<span class="badge badge-acc-${status}">${map[status] ?? status}</span>`;
+};
+
+function empty(icon, title, hint) {
+  return `<div class="empty">
+    <div class="empty-icon">${icon}</div>
+    <h3>${esc(title)}</h3>
+    <p>${esc(hint)}</p>
+  </div>`;
+}
+
+// Converte um <input type="datetime-local"> para o formato aceito pela API.
+const localInputToISO = (v) => (v ? `${v}:00`.slice(0, 19) : '');
+// E o inverso, para preencher o campo ao reagendar.
+function isoToLocalInput(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+    + `T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// ─────────────────────────────────────────────────────────── estado
+
+const state = { user: null, view: 'posts', posts: [], accounts: [], media: [], templates: [] };
+
+// ─────────────────────────────────────────────────────────── views
+
+const VIEWS = {
+  posts: {
+    title: 'Posts',
+    sub: 'Rascunhos, agendados e publicados',
+    actions: '<button class="btn btn-primary" data-act="novo-post">'
+      + '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Novo post</button>',
+    render: renderPosts,
+  },
+  agenda: {
+    title: 'Agenda',
+    sub: 'O que está na fila para sair',
+    actions: '',
+    render: renderAgenda,
+  },
+  contas: {
+    title: 'Contas sociais',
+    sub: 'Páginas do Facebook e contas do Instagram Business',
+    actions: '<button class="btn btn-primary" data-act="conectar-meta">'
+      + '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Conectar Meta</button>',
+    render: renderContas,
+  },
+  midia: {
+    title: 'Mídia',
+    sub: 'Imagens e vídeos disponíveis para os posts',
+    actions: '<label class="btn btn-primary">'
+      + '<svg viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>Enviar arquivo'
+      + '<input type="file" id="upload-input" hidden accept="image/*,video/mp4"></label>',
+    render: renderMidia,
+  },
+  templates: {
+    title: 'Templates',
+    sub: 'Prompts reutilizáveis para a geração com IA',
+    actions: '<button class="btn btn-primary" data-act="novo-template">'
+      + '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Novo template</button>',
+    render: renderTemplates,
+  },
+  ia: {
+    title: 'Inteligência artificial',
+    sub: 'Provedor, modelo e chave usados para gerar textos',
+    actions: '',
+    render: renderIA,
+  },
+};
+
+async function navigate(view) {
+  state.view = view;
+  $$('.nav-item').forEach((b) => b.classList.toggle('is-active', b.dataset.view === view));
+  const cfg = VIEWS[view];
+  $('#view-title').textContent = cfg.title;
+  $('#view-sub').textContent = cfg.sub;
+  $('#topbar-actions').innerHTML = cfg.actions;
+  $('#content').innerHTML = '<div class="skeleton"></div>'.repeat(3);
+  try {
+    await cfg.render();
+  } catch (e) {
+    $('#content').innerHTML = `<div class="callout callout-danger">${esc(e.message)}</div>`;
+  }
+}
+
+// ── posts ──────────────────────────────────────────────────
+
+async function renderPosts() {
+  const [posts, accounts] = await Promise.all([api('/posts'), api('/accounts')]);
+  state.posts = posts;
+  state.accounts = accounts;
+
+  if (!posts.length) {
+    $('#content').innerHTML = empty('📝', 'Nenhum post ainda',
+      'Crie um rascunho, gere o texto com IA e agende para as suas contas.');
+    return;
+  }
+
+  $('#content').innerHTML = `<div class="cards">${posts.map(postCard).join('')}</div>`;
+}
+
+function postCard(p) {
+  const editavel = ['draft', 'scheduled', 'failed', 'missed', 'canceled'].includes(p.status);
+  return `<article class="card post-card" data-id="${p.id}">
+    <header class="card-head">
+      ${badge(p.status)}
+      <span class="card-when">${p.status === 'published'
+        ? `publicado ${fmtDate(p.published_at)}`
+        : p.scheduled_at ? `agendado ${fmtDate(p.scheduled_at)}` : 'sem agendamento'}</span>
+    </header>
+    <p class="post-text">${esc(p.texto)}</p>
+    ${p.last_error ? `<p class="card-error" title="${esc(p.last_error)}">${esc(p.last_error)}</p>` : ''}
+    <footer class="card-foot">
+      ${p.media_id ? '<span class="chip">🖼 com mídia</span>' : ''}
+      ${p.attempts ? `<span class="chip">${p.attempts} tentativa(s)</span>` : ''}
+      <span class="spacer"></span>
+      <button class="btn btn-ghost btn-sm" data-act="detalhe" data-id="${p.id}">Detalhes</button>
+      ${editavel ? `<button class="btn btn-ghost btn-sm" data-act="editar" data-id="${p.id}">Editar</button>
+        <button class="btn btn-soft btn-sm" data-act="agendar" data-id="${p.id}">Agendar</button>` : ''}
+      ${p.status === 'scheduled' ? `<button class="btn btn-ghost btn-sm" data-act="cancelar" data-id="${p.id}">Cancelar</button>` : ''}
+      ${['draft', 'canceled', 'failed', 'missed'].includes(p.status)
+        ? `<button class="icon-btn danger" data-act="excluir" data-id="${p.id}" title="Excluir">
+             <svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/></svg></button>` : ''}
+    </footer>
+  </article>`;
+}
+
+function postForm(p = null) {
+  const opts = state.media.map((m) =>
+    `<option value="${m.id}" ${p?.media_id === m.id ? 'selected' : ''}>#${m.id} · ${m.mime}</option>`).join('');
+  return `<label class="field">
+      <span>Texto do post</span>
+      <textarea id="post-texto" rows="7" placeholder="Escreva ou gere com IA…">${esc(p?.texto ?? '')}</textarea>
+    </label>
+    <div class="row">
+      <label class="field grow">
+        <span>Mídia (opcional)</span>
+        <select id="post-media"><option value="">Sem mídia</option>${opts}</select>
+      </label>
+      <button class="btn btn-soft" type="button" data-act="gerar-ia">
+        <svg viewBox="0 0 24 24"><path d="m12 3 2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/></svg>Gerar com IA
+      </button>
+    </div>
+    <p class="form-error" id="post-error" hidden></p>`;
+}
+
+async function openPostForm(post) {
+  state.media = await api('/media').catch(() => []);
+  openModal(post ? `Editar post #${post.id}` : 'Novo post', postForm(post),
+    `<button class="btn btn-ghost" data-act="cancel">Cancelar</button>
+     <button class="btn btn-primary" data-act="save">${post ? 'Salvar' : 'Criar'}</button>`);
+
+  $('[data-act="cancel"]', $('#modal-foot')).onclick = closeModal;
+  $('[data-act="gerar-ia"]', $('#modal-body')).onclick = gerarComIA;
+  $('[data-act="save"]', $('#modal-foot')).onclick = async () => {
+    const texto = $('#post-texto').value.trim();
+    if (!texto) return showFormError('#post-error', 'O texto não pode ficar vazio.');
+    const mediaVal = $('#post-media').value;
+    const body = { texto, media_id: mediaVal ? Number(mediaVal) : null };
+    try {
+      if (post) await api(`/posts/${post.id}`, { method: 'PUT', body });
+      else await api('/posts', { method: 'POST', body });
+      closeModal();
+      toast(post ? 'Post atualizado.' : 'Post criado.');
+      navigate(state.view);
+    } catch (e) { showFormError('#post-error', e.message); }
+  };
+}
+
+function showFormError(sel, msg) {
+  const el = $(sel);
+  el.textContent = msg;
+  el.hidden = false;
+}
+
+async function gerarComIA() {
+  const templates = await api('/templates').catch(() => []);
+  const opts = templates.filter((t) => t.ativo)
+    .map((t) => `<option value="${t.id}">${esc(t.nome)}</option>`).join('');
+  const textarea = $('#post-texto');
+
+  openModal('Gerar texto com IA',
+    `<label class="field">
+       <span>Template (opcional)</span>
+       <select id="ia-template"><option value="">Nenhum</option>${opts}</select>
+     </label>
+     <label class="field">
+       <span>Instrução</span>
+       <textarea id="ia-prompt" rows="4" placeholder="Ex.: post curto anunciando promoção de inverno"></textarea>
+     </label>
+     <p class="form-error" id="ia-error" hidden></p>`,
+    `<button class="btn btn-ghost" data-act="cancel">Voltar</button>
+     <button class="btn btn-primary" data-act="gerar">Gerar</button>`);
+
+  const voltar = async () => { closeModal(); await openPostFormKeeping(textarea.value); };
+  $('[data-act="cancel"]', $('#modal-foot')).onclick = voltar;
+  $('[data-act="gerar"]', $('#modal-foot')).onclick = async (ev) => {
+    const btn = ev.currentTarget;
+    btn.disabled = true;
+    btn.textContent = 'Gerando…';
+    try {
+      const tplVal = $('#ia-template').value;
+      const r = await api('/ai/generate', {
+        method: 'POST',
+        body: {
+          prompt: $('#ia-prompt').value.trim() || null,
+          template_id: tplVal ? Number(tplVal) : null,
+        },
+      });
+      closeModal();
+      await openPostFormKeeping(r.texto);
+      toast('Texto gerado.');
+    } catch (e) {
+      showFormError('#ia-error', e.message);
+      btn.disabled = false;
+      btn.textContent = 'Gerar';
+    }
+  };
+}
+
+// Reabre o formulário de post preservando o texto (o post ainda não existe no banco).
+async function openPostFormKeeping(texto) {
+  await openPostForm(null);
+  $('#post-texto').value = texto;
+}
+
+async function openAgendar(postId) {
+  const [post, accounts] = await Promise.all([api(`/posts/${postId}`), api('/accounts')]);
+  const conectadas = accounts.filter((a) => a.status === 'connected');
+
+  if (!conectadas.length) {
+    openModal('Agendar post',
+      '<div class="callout callout-warn">Nenhuma conta conectada. Conecte uma conta em <strong>Contas</strong> antes de agendar.</div>',
+      '<button class="btn btn-ghost" data-act="cancel">Fechar</button>');
+    $('[data-act="cancel"]', $('#modal-foot')).onclick = closeModal;
+    return;
+  }
+
+  const jaSelecionadas = new Set((post.targets ?? []).map((t) => t.social_account_id));
+  const lista = conectadas.map((a) => `<label class="check">
+      <input type="checkbox" value="${a.id}" ${jaSelecionadas.has(a.id) ? 'checked' : ''}>
+      <span class="check-box"></span>
+      <span class="check-label"><strong>${esc(a.name)}</strong><small>${a.provider}</small></span>
+    </label>`).join('');
+
+  openModal(`Agendar post #${postId}`,
+    `<label class="field">
+       <span>Data e hora (seu fuso)</span>
+       <input type="datetime-local" id="ag-quando" value="${isoToLocalInput(post.scheduled_at)}">
+     </label>
+     <div class="field">
+       <span>Publicar em</span>
+       <div class="checks">${lista}</div>
+     </div>
+     <p class="form-error" id="ag-error" hidden></p>`,
+    `<button class="btn btn-ghost" data-act="cancel">Cancelar</button>
+     <button class="btn btn-primary" data-act="ok">Agendar</button>`);
+
+  $('[data-act="cancel"]', $('#modal-foot')).onclick = closeModal;
+  $('[data-act="ok"]', $('#modal-foot')).onclick = async () => {
+    const quando = $('#ag-quando').value;
+    const ids = $$('.checks input:checked').map((i) => Number(i.value));
+    if (!quando) return showFormError('#ag-error', 'Escolha a data e a hora.');
+    if (!ids.length) return showFormError('#ag-error', 'Escolha ao menos uma conta.');
+    try {
+      await api(`/posts/${postId}/schedule`, {
+        method: 'POST',
+        body: { scheduled_at: localInputToISO(quando), account_ids: ids },
+      });
+      closeModal();
+      toast('Post agendado.');
+      navigate(state.view);
+    } catch (e) { showFormError('#ag-error', e.message); }
+  };
+}
+
+async function openDetalhe(postId) {
+  const [post, accounts, history] = await Promise.all([
+    api(`/posts/${postId}`), api('/accounts'), api(`/posts/${postId}/history`),
+  ]);
+  const nome = (id) => accounts.find((a) => a.id === id)?.name ?? `conta #${id}`;
+
+  const alvos = (post.targets ?? []).length
+    ? `<table class="table">
+        <thead><tr><th>Conta</th><th>Status</th><th>ID externo</th></tr></thead>
+        <tbody>${post.targets.map((t) => `<tr>
+          <td>${esc(nome(t.social_account_id))}</td>
+          <td>${badge(t.status === 'pending' ? 'draft' : t.status === 'published' ? 'published' : 'failed')}</td>
+          <td class="mono">${esc(t.external_post_id ?? '—')}</td>
+        </tr>`).join('')}</tbody></table>`
+    : '<p class="muted">Nenhum destino definido.</p>';
+
+  const hist = history.length
+    ? `<table class="table">
+        <thead><tr><th>Quando</th><th>Conta</th><th>Tent.</th><th>Status</th><th>Erro</th></tr></thead>
+        <tbody>${history.map((h) => `<tr>
+          <td class="mono">${esc(h.timestamp)}</td>
+          <td>${esc(nome(h.social_account_id))}</td>
+          <td>${h.tentativa}</td>
+          <td>${h.status === 'published' ? '✅' : '⚠️'} ${esc(h.status)}</td>
+          <td class="cell-err">${esc(h.erro ?? '—')}</td>
+        </tr>`).join('')}</tbody></table>`
+    : '<p class="muted">Sem tentativas registradas.</p>';
+
+  openModal(`Post #${post.id}`,
+    `<div class="detail-meta">
+       ${badge(post.status)}
+       <span class="muted">agendado ${fmtDate(post.scheduled_at)}</span>
+       <span class="muted">publicado ${fmtDate(post.published_at)}</span>
+     </div>
+     <blockquote class="detail-text">${esc(post.texto)}</blockquote>
+     ${post.media_id ? `<img class="detail-media" src="/media/${post.media_id}" alt="mídia do post">` : ''}
+     ${post.last_error ? `<div class="callout callout-danger">${esc(post.last_error)}</div>` : ''}
+     <h4>Destinos</h4>${alvos}
+     <h4>Histórico de publicação</h4>${hist}`,
+    '<button class="btn btn-ghost" data-act="cancel">Fechar</button>');
+  $('[data-act="cancel"]', $('#modal-foot')).onclick = closeModal;
+}
+
+// ── agenda ─────────────────────────────────────────────────
+
+async function renderAgenda() {
+  const [posts, accounts] = await Promise.all([api('/posts'), api('/accounts')]);
+  state.accounts = accounts;
+  const fila = posts
+    .filter((p) => ['scheduled', 'publishing'].includes(p.status))
+    .sort((a, b) => (a.scheduled_at ?? '').localeCompare(b.scheduled_at ?? ''));
+
+  if (!fila.length) {
+    $('#content').innerHTML = empty('🗓', 'Nada na fila',
+      'Agende um post na aba Posts para vê-lo aqui.');
+    return;
+  }
+
+  const grupos = new Map();
+  for (const p of fila) {
+    const dia = new Date(p.scheduled_at).toLocaleDateString('pt-BR',
+      { weekday: 'long', day: '2-digit', month: 'long' });
+    if (!grupos.has(dia)) grupos.set(dia, []);
+    grupos.get(dia).push(p);
+  }
+
+  $('#content').innerHTML = [...grupos].map(([dia, items]) => `
+    <section class="agenda-day">
+      <h3 class="agenda-date">${esc(dia)}</h3>
+      ${items.map((p) => `<div class="agenda-row" data-id="${p.id}">
+        <span class="agenda-time">${new Date(p.scheduled_at)
+          .toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+        <span class="agenda-text">${esc(p.texto)}</span>
+        ${badge(p.status)}
+        <button class="btn btn-ghost btn-sm" data-act="detalhe" data-id="${p.id}">Detalhes</button>
+      </div>`).join('')}
+    </section>`).join('');
+}
+
+// ── contas ─────────────────────────────────────────────────
+
+async function renderContas() {
+  const accounts = await api('/accounts');
+  state.accounts = accounts;
+
+  if (!accounts.length) {
+    $('#content').innerHTML = empty('🔗', 'Nenhuma conta conectada',
+      'Conecte sua conta Meta para publicar em páginas do Facebook e no Instagram Business.');
+    return;
+  }
+
+  $('#content').innerHTML = `<div class="cards">${accounts.map((a) => `
+    <article class="card account-card">
+      <div class="account-icon account-${a.provider}">${a.provider === 'instagram' ? '📸' : '👍'}</div>
+      <div class="account-body">
+        <strong>${esc(a.name)}</strong>
+        <small class="muted">${a.provider} · ${esc(a.external_id)}</small>
+        ${a.last_checked_at ? `<small class="muted">verificada em ${esc(a.last_checked_at)}</small>` : ''}
+      </div>
+      ${accountBadge(a.status)}
+      <div class="account-actions">
+        <button class="btn btn-ghost btn-sm" data-act="validar-conta" data-id="${a.id}">Validar</button>
+        <button class="icon-btn danger" data-act="excluir-conta" data-id="${a.id}" title="Remover">
+          <svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/></svg>
+        </button>
+      </div>
+    </article>`).join('')}</div>`;
+}
+
+// ── mídia ──────────────────────────────────────────────────
+
+async function renderMidia() {
+  const media = await api('/media');
+  state.media = media;
+
+  if (!media.length) {
+    $('#content').innerHTML = empty('🖼', 'Nenhum arquivo',
+      'Envie imagens (jpg, png, gif, webp) ou vídeos mp4 para anexar aos posts.');
+    return;
+  }
+
+  $('#content').innerHTML = `<div class="media-grid">${media.map((m) => `
+    <figure class="media-item">
+      ${m.mime.startsWith('image/')
+        ? `<img src="/media/${m.id}" alt="mídia ${m.id}" loading="lazy">`
+        : '<div class="media-video">🎬</div>'}
+      <figcaption>
+        <span>#${m.id}</span>
+        <small>${(m.size_bytes / 1024).toFixed(0)} KB</small>
+      </figcaption>
+    </figure>`).join('')}</div>`;
+}
+
+// ── templates ──────────────────────────────────────────────
+
+async function renderTemplates() {
+  const templates = await api('/templates');
+  state.templates = templates;
+
+  if (!templates.length) {
+    $('#content').innerHTML = empty('📋', 'Nenhum template',
+      'Salve prompts que você repete — eles ficam disponíveis na geração com IA.');
+    return;
+  }
+
+  $('#content').innerHTML = `<div class="cards">${templates.map((t) => `
+    <article class="card">
+      <header class="card-head">
+        <strong>${esc(t.nome)}</strong>
+        <span class="badge ${t.ativo ? 'badge-published' : 'badge-canceled'}">${t.ativo ? 'Ativo' : 'Inativo'}</span>
+      </header>
+      <p class="post-text">${esc(t.conteudo)}</p>
+      <footer class="card-foot">
+        <span class="spacer"></span>
+        <button class="btn btn-ghost btn-sm" data-act="editar-template" data-id="${t.id}">Editar</button>
+        <button class="icon-btn danger" data-act="excluir-template" data-id="${t.id}" title="Excluir">
+          <svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/></svg>
+        </button>
+      </footer>
+    </article>`).join('')}</div>`;
+}
+
+function openTemplateForm(tpl = null) {
+  openModal(tpl ? `Editar ${tpl.nome}` : 'Novo template',
+    `<label class="field"><span>Nome</span>
+       <input id="tpl-nome" value="${esc(tpl?.nome ?? '')}" placeholder="Ex.: Promoção semanal"></label>
+     <label class="field"><span>Conteúdo do prompt</span>
+       <textarea id="tpl-conteudo" rows="6">${esc(tpl?.conteudo ?? '')}</textarea></label>
+     ${tpl ? `<label class="check"><input type="checkbox" id="tpl-ativo" ${tpl.ativo ? 'checked' : ''}>
+       <span class="check-box"></span><span class="check-label">Ativo</span></label>` : ''}
+     <p class="form-error" id="tpl-error" hidden></p>`,
+    `<button class="btn btn-ghost" data-act="cancel">Cancelar</button>
+     <button class="btn btn-primary" data-act="save">Salvar</button>`);
+
+  $('[data-act="cancel"]', $('#modal-foot')).onclick = closeModal;
+  $('[data-act="save"]', $('#modal-foot')).onclick = async () => {
+    const nome = $('#tpl-nome').value.trim();
+    const conteudo = $('#tpl-conteudo').value.trim();
+    if (!nome || !conteudo) return showFormError('#tpl-error', 'Preencha nome e conteúdo.');
+    const body = { nome, conteudo, ativo: tpl ? $('#tpl-ativo').checked : true };
+    try {
+      if (tpl) await api(`/templates/${tpl.id}`, { method: 'PUT', body });
+      else await api('/templates', { method: 'POST', body });
+      closeModal();
+      toast('Template salvo.');
+      navigate('templates');
+    } catch (e) { showFormError('#tpl-error', e.message); }
+  };
+}
+
+// ── IA ─────────────────────────────────────────────────────
+
+async function renderIA() {
+  let cfg = null;
+  try { cfg = await api('/ai/settings'); } catch { /* ainda não configurado */ }
+
+  $('#content').innerHTML = `<div class="panel">
+    <div class="panel-head">
+      <h3>Configuração do provedor</h3>
+      <p class="muted">A chave é criptografada em repouso e nunca é devolvida pela API — só a máscara.</p>
+    </div>
+    <div class="row">
+      <label class="field grow"><span>Provedor</span>
+        <select id="ia-provider">
+          <option value="anthropic" ${cfg?.provider === 'anthropic' ? 'selected' : ''}>Anthropic</option>
+          <option value="openai" ${cfg?.provider === 'openai' ? 'selected' : ''}>OpenAI</option>
+        </select></label>
+      <label class="field grow"><span>Modelo</span>
+        <input id="ia-model" value="${esc(cfg?.model ?? 'claude-opus-5')}"></label>
+    </div>
+    <label class="field"><span>API key ${cfg ? `<em class="muted">(atual: ${esc(cfg.api_key)})</em>` : ''}</span>
+      <input id="ia-key" type="password" placeholder="${cfg ? 'deixe vazio para manter a atual' : 'cole a chave aqui'}"></label>
+    <label class="field"><span>Prompt padrão (opcional)</span>
+      <textarea id="ia-default" rows="3" placeholder="Instruções fixas aplicadas a toda geração">${esc(cfg?.default_prompt ?? '')}</textarea></label>
+    <label class="field"><span>Temperature (opcional)</span>
+      <input id="ia-temp" type="number" step="0.1" min="0" max="2" value="${cfg?.temperature ?? ''}"
+             placeholder="deixe vazio — modelos Claude recentes rejeitam este parâmetro"></label>
+    <p class="form-error" id="ia-cfg-error" hidden></p>
+    <div class="panel-foot">
+      <button class="btn btn-primary" data-act="salvar-ia">Salvar configuração</button>
+    </div>
+  </div>`;
+}
+
+// ─────────────────────────────────────────────────────────── eventos
+
+document.addEventListener('click', async (ev) => {
+  const nav = ev.target.closest('.nav-item');
+  if (nav) return navigate(nav.dataset.view);
+
+  const btn = ev.target.closest('[data-act]');
+  if (!btn) return;
+  const id = Number(btn.dataset.id);
+
+  switch (btn.dataset.act) {
+    case 'novo-post': return openPostForm(null);
+    case 'editar': return openPostForm(state.posts.find((p) => p.id === id));
+    case 'agendar': return openAgendar(id);
+    case 'detalhe': return openDetalhe(id);
+    case 'cancelar':
+      return confirmDialog('Cancelar agendamento',
+        'O post volta para a lista sem sair nas redes. Confirmar?',
+        async () => { await api(`/posts/${id}/cancel`, { method: 'POST' }); toast('Agendamento cancelado.'); navigate(state.view); });
+    case 'excluir':
+      return confirmDialog('Excluir post', 'Esta ação não pode ser desfeita.',
+        async () => { await api(`/posts/${id}`, { method: 'DELETE' }); toast('Post excluído.'); navigate(state.view); });
+    case 'conectar-meta':
+      window.location.href = '/accounts/meta/connect';
+      return;
+    case 'validar-conta':
+      try {
+        const r = await api(`/accounts/${id}/validate`, { method: 'POST' });
+        toast(r.status === 'connected' ? 'Token válido.' : `Conta com status: ${r.status}`,
+          r.status === 'connected' ? 'ok' : 'warn');
+        navigate('contas');
+      } catch (e) { toast(e.message, 'danger'); }
+      return;
+    case 'excluir-conta':
+      return confirmDialog('Remover conta',
+        'A conta deixa de estar disponível para novos agendamentos.',
+        async () => {
+          try {
+            await api(`/accounts/${id}`, { method: 'DELETE' });
+            toast('Conta removida.');
+            navigate('contas');
+          } catch (e) { toast(e.message, 'danger'); }
+        });
+    case 'novo-template': return openTemplateForm(null);
+    case 'editar-template': return openTemplateForm(state.templates.find((t) => t.id === id));
+    case 'excluir-template':
+      return confirmDialog('Excluir template', 'Esta ação não pode ser desfeita.',
+        async () => { await api(`/templates/${id}`, { method: 'DELETE' }); toast('Template excluído.'); navigate('templates'); });
+    case 'salvar-ia': {
+      const temp = $('#ia-temp').value;
+      const body = {
+        provider: $('#ia-provider').value,
+        model: $('#ia-model').value.trim(),
+        api_key: $('#ia-key').value.trim() || null,
+        default_prompt: $('#ia-default').value.trim() || null,
+        temperature: temp === '' ? null : Number(temp),
+      };
+      try {
+        await api('/ai/settings', { method: 'PUT', body });
+        toast('Configuração salva.');
+        navigate('ia');
+      } catch (e) { showFormError('#ia-cfg-error', e.message); }
+      return;
+    }
+    default:
+  }
+});
+
+document.addEventListener('change', async (ev) => {
+  if (ev.target.id !== 'upload-input') return;
+  const file = ev.target.files[0];
+  if (!file) return;
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    await api('/uploads', { method: 'POST', form });
+    toast('Arquivo enviado.');
+    navigate('midia');
+  } catch (e) { toast(e.message, 'danger'); }
+});
+
+$('#modal-close').onclick = closeModal;
+$('#modal').addEventListener('click', (ev) => { if (ev.target.id === 'modal') closeModal(); });
+document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') closeModal(); });
+
+// ─────────────────────────────────────────────────────────── tema
+
+const applyTheme = (t) => {
+  document.documentElement.dataset.theme = t;
+  localStorage.setItem('autopost-theme', t);
+};
+$('#theme-toggle').onclick = () =>
+  applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+applyTheme(localStorage.getItem('autopost-theme')
+  || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+
+// ─────────────────────────────────────────────────────────── sessão
+
+$('#login-form').onsubmit = async (ev) => {
+  ev.preventDefault();
+  try {
+    const user = await api('/auth/login', {
+      method: 'POST',
+      body: { email: $('#login-email').value, senha: $('#login-senha').value },
+    });
+    enterApp(user);
+  } catch (e) { showFormError('#login-error', e.message); }
+};
+
+$('#logout').onclick = async () => {
+  await api('/auth/logout', { method: 'POST' });
+  state.user = null;
+  $('#app-shell').hidden = true;
+  $('#login-screen').hidden = false;
+};
+
+function enterApp(user) {
+  state.user = user;
+  $('#login-screen').hidden = true;
+  $('#app-shell').hidden = false;
+  $('#user-name').textContent = user.nome;
+  $('#user-email').textContent = user.email;
+  $('#user-initial').textContent = user.nome.trim()[0]?.toUpperCase() ?? '?';
+  navigate('posts');
+}
+
+try {
+  enterApp(await api('/auth/me'));
+} catch {
+  $('#login-screen').hidden = false;
+}
