@@ -106,6 +106,31 @@ describe('buildRecommendQuery', () => {
     expect(text).toContain('razao_social ILIKE');
   });
 
+  it('score é dividido pela soma dos pesos (teto 1 mesmo com sliders no chão)', () => {
+    // cinco pesos em 0.10 -> soma 0.5: sem normalizar, a melhor empresa possível
+    // tirava 0.5 ("50 de 100"). O divisor entra no score e nos componentes.
+    const { text } = buildRecommendQuery({
+      ...base,
+      profile: { ...base.profile, pesos: { cnae: 0.1, proximidade: 0.1, porte: 0.1, capital: 0.1, idade: 0.1 } },
+    });
+    const div = (0.5).toExponential();
+    expect(text).toContain(`raw.idade_comp) / ${div}::float8) AS score`);
+    expect(text).toContain(`round((cand.prox / ${div}::float8)::numeric, 3)`);
+  });
+
+  it('pesos default somam 1 — normalização inócua', () => {
+    const { text } = buildRecommendQuery(base);
+    expect(text).toContain(`/ ${(1).toExponential()}::float8) AS score`);
+  });
+
+  it('todos os pesos zerados não geram divisão por zero', () => {
+    const { text } = buildRecommendQuery({
+      ...base,
+      profile: { ...base.profile, pesos: { cnae: 0, proximidade: 0, porte: 0, capital: 0, idade: 0 } },
+    });
+    expect(text).toContain(`/ ${(1).toExponential()}::float8) AS score`);
+  });
+
   it('cnaes_alvo ausente vira array vazio', () => {
     const { params } = buildRecommendQuery({
       ...base,

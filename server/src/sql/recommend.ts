@@ -172,6 +172,22 @@ export function buildRecommendQuery(args: RecommendArgs): { text: string; params
   const wPorte = profile.pesos?.porte ?? 0.15;
   const wCapital = profile.pesos?.capital ?? 0.1;
   const wIdade = profile.pesos?.idade ?? 0.1;
+  // wProx não entra no SQL como parâmetro (já vem multiplicado dentro do pc de
+  // cada município, ver muniProximity) — aqui ele só compõe o divisor. Default
+  // 0.25 = o mesmo de parsePesos.
+  const wProx = profile.pesos?.proximidade ?? 0.25;
+
+  // NORMALIZAÇÃO DO SCORE. O score é a soma dos cinco componentes já ponderados,
+  // então o teto dele é a SOMA DOS PESOS, não 1. Com os pesos default a soma dá
+  // exatamente 1,0 e dividir é inócuo; mas quem mexe nos sliders encolhe o teto
+  // junto (cinco pesos em 0,10 -> teto 0,50) e a tela passava a mostrar "27 de
+  // 100" para a melhor empresa da lista, como se as empresas tivessem piorado.
+  // Dividir pela soma devolve a escala 0..1 sem mexer no ranking — divisor
+  // constante e positivo não altera a ordem. Todos os pesos em zero: score é 0
+  // de qualquer jeito, divide por 1 só p/ não dar divisão por zero.
+  // round: a soma dos default em float dá 1.0000000000000002 e sujaria o SQL.
+  const wSoma = Math.round((wCnae + wProx + wPorte + wCapital + wIdade) * 1e6) / 1e6;
+  const norm = `${(wSoma > 0 ? wSoma : 1).toExponential()}::float8`;
 
   // $1 municipios, $2 orgId, $3 wCnae, $4 wPorte, $5 cnaes, $6 divisoesAlvo,
   // $7 secoesAlvo, $8 pruneDivisoes, $9 regioesUf, $10 regioesRegiao,
@@ -213,7 +229,7 @@ export function buildRecommendQuery(args: RecommendArgs): { text: string; params
 WITH cand AS (
   -- score num nível externo p/ o ORDER BY referenciar prox/fit/porte_comp por nome
   -- (aliases não são visíveis dentro de expressões do mesmo SELECT).
-  SELECT raw.*, (raw.prox + $3 * raw.fit + raw.porte_comp + raw.capital_comp + raw.idade_comp) AS score
+  SELECT raw.*, ((raw.prox + $3 * raw.fit + raw.porte_comp + raw.capital_comp + raw.idade_comp) / ${norm}) AS score
   FROM (
     SELECT
       c.id, c.municipio_id, c.cnae_principal,
@@ -245,12 +261,14 @@ SELECT
     'capital_social', c2.capital_social,
     'idade_anos', CASE WHEN c2.data_inicio_atividade IS NOT NULL
                        THEN round(((CURRENT_DATE - c2.data_inicio_atividade)::numeric / 365.25), 1) END,
+    -- componentes na MESMA escala do score (divididos pela soma dos pesos), p/ as
+    -- cinco barrinhas do card somarem exatamente o score exibido.
     'componentes', jsonb_build_object(
-      'cnae', round(($3 * cand.fit)::numeric, 3),
-      'proximidade', round(cand.prox::numeric, 3),
-      'porte', round(cand.porte_comp::numeric, 3),
-      'capital', round(cand.capital_comp::numeric, 3),
-      'idade', round(cand.idade_comp::numeric, 3)
+      'cnae', round((($3 * cand.fit) / ${norm})::numeric, 3),
+      'proximidade', round((cand.prox / ${norm})::numeric, 3),
+      'porte', round((cand.porte_comp / ${norm})::numeric, 3),
+      'capital', round((cand.capital_comp / ${norm})::numeric, 3),
+      'idade', round((cand.idade_comp / ${norm})::numeric, 3)
     )
   ) AS reason
 FROM cand
