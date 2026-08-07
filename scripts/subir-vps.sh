@@ -79,6 +79,7 @@ rsync -az --delete -e "ssh -p $SSH_PORT" \
   --exclude dados_cnpj --exclude dados_cnefe --exclude MazyOS \
   --exclude __pycache__ --exclude '*.log' --exclude cloudflared.deb \
   --exclude marca --exclude e2e/test-results --exclude e2e/playwright-report \
+  --exclude .venv --exclude .pytest_cache --exclude AutoPost/data \
   ./ "$TARGET:$REMOTE_DIR/"
 
 if [ "$SKIP_DB" != "1" ]; then
