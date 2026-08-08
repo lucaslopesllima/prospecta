@@ -22,8 +22,11 @@ OAUTH_AUTHORIZE = "https://www.linkedin.com/oauth/v2/authorization"
 OAUTH_TOKEN = "https://www.linkedin.com/oauth/v2/accessToken"
 # openid/profile identificam o membro; w_member_social autoriza publicar.
 SCOPES = "openid profile w_member_social"
-# A Posts API é versionada por data; sem este header a chamada é recusada.
-LINKEDIN_VERSION = "202405"
+# A Posts API é versionada por data (YYYYMM); sem este header a chamada é
+# recusada, e com uma versão fora de suporte também — o LinkedIn mantém cada
+# versão por no mínimo 1 ano e depois a desativa. Revise anualmente:
+# https://learn.microsoft.com/en-us/linkedin/marketing/versioning
+LINKEDIN_VERSION = "202607"
 TIMEOUT = 60.0
 
 LABEL = "LinkedIn"

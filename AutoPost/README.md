@@ -71,9 +71,20 @@ Para ligar qualquer rede:
 
 | Rede | Redirect URI | O que publica |
 |---|---|---|
-| Meta | `/accounts/meta/callback` | Facebook: texto e imagem. Instagram: imagem obrigatória, por URL pública |
+| Meta | `/accounts/meta/callback` | Facebook: texto e imagem. Instagram: **JPEG** obrigatório, por URL pública |
 | TikTok | `/accounts/tiktok/callback` | Só vídeo, baixado por URL pública (`PULL_FROM_URL`) |
 | LinkedIn | `/accounts/linkedin/callback` | Texto e imagem no feed do próprio perfil |
+
+### Versões de API — precisam de manutenção anual
+
+As três plataformas versionam e desativam versões antigas; chamada com versão
+morta falha inteira, não degrada.
+
+| Rede | Constante | Valor | Expira |
+|---|---|---|---|
+| Meta | `meta.GRAPH` | `v24.0` | fev/2028 ([changelog](https://developers.facebook.com/docs/graph-api/changelog/)) |
+| LinkedIn | `linkedin.LINKEDIN_VERSION` | `202607` | ~jul/2027, mínimo 1 ano ([versioning](https://learn.microsoft.com/en-us/linkedin/marketing/versioning)) |
+| TikTok | — | v2, sem data | sem janela publicada |
 
 Job diário (03:00 UTC) revalida os tokens. Expirado ou revogado vira status visível
 na conta — nunca falha silenciosa. Tokens são criptografados com Fernet e nunca
@@ -82,10 +93,19 @@ aparecem em logs ou respostas da API; o secret só volta mascarado.
 Instagram e TikTok exigem mídia por URL pública: o agendador gera um link assinado
 e temporário (1h) em `/media/public/{token}` só para isso.
 
-Restrições das plataformas, não do código: o TikTok só permite `privacy_level`
-público depois que o app passa pela auditoria — antes disso o post sai como
-`SELF_ONLY`. O LinkedIn só emite `refresh_token` para apps aprovados no programa
-de refresh; sem ele, a reconexão ao expirar é manual.
+Restrições das plataformas, não do código:
+
+- **TikTok** exige `creator_info/query` antes de todo direct post, e o
+  `privacy_level` enviado precisa estar entre os `privacy_level_options` que
+  aquela chamada devolve — a lista muda com o tipo de conta e com o estado da
+  auditoria do app. O provider consulta e escolhe o maior alcance disponível;
+  app sem auditoria costuma receber só `SELF_ONLY` (post privado). O domínio de
+  `PUBLIC_BASE_URL` também precisa estar verificado no painel do TikTok para o
+  `PULL_FROM_URL` funcionar.
+- **Instagram** aceita somente JPEG (PNG é recusado) e limita a 100 publicações
+  por API em janela móvel de 24h.
+- **LinkedIn** só emite `refresh_token` para apps aprovados no programa de
+  refresh; sem ele, a reconexão ao expirar é manual.
 
 ## Segurança e isolamento
 

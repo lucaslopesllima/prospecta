@@ -16,8 +16,11 @@ import httpx
 from app.config import settings
 from app.providers.social import AppCredentials, PublishError, TokenExpired
 
-GRAPH = "https://graph.facebook.com/v21.0"
-OAUTH_DIALOG = "https://www.facebook.com/v21.0/dialog/oauth"
+# Cada versão da Graph API vive ~2 anos. v24.0 (out/2025) expira em fev/2028;
+# a v21.0 que estava aqui morre em jan/2027. Revise antes disso:
+# https://developers.facebook.com/docs/graph-api/changelog/
+GRAPH = "https://graph.facebook.com/v24.0"
+OAUTH_DIALOG = "https://www.facebook.com/v24.0/dialog/oauth"
 SCOPES = (
     "pages_show_list,pages_read_engagement,pages_manage_posts,"
     "instagram_basic,instagram_content_publish"
@@ -162,6 +165,12 @@ class InstagramProvider:
         media_path: str | None = None, media_mime: str | None = None,
         media_url: str | None = None,
     ) -> str:
+        # O Instagram aceita só JPEG (PNG, MPO e JPS são recusados). Barrar aqui
+        # troca um erro obscuro da Graph API por uma mensagem acionável.
+        if media_mime and media_mime not in ("image/jpeg", "image/jpg"):
+            raise PublishError(
+                f"Instagram aceita apenas imagem JPEG — o arquivo enviado é {media_mime}"
+            )
         # Limitação da Graph API: o Instagram só aceita mídia por URL pública.
         if not media_url:
             raise PublishError(

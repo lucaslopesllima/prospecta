@@ -80,6 +80,47 @@ async def test_linkedin_recusa_video():
         )
 
 
+def test_privacy_level_sai_das_opcoes_do_criador():
+    """A API recusa privacy_level fora dos privacy_level_options do criador."""
+    # Conta pública: prefere o alcance maior.
+    assert tiktok._pick_privacy_level(
+        ["PUBLIC_TO_EVERYONE", "MUTUAL_FOLLOW_FRIENDS", "SELF_ONLY"], None
+    ) == "PUBLIC_TO_EVERYONE"
+
+    # Conta privada não oferece PUBLIC_TO_EVERYONE — não pode ser escolhido.
+    assert tiktok._pick_privacy_level(
+        ["FOLLOWER_OF_CREATOR", "MUTUAL_FOLLOW_FRIENDS", "SELF_ONLY"], None
+    ) == "FOLLOWER_OF_CREATOR"
+
+    # App sem auditoria: a única opção devolvida costuma ser SELF_ONLY.
+    assert tiktok._pick_privacy_level(["SELF_ONLY"], None) == "SELF_ONLY"
+
+    # Lista vazia é erro explícito, não um valor inventado.
+    with pytest.raises(PublishError):
+        tiktok._pick_privacy_level([], None)
+
+
+def test_linkedin_version_esta_no_formato_e_viva():
+    """Versão fora de suporte faz toda chamada falhar; o LinkedIn mantém ~1 ano."""
+    assert len(linkedin.LINKEDIN_VERSION) == 6 and linkedin.LINKEDIN_VERSION.isdigit()
+    ano, mes = int(linkedin.LINKEDIN_VERSION[:4]), int(linkedin.LINKEDIN_VERSION[4:])
+    assert 1 <= mes <= 12
+    # 202405 (o valor original) já estava morto quando isto foi escrito.
+    assert ano * 100 + mes >= 202508
+
+
+@pytest.mark.anyio
+async def test_instagram_recusa_png():
+    """Instagram só aceita JPEG — pegar aqui evita erro obscuro da Graph API."""
+    from app.providers.social import meta
+
+    with pytest.raises(PublishError, match="JPEG"):
+        await meta.InstagramProvider().publish(
+            "ig-id", "tok", "texto", media_path="/tmp/x.png",
+            media_mime="image/png", media_url="https://ex.com/x.png",
+        )
+
+
 def test_get_provider_cobre_as_quatro_redes():
     for nome in ("facebook", "instagram", "tiktok", "linkedin"):
         provider = social.get_provider(nome)

@@ -10,6 +10,9 @@ Todo post exige um vídeo. Um post sem mídia falha com mensagem explícita.
 O envio usa PULL_FROM_URL (o TikTok baixa o vídeo da nossa URL pública
 assinada) — evita o upload em partes e depende de PUBLIC_BASE_URL. O domínio
 precisa estar verificado no painel do TikTok para que o pull seja aceito.
+
+Todo direct post é precedido por creator_info/query: a documentação exige a
+chamada, e é ela que informa quais privacy_level a conta aceita.
 """
 from urllib.parse import urlencode
 
@@ -138,6 +141,49 @@ async def list_connectable_accounts(creds: AppCredentials, tokens: dict) -> list
         }]
 
 
+# Ordem de preferência do privacy_level. A API exige que o valor esteja entre os
+# privacy_level_options do criador, e a lista muda com o tipo de conta: pública
+# oferece PUBLIC_TO_EVERYONE, privada oferece FOLLOWER_OF_CREATOR. SELF_ONLY
+# existe nas duas e é o único aceito enquanto o app não passa pela auditoria.
+PRIVACY_PREFERENCE = (
+    "PUBLIC_TO_EVERYONE", "FOLLOWER_OF_CREATOR", "MUTUAL_FOLLOW_FRIENDS", "SELF_ONLY",
+)
+
+
+def _json_headers(access_token: str) -> dict:
+    return {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json; charset=UTF-8",
+    }
+
+
+async def query_creator_info(client: httpx.AsyncClient, access_token: str) -> dict:
+    """Obrigatório antes de todo direct post — a doc do TikTok é explícita.
+
+    Além de ser exigido, é daqui que sai a lista de privacy_level válidos para
+    aquele criador; mandar um valor fora dela faz o init falhar.
+    """
+    r = await client.post(
+        f"{API}/post/publish/creator_info/query/",
+        headers=_json_headers(access_token),
+    )
+    data = r.json()
+    _raise_for_error(data)
+    return data.get("data", {})
+
+
+def _pick_privacy_level(options: list[str], desejado: str | None) -> str:
+    if desejado and desejado in options:
+        return desejado
+    for level in PRIVACY_PREFERENCE:
+        if level in options:
+            return level
+    raise PublishError(
+        "TikTok não ofereceu nenhum nível de privacidade para esta conta"
+        f" (privacy_level_options={options})"
+    )
+
+
 class TikTokProvider:
     async def publish(
         self, external_id: str, access_token: str, texto: str,
@@ -149,17 +195,17 @@ class TikTokProvider:
                 "TikTok só aceita post com vídeo, baixado de uma URL pública —"
                 " anexe um vídeo ao post e configure PUBLIC_BASE_URL"
             )
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "Content-Type": "application/json; charset=UTF-8",
-        }
         async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            creator = await query_creator_info(client, access_token)
+            privacy_level = _pick_privacy_level(
+                creator.get("privacy_level_options") or [], None
+            )
             r = await client.post(
                 f"{API}/post/publish/video/init/",
-                headers=headers,
+                headers=_json_headers(access_token),
                 json={
                     # title é o texto que aparece na legenda do vídeo.
-                    "post_info": {"title": texto[:2200], "privacy_level": "SELF_ONLY"},
+                    "post_info": {"title": texto[:2200], "privacy_level": privacy_level},
                     "source_info": {"source": "PULL_FROM_URL", "video_url": media_url},
                 },
             )
