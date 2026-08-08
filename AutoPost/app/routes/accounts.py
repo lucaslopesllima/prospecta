@@ -96,6 +96,20 @@ async def oauth_callback(
     except (social.PublishError, social.TokenExpired) as e:
         raise HTTPException(status_code=502, detail=f"falha em {group}: {e}")
 
+    if not accounts:
+        # OAuth conclui com sucesso e mesmo assim não vem nenhuma conta — foi o
+        # que aconteceu com a Meta sem business_management. Sem esta checagem o
+        # usuário recebe "[]" e nenhuma pista do que fazer.
+        log.warning("tenant=%s autorizou %s mas nenhuma conta veio", user["tenant_id"], group)
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                f"A autorização em {group} foi concluída, mas nenhuma conta foi"
+                " devolvida. Verifique se você marcou ao menos uma página/perfil"
+                " no diálogo e se o app tem todas as permissões do caso de uso."
+            ),
+        )
+
     saved = []
     for acc in accounts:
         refresh = acc.get("refresh_token")

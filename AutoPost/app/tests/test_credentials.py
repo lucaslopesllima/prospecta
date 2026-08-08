@@ -94,3 +94,32 @@ def test_credenciais_nao_vazam_entre_tenants(client, conn, alice):
     assert meta["client_id"] is None
     # Sem herança: Bob não consegue conectar usando o app de Alice.
     assert client.get("/accounts/meta/connect", follow_redirects=False).status_code == 409
+
+
+def test_callback_sem_contas_avisa_em_vez_de_devolver_vazio(client, alice, monkeypatch):
+    """OAuth que conclui sem trazer conta precisa falhar visível, não devolver []."""
+    from app import auth
+    from app.providers.social import meta
+
+    client.put("/credentials/meta", json={"client_id": "app", "client_secret": "segredo-longo"})
+
+    async def _tokens(_creds, _code):
+        return {"access_token": "tok", "refresh_token": None, "expires_in": None}
+
+    async def _nenhuma_conta(_creds, _tokens):
+        return []
+
+    monkeypatch.setattr(meta, "exchange_code", _tokens)
+    monkeypatch.setattr(meta, "list_connectable_accounts", _nenhuma_conta)
+
+    state = auth.sign_oauth_state(1)
+    r = client.get(f"/accounts/meta/callback?code=abc&state={state}")
+    assert r.status_code == 502
+    assert "nenhuma conta" in r.json()["detail"]
+
+
+def test_scopes_da_meta_incluem_business_management():
+    """Sem business_management o /me/accounts volta vazio e nada é conectado."""
+    from app.providers.social import meta
+
+    assert "business_management" in meta.SCOPES

@@ -21,9 +21,13 @@ from app.providers.social import AppCredentials, PublishError, TokenExpired
 # https://developers.facebook.com/docs/graph-api/changelog/
 GRAPH = "https://graph.facebook.com/v24.0"
 OAUTH_DIALOG = "https://www.facebook.com/v24.0/dialog/oauth"
+# business_management é obrigatória, e a falta dela falha em silêncio: sem ela o
+# OAuth conclui normalmente, mas /me/accounts devolve lista vazia — nenhuma
+# página para conectar, sem nenhum erro. Só aparece quando a Página pertence a
+# um portfólio empresarial, que é o caso normal de página de empresa.
 SCOPES = (
     "pages_show_list,pages_read_engagement,pages_manage_posts,"
-    "instagram_basic,instagram_content_publish"
+    "business_management,instagram_basic,instagram_content_publish"
 )
 TIMEOUT = 30.0
 
