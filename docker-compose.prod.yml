@@ -176,8 +176,8 @@ services:
     volumes:
       - ./nginx/templates:/etc/nginx/templates:ro
       - ./nginx/options-ssl.conf:/etc/nginx/snippets/options-ssl.conf:ro
-      # Landing page estática servida em ${DOMAIN}/www (a aplicação fica em
-      # app.${DOMAIN}). HTML puro — não passa por build.
+      # Landing page estática servida em ${DOMAIN} e www.${DOMAIN} (a aplicação
+      # fica em app.${DOMAIN}). HTML puro — não passa por build.
       - ./landing:/usr/share/nginx/landing:ro
       - certbot_conf:/etc/letsencrypt:ro
       - certbot_www:/var/www/certbot:ro

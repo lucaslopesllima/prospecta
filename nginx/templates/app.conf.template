@@ -1,0 +1,71 @@
+# Reverse proxy TLS da APLICAÇÃO Rovva (app.${DOMAIN}).
+#
+# O domínio raiz (${DOMAIN}) serve a landing page estática — ver rovva.conf.template.
+# A aplicação (SPA + API Fastify) vive aqui, no subdomínio app.
+#
+# A imagem oficial do nginx roda envsubst neste template no boot (só ${DOMAIN} é
+# trocado — ver NGINX_ENVSUBST_FILTER no compose); as variáveis de runtime do
+# nginx ($host, $remote_addr, ...) ficam intactas.
+#
+# TLS termina aqui; o app recebe o tráfego já em texto claro pela rede interna do
+# compose (app:8080). Os headers de segurança (HSTS/CSP) são emitidos pelo próprio
+# app via helmet — não duplicar aqui pra não conflitar.
+
+# ── HTTP: desafio ACME (renovação do cert) + redirect pra HTTPS ───────────────
+server {
+    listen 80;
+    listen [::]:80;
+    server_name app.${DOMAIN};
+
+    # certbot (webroot) grava o token aqui; precisa responder em HTTP puro.
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# ── HTTPS ─────────────────────────────────────────────────────────────────────
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name app.${DOMAIN};
+
+    # Mesmo cert do domínio principal (app.${DOMAIN} entra como SAN; ver
+    # CERT_EXTRA_DOMAINS no .env).
+    ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+    include /etc/nginx/snippets/options-ssl.conf;
+
+    # Uploads de mídia/catálogo. Alinhe com o limite do app se mexer lá.
+    client_max_body_size 25m;
+
+    # WebSocket do espelho de chat WhatsApp ao vivo (precisa de Upgrade + timeout longo).
+    location /api/whatsapp/ws {
+        proxy_pass http://app:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
+    location / {
+        proxy_pass http://app:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        # app confia no X-Forwarded-Proto pra saber que é HTTPS (trustProxy) e
+        # ligar HSTS/cookies seguros.
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;
+    }
+}
