@@ -95,6 +95,11 @@ e temporário (1h) em `/media/public/{token}` só para isso.
 
 Restrições das plataformas, não do código:
 
+- **TikTok** publica de forma **assíncrona**: o `video/init/` devolve um
+  `publish_id` que é o processo, não o post. O provider acompanha
+  `status/fetch/` até `PUBLISH_COMPLETE` (guarda o id real do post) ou `FAILED`
+  (vira erro com o `fail_reason`), com teto de 90s — passado isso o upload já
+  foi aceito e a moderação segue por conta do TikTok.
 - **TikTok** exige `creator_info/query` antes de todo direct post, e o
   `privacy_level` enviado precisa estar entre os `privacy_level_options` que
   aquela chamada devolve — a lista muda com o tipo de conta e com o estado da
@@ -105,7 +110,10 @@ Restrições das plataformas, não do código:
 - **Instagram** aceita somente JPEG (PNG é recusado) e limita a 100 publicações
   por API em janela móvel de 24h.
 - **LinkedIn** só emite `refresh_token` para apps aprovados no programa de
-  refresh; sem ele, a reconexão ao expirar é manual.
+  refresh; sem ele, a reconexão ao expirar é manual. Além disso, um token com
+  apenas `w_member_social` é write-only: não dá para consultar `/rest/images` e
+  confirmar que a imagem terminou de processar antes de publicar — o 2xx do
+  upload é a única garantia possível.
 
 ## Segurança e isolamento
 

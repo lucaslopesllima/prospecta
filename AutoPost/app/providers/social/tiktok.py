@@ -13,7 +13,12 @@ precisa estar verificado no painel do TikTok para que o pull seja aceito.
 
 Todo direct post é precedido por creator_info/query: a documentação exige a
 chamada, e é ela que informa quais privacy_level a conta aceita.
+
+A publicação é assíncrona: o init devolve um publish_id (processo), e o post só
+existe depois do download e da moderação. O provider acompanha o status até
+concluir ou falhar, para que vídeo recusado não seja contado como publicado.
 """
+import asyncio
 from urllib.parse import urlencode
 
 import httpx
@@ -172,6 +177,50 @@ async def query_creator_info(client: httpx.AsyncClient, access_token: str) -> di
     return data.get("data", {})
 
 
+# O init só enfileira: o TikTok baixa o vídeo, checa formato/duração e passa
+# pela moderação depois. Sem esperar por isso, um vídeo recusado (formato
+# inválido, spam, autorização revogada) seria contabilizado como publicado.
+# A moderação costuma levar menos de um minuto, mas pode levar horas — por isso
+# há teto: passado o teto o upload já foi aceito e a espera vira responsabilidade
+# do TikTok, não do agendador.
+POLL_INTERVAL_SECONDS = 5
+POLL_MAX_SECONDS = 90
+
+
+async def _wait_for_publish(
+    client: httpx.AsyncClient, access_token: str, publish_id: str
+) -> str:
+    """Acompanha o publish_id até concluir ou falhar. Retorna o id do post."""
+    waited = 0
+    while True:
+        r = await client.post(
+            f"{API}/post/publish/status/fetch/",
+            headers=_json_headers(access_token),
+            json={"publish_id": publish_id},
+        )
+        data = r.json()
+        _raise_for_error(data)
+        info = data.get("data", {})
+        status = info.get("status")
+
+        if status == "PUBLISH_COMPLETE":
+            # O campo vem com este typo na própria API do TikTok; aceitamos as
+            # duas grafias para não quebrar se um dia corrigirem.
+            ids = info.get("publicaly_available_post_id") \
+                or info.get("publicly_available_post_id") or []
+            return str(ids[0]) if ids else publish_id
+        if status == "FAILED":
+            raise PublishError(
+                f"TikTok recusou o vídeo: {info.get('fail_reason') or 'motivo não informado'}"
+            )
+        if waited >= POLL_MAX_SECONDS:
+            # Ainda em PROCESSING_DOWNLOAD/moderação. O upload foi aceito.
+            return publish_id
+
+        await asyncio.sleep(POLL_INTERVAL_SECONDS)
+        waited += POLL_INTERVAL_SECONDS
+
+
 def _pick_privacy_level(options: list[str], desejado: str | None) -> str:
     if desejado and desejado in options:
         return desejado
@@ -214,7 +263,9 @@ class TikTokProvider:
             publish_id = data.get("data", {}).get("publish_id")
             if not publish_id:
                 raise PublishError(f"TikTok não devolveu publish_id: {data}")
-            return publish_id
+            # publish_id identifica o processo, não o post — só depois do
+            # download e da moderação existe post de verdade.
+            return await _wait_for_publish(client, access_token, publish_id)
 
     async def validate(self, external_id: str, access_token: str) -> bool:
         async with httpx.AsyncClient(timeout=TIMEOUT) as client:

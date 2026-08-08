@@ -3,6 +3,7 @@
 Não faz rede. Cobre o que quebra em silêncio: URL de autorização malformada,
 erro do TikTok que vem com HTTP 200, e publicação que a plataforma não aceita.
 """
+import httpx
 import pytest
 
 from app.providers import social
@@ -119,6 +120,55 @@ async def test_instagram_recusa_png():
             "ig-id", "tok", "texto", media_path="/tmp/x.png",
             media_mime="image/png", media_url="https://ex.com/x.png",
         )
+
+
+def _status_client(monkeypatch, respostas):
+    """Cliente httpx com respostas encadeadas para /status/fetch/, sem rede."""
+    fila = list(respostas)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=fila.pop(0))
+
+    monkeypatch.setattr(tiktok.asyncio, "sleep", _no_sleep)
+    return httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+
+async def _no_sleep(_segundos):
+    return None
+
+
+@pytest.mark.anyio
+async def test_publish_id_nao_e_post_publicado(monkeypatch):
+    """Só PUBLISH_COMPLETE conta como publicado — e o id real vem depois."""
+    async with _status_client(monkeypatch, [
+        {"data": {"status": "PROCESSING_DOWNLOAD"}},
+        {"data": {"status": "PUBLISH_COMPLETE",
+                  "publicaly_available_post_id": ["7300000000000000000"]}},
+    ]) as client:
+        post_id = await tiktok._wait_for_publish(client, "tok", "pub-1")
+    assert post_id == "7300000000000000000"
+
+
+@pytest.mark.anyio
+async def test_video_recusado_vira_erro_e_nao_publicacao(monkeypatch):
+    """Sem isto, vídeo rejeitado pela moderação seria contado como publicado."""
+    async with _status_client(monkeypatch, [
+        {"data": {"status": "FAILED", "fail_reason": "file_format_check_failed"}},
+    ]) as client:
+        with pytest.raises(PublishError, match="file_format_check_failed"):
+            await tiktok._wait_for_publish(client, "tok", "pub-2")
+
+
+@pytest.mark.anyio
+async def test_moderacao_lenta_nao_trava_o_agendador(monkeypatch):
+    """Passado o teto, devolve o publish_id em vez de esperar horas."""
+    monkeypatch.setattr(tiktok, "POLL_MAX_SECONDS", 10)
+    async with _status_client(monkeypatch, [
+        {"data": {"status": "PROCESSING_DOWNLOAD"}},
+        {"data": {"status": "PROCESSING_DOWNLOAD"}},
+        {"data": {"status": "PROCESSING_DOWNLOAD"}},
+    ]) as client:
+        assert await tiktok._wait_for_publish(client, "tok", "pub-3") == "pub-3"
 
 
 def test_get_provider_cobre_as_quatro_redes():

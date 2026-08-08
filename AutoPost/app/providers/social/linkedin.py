@@ -132,7 +132,9 @@ async def _upload_image(
         raise PublishError(f"LinkedIn não devolveu a URL de upload: {value}")
 
     with open(media_path, "rb") as f:
-        # O PUT vai para um host de storage e não aceita os headers da API.
+        # PUT com o token no Authorization — é o que a documentação especifica
+        # para imagem (o upload de vídeo, ao contrário, recusa o token). O host
+        # é de storage e não aceita os demais headers da API.
         up = await client.put(
             upload_url,
             content=f.read(),
@@ -140,6 +142,10 @@ async def _upload_image(
                      "Content-Type": media_mime or "application/octet-stream"},
         )
     _raise_for_response(up)
+    # O ideal seria confirmar status=AVAILABLE antes de publicar (imagem que
+    # falha no processamento gera post invisível), mas um token só com
+    # w_member_social não pode fazer GET em /rest/images. O 2xx do PUT é a
+    # única confirmação disponível com os escopos que temos.
     return image_urn
 
 
