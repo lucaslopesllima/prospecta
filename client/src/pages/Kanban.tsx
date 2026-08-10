@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import type { Brand, CatalogItem, Contact, KanbanCard, NamedItem, PrivateLabel, RepresentedCompany, Stage } from '../lib/types.ts';
-import { Badge, Btn, cn, Collapse, ErrorState, FilterPanel, inputCls, Modal, PageHeader, Popover, SafeButton, Spinner, StatRow, useCollapseOnOutside, type Tone } from '../lib/ui.tsx';
+import { Badge, Btn, cn, Collapse, ErrorState, FilterPanel, inputCls, Modal, PageHeader, Popover, SafeButton, Spinner, StatRow, useCollapseOnOutside, usePanels, type Tone } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { CompanyFilterBar, useCompanyFilter } from '../lib/companyFilter.tsx';
 import { useSellers, SellerFilter } from '../lib/sellers.tsx';
@@ -21,8 +21,6 @@ const STATUS_LABEL: Record<string, string> = {
   prospect: 'Prospect', cliente: 'Cliente', descartado: 'Descartado',
 };
 const STATUS_OPTS = ['prospect', 'cliente', 'descartado'] as const;
-const FILTERS_OPEN_KEY = 'funil:filtersOpen';
-const KPIS_OPEN_KEY = 'funil:kpisOpen';
 const FILTROS_KEY = 'funil:filtros';
 
 // Filtros próprios do funil (o CompanyFilterBar só cobre atributos da empresa).
@@ -65,12 +63,17 @@ export function Kanban(): React.JSX.Element {
   const [ff, setFf] = useState<FunilFiltros>(loadFiltros);
   const { can } = useAuth();
 
-  const [filtersOpen, setFiltersOpen] = useState(() => {
-    try { return localStorage.getItem(FILTERS_OPEN_KEY) === '1'; } catch { return false; }
-  });
-  const [kpisOpen, setKpisOpen] = useState(() => {
-    try { return localStorage.getItem(KPIS_OPEN_KEY) !== '0'; } catch { return true; }
-  });
+  const panels = usePanels('funil', 'kpis');
+  const filtersOpen = panels.aberto === 'filtros';
+  const kpisOpen = panels.aberto === 'kpis';
+  const setFiltersOpen = (next: boolean | ((current: boolean) => boolean)): void => {
+    const open = typeof next === 'function' ? next(filtersOpen) : next;
+    if (open) panels.abrir('filtros'); else if (filtersOpen) panels.fechar();
+  };
+  const setKpisOpen = (next: boolean | ((current: boolean) => boolean)): void => {
+    const open = typeof next === 'function' ? next(kpisOpen) : next;
+    if (open) panels.abrir('kpis'); else if (kpisOpen) panels.fechar();
+  };
   const [ownerId, setOwnerId] = useState<'todos' | number>(() => {
     const value = Number(params.get('owner_user_id'));
     return Number.isFinite(value) && value > 0 ? value : 'todos';
@@ -121,27 +124,15 @@ export function Kanban(): React.JSX.Element {
     try { localStorage.setItem(FILTROS_KEY, JSON.stringify(ff)); } catch { /* storage indisponível */ }
   }, [ff]);
 
-  // Persiste se a barra de filtros está aberta.
-  useEffect(() => {
-    try { localStorage.setItem(FILTERS_OPEN_KEY, filtersOpen ? '1' : '0'); } catch { /* storage indisponível */ }
-  }, [filtersOpen]);
-
-  // Persiste se os indicadores (KPIs) estão expandidos.
-  useEffect(() => {
-    try { localStorage.setItem(KPIS_OPEN_KEY, kpisOpen ? '1' : '0'); } catch { /* storage indisponível */ }
-  }, [kpisOpen]);
-
-  // Botão "Buscar" da barra: os filtros do funil são client-side (já aplicam a
-  // cada mudança), então aqui ele só recarrega o board do servidor. O painel
-  // fica aberto — quem fecha é o botão "Filtros" ou o clique fora.
+  // Botão "Buscar" recarrega board e devolve espaço às colunas.
   const [buscando, setBuscando] = useState(false);
   const buscar = useCallback((): void => {
-    setFiltersOpen(true); // explícito: buscar nunca recolhe o painel
+    panels.fechar();
     setBuscando(true);
     void load()
       .catch(() => toast.error('Não foi possível atualizar o funil.'))
       .finally(() => setBuscando(false));
-  }, [load]);
+  }, [load, panels.fechar]);
 
   // Um botão de limpar só: zera os campos da empresa e os filtros do funil.
   const limparTudo = useCallback((): void => {
@@ -151,7 +142,7 @@ export function Kanban(): React.JSX.Element {
 
   // Clicar no board (ou em qualquer lugar fora do painel) recolhe os filtros.
   const filtrosRef = useRef<HTMLDivElement>(null);
-  const fecharFiltros = useCallback(() => setFiltersOpen(false), []);
+  const fecharFiltros = panels.fechar;
   useCollapseOnOutside(filtersOpen, fecharFiltros, filtrosRef, '[data-filtros-toggle]');
 
   // Espelho dos cards em ref: `move` fica estável (useCallback sem depender de

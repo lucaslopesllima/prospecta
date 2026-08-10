@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 // CSS do Leaflet viaja junto com o chunk lazy da página (fora do bundle inicial).
 import 'leaflet/dist/leaflet.css';
-import { MapContainer, TileLayer, CircleMarker, Polyline, Popup, Tooltip, useMap } from 'react-leaflet';
+import { MapContainer, CircleMarker, Polyline, Popup, Tooltip, useMap } from 'react-leaflet';
 import type { LatLngBoundsExpression } from 'leaflet';
 import { api, ApiError } from '../lib/api.ts';
 import type { FunnelCompany, Vehicle, OptimizeResult, RouteStop, SavedRoute } from '../lib/types.ts';
@@ -12,6 +12,7 @@ import { toast } from '../lib/toast.tsx';
 import { loadPartida, type Partida } from '../lib/companyFilter.tsx';
 import { useAuth } from '../lib/auth.tsx';
 import { confirmDialog } from '../lib/confirm.ts';
+import { ThemedTileLayer } from '../lib/mapTiles.tsx';
 
 // Navega até um ponto único. Origem omitida de propósito → no celular o Maps usa
 // o GPS atual como ponto de partida; no desktop abre a aba com o destino.
@@ -367,7 +368,7 @@ function Planner({ vehicles }: { vehicles: Vehicle[] }): React.JSX.Element {
             <Card className="overflow-hidden p-0">
               <div className="h-[320px] w-full">
                 <MapContainer center={[result.origem.lat, result.origem.lon]} zoom={11} className="h-full w-full" scrollWheelZoom>
-                  <TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                  <ThemedTileLayer />
                   <FitAll pts={mapPts} />
                   {/* traçado em Signal Orange (acento da marca) p/ separar do
                       azul dos marcadores numerados. */}

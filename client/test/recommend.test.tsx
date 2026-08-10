@@ -57,6 +57,11 @@ const comTerritorio = (): void =>
 const mount = (): ReturnType<typeof render> =>
   render(<MemoryRouter><Recommend /></MemoryRouter>);
 
+const clickCardAction = async (name: string | RegExp, trigger?: HTMLElement): Promise<void> => {
+  await userEvent.click(trigger ?? screen.getAllByRole('button', { name: 'Mais ações' })[0]!);
+  await userEvent.click(await screen.findByRole('menuitem', { name }));
+};
+
 beforeEach(() => {
   localStorage.clear();
   vi.mocked(m.get).mockReset();
@@ -198,7 +203,7 @@ describe('Recommend — mapa, rota e interações', () => {
     comTerritorio();
     mount();
     await screen.findByText('Loja Alvo', undefined, { timeout: 2000 });
-    await userEvent.click(screen.getByRole('button', { name: 'Ver no mapa' }));
+    await clickCardAction('Ver no mapa');
     expect(await screen.findByTestId('map')).toBeInTheDocument();
     await waitFor(() => expect(m.get.mock.calls.some((c) => String(c[0]).includes('/geocode'))).toBe(true));
   });
@@ -208,7 +213,7 @@ describe('Recommend — mapa, rota e interações', () => {
     mockFetch(okRoute);
     mount();
     await screen.findByText('Loja Alvo', undefined, { timeout: 2000 });
-    await userEvent.click(screen.getByRole('button', { name: 'Rota' }));
+    await clickCardAction('Rota');
     expect(await screen.findByText(/2\.0 km/, undefined, { timeout: 2000 })).toBeInTheDocument();
     expect(screen.getByText(/~3 min/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Limpar rota' }));
@@ -227,7 +232,7 @@ describe('Recommend — mapa, rota e interações', () => {
     });
     mount();
     await screen.findByText('Loja Alvo', undefined, { timeout: 2000 });
-    await userEvent.click(screen.getByRole('button', { name: 'Rota' }));
+    await clickCardAction('Rota');
     expect(await screen.findByText(/2\.0 km/, undefined, { timeout: 2000 })).toBeInTheDocument();
   });
 
@@ -244,7 +249,7 @@ describe('Recommend — mapa, rota e interações', () => {
     });
     mount();
     await screen.findByText('Loja Alvo', undefined, { timeout: 2000 });
-    await userEvent.click(screen.getByRole('button', { name: 'Rota' }));
+    await clickCardAction('Rota');
     expect(await screen.findByText(/2\.0 km/, undefined, { timeout: 2000 })).toBeInTheDocument();
   });
 
@@ -259,7 +264,7 @@ describe('Recommend — mapa, rota e interações', () => {
     });
     mount();
     await screen.findByText('Loja Alvo', undefined, { timeout: 2000 });
-    await userEvent.click(screen.getByRole('button', { name: 'Rota' }));
+    await clickCardAction('Rota');
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('Cadastre seu endereço')));
   });
 
@@ -268,7 +273,7 @@ describe('Recommend — mapa, rota e interações', () => {
     mockFetch({ code: 'NoRoute', routes: [] });
     mount();
     await screen.findByText('Loja Alvo', undefined, { timeout: 2000 });
-    await userEvent.click(screen.getByRole('button', { name: 'Rota' }));
+    await clickCardAction('Rota');
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Não foi possível traçar a rota.'));
   });
 
@@ -277,7 +282,7 @@ describe('Recommend — mapa, rota e interações', () => {
     global.fetch = vi.fn().mockRejectedValue(new Error('net')) as unknown as typeof fetch;
     mount();
     await screen.findByText('Loja Alvo', undefined, { timeout: 2000 });
-    await userEvent.click(screen.getByRole('button', { name: 'Rota' }));
+    await clickCardAction('Rota');
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Falha ao traçar rota.'));
   });
 
@@ -292,7 +297,7 @@ describe('Recommend — mapa, rota e interações', () => {
     });
     mount();
     await screen.findByText('Loja Alvo', undefined, { timeout: 2000 });
-    await userEvent.click(screen.getByRole('button', { name: 'Rota' }));
+    await clickCardAction('Rota');
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Permissão de localização negada.'));
   });
 
@@ -306,18 +311,17 @@ describe('Recommend — mapa, rota e interações', () => {
   });
 
   it('abre/fecha filtros e indicadores, persistindo no localStorage', async () => {
-    localStorage.setItem('prospeccao:filtersOpen', '1');
-    localStorage.setItem('prospeccao:kpisOpen', '0');
+    localStorage.setItem('prospeccao:panel', 'filtros');
     comTerritorio();
     mount();
     await screen.findByText('Loja Alvo', undefined, { timeout: 2000 });
     await userEvent.click(screen.getAllByRole('button', { name: /Filtros/ })[0]);
     await userEvent.click(screen.getByRole('button', { name: /Indicadores/ }));
-    await waitFor(() => expect(['0', '1']).toContain(localStorage.getItem('prospeccao:kpisOpen')));
+    await waitFor(() => expect(localStorage.getItem('prospeccao:panel')).toBe('kpis'));
   });
 
-  it('botão Buscar consulta a base na hora sem fechar os filtros', async () => {
-    localStorage.setItem('prospeccao:filtersOpen', '1');
+  it('botão Buscar consulta a base na hora e fecha os filtros', async () => {
+    localStorage.setItem('prospeccao:panel', 'filtros');
     comTerritorio();
     mount();
     await screen.findByText('Loja Alvo', undefined, { timeout: 2000 });
@@ -325,25 +329,25 @@ describe('Recommend — mapa, rota e interações', () => {
     const antes = buscas();
     await userEvent.click(screen.getByRole('button', { name: /Buscar/ }));
     await waitFor(() => expect(buscas()).toBe(antes + 1));
-    expect(localStorage.getItem('prospeccao:filtersOpen')).toBe('1'); // painel segue aberto
+    expect(localStorage.getItem('prospeccao:panel')).toBe('none');
   });
 
   it('sem território o botão Buscar não consulta nem fecha os filtros', async () => {
-    localStorage.setItem('prospeccao:filtersOpen', '1');
+    localStorage.setItem('prospeccao:panel', 'filtros');
     mount();
     await screen.findByText('Defina o território');
     await userEvent.click(screen.getByRole('button', { name: /Buscar/ }));
     expect(m.get.mock.calls.some((c) => String(c[0]).startsWith('/api/recommend'))).toBe(false);
-    expect(localStorage.getItem('prospeccao:filtersOpen')).toBe('1');
+    expect(localStorage.getItem('prospeccao:panel')).toBe('filtros');
   });
 
   it('clicar na lista recolhe os filtros abertos', async () => {
-    localStorage.setItem('prospeccao:filtersOpen', '1');
+    localStorage.setItem('prospeccao:panel', 'filtros');
     comTerritorio();
     mount();
     await screen.findByText('Loja Alvo', undefined, { timeout: 2000 });
     await userEvent.click(screen.getByText('Loja Alvo')); // fora do painel de filtros
-    await waitFor(() => expect(localStorage.getItem('prospeccao:filtersOpen')).toBe('0'));
+    await waitFor(() => expect(localStorage.getItem('prospeccao:panel')).toBe('none'));
   });
 
   it('cards mostram faixas de score, fallback de nome e escondem mapa sem coordenada', async () => {
@@ -361,7 +365,8 @@ describe('Recommend — mapa, rota e interações', () => {
     expect(await screen.findByText('Alta Ltda', undefined, { timeout: 2000 })).toBeInTheDocument();
     expect(screen.getByText('Media')).toBeInTheDocument(); // nome_fantasia null → razao_social
     const baixa = screen.getByText('Baixa Ltda').closest('.p-4')!;
-    expect(within(baixa as HTMLElement).queryByRole('button', { name: 'Ver no mapa' })).not.toBeInTheDocument();
+    await userEvent.click(within(baixa as HTMLElement).getByRole('button', { name: 'Mais ações' }));
+    expect(screen.queryByRole('menuitem', { name: 'Ver no mapa' })).not.toBeInTheDocument();
   });
 
   it('sem permissão esconde o botão de adicionar ao funil', async () => {
@@ -413,7 +418,7 @@ describe('Recommend — mapa, rota e interações', () => {
     mount();
     await screen.findByText('E1', undefined, { timeout: 2000 });
     // foca o primeiro (vai pro mapa com focus) → exercita o caminho de foco no cluster
-    fireEvent.click(screen.getAllByRole('button', { name: 'Ver no mapa' })[0]);
+    await clickCardAction('Ver no mapa');
     await screen.findByTestId('map');
     // clica todos os marcadores; só o cluster tem handler (aproxima o mapa)
     for (const cm of screen.getAllByTestId('cm')) fireEvent.click(cm);
@@ -431,7 +436,7 @@ describe('Recommend — cobertura extra', () => {
     });
     mount();
     await screen.findByText('Loja Alvo', undefined, { timeout: 2000 });
-    await userEvent.click(screen.getByRole('button', { name: 'Ver no mapa' }));
+    await clickCardAction('Ver no mapa');
     expect(await screen.findByTestId('map')).toBeInTheDocument();
     await waitFor(() => expect(m.get.mock.calls.some((c) => String(c[0]).includes('/geocode'))).toBe(true));
   });
@@ -482,7 +487,7 @@ describe('Recommend — adicionar aos contatos', () => {
     m.post.mockResolvedValueOnce({ contact: { id: 9, nome: 'Loja Alvo' } });
     mount();
     await screen.findByText('Loja Alvo', undefined, { timeout: 2000 });
-    await userEvent.click(screen.getByRole('button', { name: /Adicionar aos contatos/ }));
+    await clickCardAction(/Adicionar aos contatos/);
 
     expect(await screen.findByText('Novo contato')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Nome *')).toHaveValue('Loja Alvo');
@@ -504,7 +509,7 @@ describe('Recommend — adicionar aos contatos', () => {
     m.post.mockRejectedValueOnce(new Error('cc-fail'));
     mount();
     await screen.findByText('Loja Alvo', undefined, { timeout: 2000 });
-    await userEvent.click(screen.getByRole('button', { name: /Adicionar aos contatos/ }));
+    await clickCardAction(/Adicionar aos contatos/);
     await screen.findByText('Novo contato');
     expect(screen.getByPlaceholderText('Telefone')).toHaveValue('');
 
@@ -523,7 +528,7 @@ describe('Recommend — adicionar aos contatos', () => {
     });
     mount();
     await screen.findByText('Loja Alvo', undefined, { timeout: 2000 });
-    await userEvent.click(screen.getByRole('button', { name: /Adicionar aos contatos/ }));
+    await clickCardAction(/Adicionar aos contatos/);
     await screen.findByText('Novo contato');
     expect(screen.getByPlaceholderText('Nome *')).toHaveValue('Loja Alvo');
 

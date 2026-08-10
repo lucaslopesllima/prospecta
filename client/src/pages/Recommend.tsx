@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 // CSS do Leaflet viaja junto com o chunk lazy da página (fora do bundle inicial).
 import 'leaflet/dist/leaflet.css';
-import { MapContainer, TileLayer, CircleMarker, Popup, Polyline, Tooltip, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, CircleMarker, Popup, Polyline, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import type { LatLngBoundsExpression } from 'leaflet';
 import { api, ApiError, BUSCA_DEBOUNCE_MS } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
-import type { Recommendation, GeocodeResult, CompanyDetail } from '../lib/types.ts';
-import { Badge, Btn, Card, cn, Collapse, EmptyState, FilterPanel, PageHeader, SafeButton, ScoreBar, Segmented, Spinner, StatRow, useCollapseOnOutside, type Tone } from '../lib/ui.tsx';
+import type { Recommendation, GeocodeResult, CompanyDetail, Municipio } from '../lib/types.ts';
+import { Alert, Badge, Btn, Card, cn, Collapse, EmptyState, FilterPanel, PageHeader, Popover, SafeButton, ScoreBar, Segmented, Spinner, StatRow, useCollapseOnOutside, usePanels, type Tone } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { CompanyFilterBar, useCompanyFilter, faixasParams, faixasInvalidas } from '../lib/companyFilter.tsx';
 import { CompanyModal } from '../lib/companyModal.tsx';
@@ -14,6 +15,7 @@ import { NewContactModal, EMPTY_CONTACT, type ContactForm } from '../lib/contact
 import { Cnae } from '../lib/cnae.tsx';
 import { maskPhone } from '../lib/format.ts';
 import { toast } from '../lib/toast.tsx';
+import { ThemedTileLayer } from '../lib/mapTiles.tsx';
 
 const MATCH_COLOR: Record<string, string> = {
   classe: '#039855', divisao: '#0284c7', secao: '#12b76a', nenhum: '#94a3b8',
@@ -24,9 +26,6 @@ const MATCH_LABEL: Record<string, string> = {
 const MATCH_TONE: Record<string, Tone> = {
   classe: 'success', divisao: 'info', secao: 'brand', nenhum: 'neutral',
 };
-const FILTERS_OPEN_KEY = 'prospeccao:filtersOpen';
-const KPIS_OPEN_KEY = 'prospeccao:kpisOpen';
-
 function FitBounds({ pts, focus }: { pts: [number, number][]; focus: MapFocus | null }): null {
   const map = useMap();
   useEffect(() => {
@@ -124,20 +123,106 @@ export function Recommend(): React.JSX.Element {
   const [done, setDone] = useState(false);
   const [added, setAdded] = useState<Set<string>>(new Set());
   const [view, setView] = useState<'lista' | 'mapa'>('lista');
-  const [filtersOpen, setFiltersOpen] = useState(() => {
-    try { return localStorage.getItem(FILTERS_OPEN_KEY) === '1'; } catch { return false; }
-  });
-  const [kpisOpen, setKpisOpen] = useState(() => {
-    try { return localStorage.getItem(KPIS_OPEN_KEY) !== '0'; } catch { return true; }
-  });
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filter = useCompanyFilter('prospeccao');
+  const panels = usePanels('prospeccao', filter.territorio.length === 0 ? 'filtros' : 'kpis');
+  const filtersOpen = panels.aberto === 'filtros';
+  const kpisOpen = panels.aberto === 'kpis';
+  const setFiltersOpen = (next: boolean | ((current: boolean) => boolean)): void => {
+    const open = typeof next === 'function' ? next(filtersOpen) : next;
+    if (open) panels.abrir('filtros'); else if (filtersOpen) panels.fechar();
+  };
+  const setKpisOpen = (next: boolean | ((current: boolean) => boolean)): void => {
+    const open = typeof next === 'function' ? next(kpisOpen) : next;
+    if (open) panels.abrir('kpis'); else if (kpisOpen) panels.fechar();
+  };
   const [viewing, setViewing] = useState<number | null>(null);
   const [addingContact, setAddingContact] = useState<ContactForm | null>(null);
   const [focus, setFocus] = useState<MapFocus | null>(null);
   const [route, setRoute] = useState<RouteInfo | null>(null);
   const [routingId, setRoutingId] = useState<string | null>(null);
   const [geoCache, setGeoCache] = useState<Record<string, { lat: number; lon: number; precisao: string }>>({});
-  const filter = useCompanyFilter('prospeccao');
   const LIMIT = 20;
+
+  // URL compartilhável: hidrata filtros uma vez e depois espelha mudanças sem
+  // criar entradas extras no histórico. Município usa endpoint de labels para
+  // recuperar nome/UF a partir dos ids do link.
+  const [urlReady, setUrlReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    const hydrate = async (): Promise<void> => {
+      const q = searchParams.get('q');
+      const cnae = searchParams.get('cnae');
+      const porte = searchParams.get('porte');
+      if (q !== null) filter.setFq(q);
+      if (cnae !== null) filter.setFCnae(cnae);
+      if (porte !== null) filter.setFPorte(porte);
+      const faixa = { ...filter.faixas };
+      if (searchParams.has('cap_min')) faixa.capMin = searchParams.get('cap_min') ?? '';
+      if (searchParams.has('cap_max')) faixa.capMax = searchParams.get('cap_max') ?? '';
+      if (searchParams.has('idade_min')) faixa.idadeMin = searchParams.get('idade_min') ?? '';
+      if (searchParams.has('idade_max')) faixa.idadeMax = searchParams.get('idade_max') ?? '';
+      filter.setFaixas(faixa);
+      const peso = { ...filter.pesos };
+      for (const k of ['cnae', 'proximidade', 'porte', 'capital', 'idade'] as const) {
+        const raw = searchParams.get(`w_${k}`);
+        if (raw !== null && Number.isFinite(Number(raw))) peso[k] = Math.max(0, Math.min(1, Number(raw)));
+      }
+      filter.setPesos(peso);
+      const lat = Number(searchParams.get('partida_lat'));
+      const lon = Number(searchParams.get('partida_lon'));
+      const label = searchParams.get('partida');
+      if (label && Number.isFinite(lat) && Number.isFinite(lon)) filter.setPartida({ label, lat, lon });
+      if (searchParams.get('view') === 'mapa') setView('mapa');
+      const ids = (searchParams.get('munis') ?? '').split(',').map(Number).filter(Number.isFinite);
+      if (ids.length > 0) {
+        const r = await api.get<{ municipios: Municipio[] }>(`/api/municipios/labels?ids=${ids.join(',')}`).catch(() => null);
+        if (!cancelled && r?.municipios) filter.setTerritorio(r.municipios);
+      }
+      if (!cancelled) setUrlReady(true);
+    };
+    void hydrate();
+    return () => { cancelled = true; };
+    // Estado inicial da URL é intencionalmente lido uma vez.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!urlReady) return;
+    const next = new URLSearchParams();
+    if (filter.fq.trim()) next.set('q', filter.fq.trim());
+    if (filter.fCnae.trim()) next.set('cnae', filter.fCnae.trim());
+    if (filter.fPorte) next.set('porte', filter.fPorte);
+    if (filter.territorio.length > 0) next.set('munis', filter.territorio.map((m) => m.id).join(','));
+    for (const [k, v] of Object.entries(faixasParams(filter.faixas))) next.set(k, v);
+    for (const k of ['cnae', 'proximidade', 'porte', 'capital', 'idade'] as const) next.set(`w_${k}`, String(filter.pesos[k]));
+    if (filter.partida) {
+      next.set('partida', filter.partida.label);
+      next.set('partida_lat', String(filter.partida.lat));
+      next.set('partida_lon', String(filter.partida.lon));
+    }
+    if (view === 'mapa') next.set('view', 'mapa');
+    setSearchParams(next, { replace: true });
+  }, [filter.fq, filter.fCnae, filter.fPorte, filter.territorio, filter.faixas,
+    filter.pesos, filter.partida, view, setSearchParams, urlReady]);
+
+  // Primeira visita: usa cidade cadastrada na conta como território inicial.
+  // Executa uma vez; se não houver endereço, CTA do estado vazio assume.
+  const suggestedTerritory = useRef(false);
+  useEffect(() => {
+    if (suggestedTerritory.current || filter.territorio.length > 0 || searchParams.has('munis')) return;
+    suggestedTerritory.current = true;
+    void api.get<{ org?: { cidade?: string | null; uf?: string | null } }>('/api/account')
+      .then(async (account) => {
+        const city = account.org?.cidade?.trim();
+        if (!city) return;
+        const result = await api.get<{ municipios: Municipio[] }>(`/api/municipios/search?q=${encodeURIComponent(city)}`);
+        const exact = result.municipios.find((m) => m.nome.localeCompare(city, 'pt-BR', { sensitivity: 'base' }) === 0
+          && (!account.org?.uf || m.uf === account.org.uf));
+        if (exact) filter.setTerritorio([exact]);
+      })
+      .catch(() => undefined);
+  }, [filter.territorio.length, searchParams]);
 
   // Clicar na lista/mapa (ou em qualquer lugar fora do painel) recolhe os filtros.
   const filtrosRef = useRef<HTMLDivElement>(null);
@@ -276,26 +361,24 @@ export function Recommend(): React.JSX.Element {
     filter.faixas.capMin, filter.faixas.capMax, filter.faixas.idadeMin, filter.faixas.idadeMax,
     filter.partida?.lat, filter.partida?.lon]);
 
-  // Botão "Buscar" da barra: dispara a consulta na hora (sem debounce). Não
-  // recolhe o painel — quem fecha é o botão "Filtros" ou o clique fora.
+  // Botão "Buscar" dispara a consulta na hora e devolve espaço aos resultados.
   // Sem território (ou com faixa invertida) não há o que buscar.
   const buscar = (): void => {
     if (semTerritorio || faixaRuim) return;
-    setFiltersOpen(true); // explícito: buscar nunca recolhe o painel
+    setFiltersOpen(false);
     void load(0);
   };
 
+  const copiarBusca = async (): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      toast.success('Link da busca copiado.');
+    } catch {
+      toast.error('Não foi possível copiar o link da busca.');
+    }
+  };
+
   // No mapa, plota só o que já está carregado na lista — sem auto-paginar.
-
-  // Persiste se a barra de filtros está aberta.
-  useEffect(() => {
-    try { localStorage.setItem(FILTERS_OPEN_KEY, filtersOpen ? '1' : '0'); } catch { /* storage indisponível */ }
-  }, [filtersOpen]);
-
-  // Persiste se os indicadores (KPIs) estão expandidos.
-  useEffect(() => {
-    try { localStorage.setItem(KPIS_OPEN_KEY, kpisOpen ? '1' : '0'); } catch { /* storage indisponível */ }
-  }, [kpisOpen]);
 
   // Monta o contato-base da empresa (nome + telefone do cadastro). O telefone não
   // vem na recomendação — busca no detalhe (RFB); sem detalhe, fica só o nome.
@@ -380,13 +463,13 @@ export function Recommend(): React.JSX.Element {
   if (err && recs.length === 0) {
     return (
       <div className="p-4 sm:p-6">
-        <Card className="border-amber-200 bg-amber-50 p-5">
-          <p className="font-semibold text-amber-900">{err}</p>
+        <Alert tone="warn" className="p-4">
+          <p className="font-semibold">{err}</p>
           <button onClick={() => setFiltersOpen(true)}
-            className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-brand-700 hover:underline">
+            className="mt-2 inline-flex items-center gap-1 font-semibold text-brand-700 hover:underline dark:text-brand-300">
             Ajustar filtros da busca <Icon name="chevronRight" size={15} />
           </button>
-        </Card>
+        </Alert>
       </div>
     );
   }
@@ -397,15 +480,14 @@ export function Recommend(): React.JSX.Element {
   const painelLista = (
     <div className="space-y-4">
       {faixaRuim && (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          <Icon name="alertTriangle" size={16} className="shrink-0" />
+        <Alert tone="warn" className="flex-wrap items-center py-2">
           <span>Busca pausada: o valor inicial de uma faixa está maior que o limite.</span>
           {!filtersOpen && (
             <button onClick={() => setFiltersOpen(true)} className="font-semibold text-brand-700 hover:underline">
               Abrir filtros
             </button>
           )}
-        </div>
+        </Alert>
       )}
       {/* Desktop: acordeão inline. Celular: folha pelo rodapé — o painel cobre a
           lista em vez de empurrá-la, e o rodapé conta os resultados ao vivo. */}
@@ -460,6 +542,9 @@ export function Recommend(): React.JSX.Element {
                     className={cn('transition-transform duration-300 ease-out', kpisOpen ? 'rotate-90' : 'rotate-0')} />
                 </Btn>
               )}
+              <Btn variant="ghost" icon="link" title="Copiar link desta busca" onClick={copiarBusca}>
+                Compartilhar
+              </Btn>
               <Segmented value={view} onChange={(v) => { setFocus(null); setView(v); }} options={[
                 { value: 'lista', label: 'Lista', icon: 'list' },
                 { value: 'mapa', label: 'Mapa', icon: 'map' },
@@ -493,7 +578,7 @@ export function Recommend(): React.JSX.Element {
           )}
           <Card className="min-h-0 flex-1 overflow-hidden p-0">
             <MapContainer center={center} zoom={11} className="h-full w-full" scrollWheelZoom>
-              <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+              <ThemedTileLayer />
               <FitBounds pts={bounds} focus={focus} />
               <FlyTo focus={focus} />
               <RecMarkers pontos={pontos} focus={focus} renderMarker={({ r, lat, lon }) => {
@@ -561,7 +646,8 @@ export function Recommend(): React.JSX.Element {
           )}
           {recs.length === 0 && !loading && (semTerritorio
             ? <EmptyState icon="mapPin" title="Defina o território"
-                hint="Abra os Filtros e selecione municípios (ou um estado inteiro) para buscar empresas." />
+                hint="Selecione municípios ou um estado inteiro para buscar empresas."
+                action={<Btn icon="mapPin" onClick={() => setFiltersOpen(true)}>Definir território</Btn>} />
             : <EmptyState icon="building" title="Nenhuma empresa encontrada"
                 hint="Nenhuma empresa bate com os filtros aplicados. Ajuste os critérios." />)}
         </div>
@@ -575,8 +661,12 @@ export function Recommend(): React.JSX.Element {
 
 function RecCard({ rec, added, onAdd, onAddContact, onView, onViewMap, onRoute, routing }: { rec: Recommendation; added: boolean; onAdd: () => void; onAddContact: () => void; onView: () => void; onViewMap: () => void; onRoute: () => void; routing: boolean }): React.JSX.Element {
   const { can } = useAuth();
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const actionsRef = useRef<HTMLButtonElement>(null);
   const c = rec.reason.componentes;
   const score = rec.score * 100;
+  const hasLocation = rec.lat != null && rec.lon != null;
+  const hasSecondary = can('contacts.create') || hasLocation;
   return (
     <Card className="p-4 transition-shadow hover:shadow-pop">
       <div className="flex items-start justify-between gap-3">
@@ -585,13 +675,10 @@ function RecCard({ rec, added, onAdd, onAddContact, onView, onViewMap, onRoute, 
             <Icon name="building" size={20} />
           </span>
           <div className="min-w-0">
-            <div className="flex items-center gap-1">
-              <p className="truncate font-semibold text-ink-900">{rec.nome_fantasia || rec.razao_social}</p>
-              <button type="button" onClick={onView} title="Ver dados da empresa"
-                className="shrink-0 rounded-md p-0.5 text-ink-300 transition hover:bg-ink-100 hover:text-brand-600">
-                <Icon name="eye" size={15} />
-              </button>
-            </div>
+            <button type="button" onClick={onView} title="Ver dados da empresa" aria-label="Ver dados da empresa"
+              className="block max-w-full truncate text-left font-semibold text-ink-900 transition-colors hover:text-brand-600 hover:underline">
+              {rec.nome_fantasia || rec.razao_social}
+            </button>
             <p className="truncate text-xs text-ink-400">{rec.razao_social} · {rec.uf}</p>
           </div>
         </div>
@@ -625,12 +712,34 @@ function RecCard({ rec, added, onAdd, onAddContact, onView, onViewMap, onRoute, 
         {added
           ? <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-600"><Icon name="check" size={16} /> Adicionado ao funil</span>
           : can('relationships.create') && <Btn size="sm" icon="plus" onClick={onAdd}>Adicionar ao funil</Btn>}
-        {can('contacts.create') && <Btn size="sm" variant="soft" icon="users" onClick={onAddContact}>Adicionar aos contatos</Btn>}
-        {rec.lat != null && rec.lon != null && (
-          <Btn size="sm" variant="soft" icon="map" onClick={onViewMap}>Ver no mapa</Btn>
-        )}
-        {rec.lat != null && rec.lon != null && (
-          <Btn size="sm" variant="soft" icon="map" onClick={onRoute} disabled={routing}>{routing ? 'Traçando…' : 'Rota'}</Btn>
+        {hasSecondary && (
+          <>
+            <button ref={actionsRef} type="button" onClick={() => setActionsOpen((v) => !v)}
+              aria-label="Mais ações" aria-haspopup="menu" aria-expanded={actionsOpen}
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-sm font-semibold text-ink-600 transition hover:bg-ink-100 sm:min-h-8">
+              <Icon name="moreHorizontal" size={17} /> Mais ações
+            </button>
+            <Popover open={actionsOpen} anchorRef={actionsRef} onClose={() => setActionsOpen(false)} width={220} align="left">
+              {can('contacts.create') && (
+                <SafeButton onClick={() => { setActionsOpen(false); return onAddContact(); }} role="menuitem"
+                  className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-ink-700 hover:bg-ink-50">
+                  <Icon name="users" size={16} /> Adicionar aos contatos
+                </SafeButton>
+              )}
+              {hasLocation && (
+                <SafeButton onClick={() => { setActionsOpen(false); return onViewMap(); }} role="menuitem"
+                  className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-ink-700 hover:bg-ink-50">
+                  <Icon name="map" size={16} /> Ver no mapa
+                </SafeButton>
+              )}
+              {hasLocation && (
+                <SafeButton onClick={() => { setActionsOpen(false); return onRoute(); }} role="menuitem" disabled={routing}
+                  className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-ink-700 hover:bg-ink-50 disabled:opacity-50">
+                  <Icon name="route" size={16} /> {routing ? 'Traçando…' : 'Rota'}
+                </SafeButton>
+              )}
+            </Popover>
+          </>
         )}
       </div>
     </Card>

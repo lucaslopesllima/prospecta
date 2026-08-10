@@ -93,6 +93,16 @@ describe('Orders', () => {
     expect(screen.getAllByText(/R\$\s?500,00/).length).toBeGreaterThan(0);
   });
 
+  it('mantém somente filtros ou indicadores abertos', async () => {
+    mount();
+    await screen.findByText('Cliente Um LTDA');
+    expect(screen.getByTitle('Recolher indicadores')).toBeInTheDocument();
+    await userEvent.click(screen.getByTitle('Expandir filtros'));
+    expect(screen.getByTitle('Recolher filtros')).toBeInTheDocument();
+    expect(screen.getByTitle('Expandir indicadores')).toBeInTheDocument();
+    expect(localStorage.getItem('pedidos:panel')).toBe('filtros');
+  });
+
   it('filtra por status', async () => {
     mount();
     await screen.findByText('Cliente Um LTDA');

@@ -338,24 +338,29 @@ export function NotificationBell({ variant }: { variant: 'light' | 'dark' }): Re
   );
 }
 
-// Navegação no mobile/PWA: FAB Material flutuante no canto inferior esquerdo.
-// Substitui a antiga barra inferior — toca no botão, abre um menu flutuante com
-// toda a navegação (agrupada), fecha ao escolher destino, tocar fora ou trocar
-// de rota. Só aparece no mobile (sm:hidden); no desktop vale a Sidebar.
-function MobileNavFab(): React.JSX.Element {
+// Navegação mobile: quatro destinos diários ficam a um toque; baixa frequência
+// vai para "Mais". FAB deixa de servir como menu no topo (região difícil para o
+// polegar) e volta a ficar reservado para ações contextuais das páginas.
+function MobileBottomNav(): React.JSX.Element {
   const groups = useNavGroups();
+  const nav = useNav();
   const { user, logout } = useAuth();
   const loc = useLocation();
   const [open, setOpen] = useState(false);
   const inicial = (user?.org_nome ?? user?.email ?? '?').charAt(0).toUpperCase();
+  const primaryPaths = new Set(['/', '/prospeccao', '/funil', '/agenda']);
+  const primary = nav.filter((item) => primaryPaths.has(item.to));
+  const secondary = groups
+    .map((group) => ({ ...group, items: group.items.filter((item) => !primaryPaths.has(item.to)) }))
+    .filter((group) => group.items.length > 0);
   useEffect(() => { setOpen(false); }, [loc.pathname]);
   return (
-    <div className="sm:hidden">
+    <div className="shrink-0 sm:hidden">
       {open && <div className="fixed inset-0 z-[1090] bg-black/40" onClick={() => setOpen(false)} />}
       {open && (
         <nav aria-label="Navegação"
-          className="fixed top-[calc(env(safe-area-inset-top)+4.5rem)] left-4 z-[1100] max-h-[70vh] w-64 max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain rounded-2xl border border-ink-200 bg-surface p-2 shadow-pop animate-[toastIn_.18s_ease-out]">
-          {groups.map((g, gi) => (
+          className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] left-3 right-3 z-[1100] max-h-[70vh] overflow-y-auto overscroll-contain rounded-2xl border border-ink-200 bg-glass p-2 shadow-pop backdrop-blur-xl animate-[toastIn_.18s_ease-out]">
+          {secondary.map((g, gi) => (
             <div key={g.label ?? 'top'} className={cn(gi > 0 && 'mt-1.5 border-t border-ink-100 pt-1.5')}>
               {g.label && <p className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-ink-400">{g.label}</p>}
               {g.items.map((n) => (
@@ -390,10 +395,33 @@ function MobileNavFab(): React.JSX.Element {
           </div>
         </nav>
       )}
-      <button onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-label={open ? 'Fechar menu' : 'Abrir menu'}
-        className="fixed top-[max(env(safe-area-inset-top),1rem)] left-4 z-[1100] grid h-14 w-14 place-items-center rounded-2xl bg-brand-600 text-white shadow-[0_8px_20px_-6px_rgba(44,86,221,0.6)] transition-transform active:scale-95">
-        <Icon name={open ? 'x' : 'menu'} size={26} className="transition-transform duration-200" />
-      </button>
+      <nav aria-label="Navegação principal"
+        className="flex items-stretch border-t border-ink-200 bg-surface px-1 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_-18px_rgba(16,24,40,.45)]">
+        {primary.map((item) => (
+          <NavLink key={item.to} to={item.to} end={item.to === '/'}
+            className={({ isActive }) => cn(
+              'flex min-h-16 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-semibold transition-colors',
+              isActive ? 'text-brand-600' : 'text-ink-400 active:bg-ink-100',
+            )}>
+            {({ isActive }) => (
+              <>
+                <span className={cn('grid h-7 min-w-9 place-items-center rounded-full px-2', isActive && 'bg-brand-50')}>
+                  <Icon name={item.icon} size={19} />
+                </span>
+                <span className="max-w-full truncate">{item.label === 'Buscar Empresas' ? 'Empresas' : item.label}</span>
+              </>
+            )}
+          </NavLink>
+        ))}
+        <button onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-label={open ? 'Fechar menu' : 'Abrir menu'}
+          className={cn('flex min-h-16 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-semibold transition-colors',
+            open ? 'text-brand-600' : 'text-ink-400 active:bg-ink-100')}>
+          <span className={cn('grid h-7 min-w-9 place-items-center rounded-full px-2', open && 'bg-brand-50')}>
+            <Icon name={open ? 'x' : 'moreHorizontal'} size={20} />
+          </span>
+          Mais
+        </button>
+      </nav>
     </div>
   );
 }
@@ -438,10 +466,12 @@ function Shell({ children }: { children: ReactNode }): React.JSX.Element {
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* mobile top bar */}
-        {/* canto superior esquerdo é do FAB de navegação → header só com controles à direita */}
-        <header data-chrome className="flex items-center justify-end bg-ink-900 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] sm:hidden">
+        <header data-chrome className="flex items-center justify-between gap-3 bg-ink-900 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] sm:hidden">
+          <div className="flex min-w-0 items-center gap-2">
+            <LogoMark size={26} className="shrink-0 rounded-lg" />
+            <span className="truncate text-sm font-semibold text-white">{title}</span>
+          </div>
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-ink-300">{title}</span>
             <ThemeToggle variant="dark" />
             <NotificationBell variant="dark" />
             <NavLink to="/conta" aria-label="Meu perfil"
@@ -459,10 +489,8 @@ function Shell({ children }: { children: ReactNode }): React.JSX.Element {
 
         <OfflineBanner />
         <main className="min-h-0 flex-1 overflow-auto">{children}</main>
+        <MobileBottomNav />
       </div>
-
-      {/* menu flutuante (FAB Material) no mobile — substitui a barra inferior */}
-      <MobileNavFab />
     </div>
   );
 }

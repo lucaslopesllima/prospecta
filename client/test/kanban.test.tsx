@@ -14,6 +14,10 @@ vi.mock('../src/lib/auth.tsx', () => {
   const useAuth = vi.fn();
   return { useAuth, useOptionalUser: () => useAuth().user ?? null };
 });
+vi.mock('react-router-dom', async (orig) => {
+  const real = await orig() as Record<string, unknown>;
+  return { ...real, useSearchParams: () => [new URLSearchParams()] };
+});
 vi.mock('../src/lib/confirm.ts', () => ({ confirmDialog: vi.fn(async () => true) }));
 const m = vi.mocked(api);
 const useAuthMock = vi.mocked(useAuth);
@@ -178,27 +182,27 @@ describe('Kanban', () => {
     render(<Kanban />);
     await screen.findByText('Loja Um');
     await userEvent.click(screen.getByTitle('Expandir filtros'));
-    expect(localStorage.getItem('funil:filtersOpen')).toBe('1');
-    await userEvent.click(screen.getByTitle('Recolher indicadores'));
-    expect(localStorage.getItem('funil:kpisOpen')).toBe('0');
+    expect(localStorage.getItem('funil:panel')).toBe('filtros');
+    await userEvent.click(screen.getByTitle('Expandir indicadores'));
+    expect(localStorage.getItem('funil:panel')).toBe('kpis');
   });
 
   it('clicar no board recolhe os filtros; clicar dentro do painel mantém aberto', async () => {
     render(<Kanban />);
     await screen.findByText('Loja Um');
     await userEvent.click(screen.getByTitle('Expandir filtros'));
-    expect(localStorage.getItem('funil:filtersOpen')).toBe('1');
+    expect(localStorage.getItem('funil:panel')).toBe('filtros');
 
     // clique dentro do painel (um dos selects do filtro) não fecha
     await userEvent.click(screen.getByLabelText('Etapa'));
-    expect(localStorage.getItem('funil:filtersOpen')).toBe('1');
+    expect(localStorage.getItem('funil:panel')).toBe('filtros');
 
     await userEvent.click(coluna('Negociação')); // clique no board = fora do painel
     await waitFor(() => expect(screen.getByTitle('Expandir filtros')).toBeInTheDocument());
-    expect(localStorage.getItem('funil:filtersOpen')).toBe('0');
+    expect(localStorage.getItem('funil:panel')).toBe('none');
   });
 
-  it('botão Buscar recarrega o board sem fechar os filtros', async () => {
+  it('botão Buscar recarrega o board e fecha os filtros', async () => {
     render(<Kanban />);
     await screen.findByText('Loja Um');
     await userEvent.click(screen.getByTitle('Expandir filtros'));
@@ -206,8 +210,8 @@ describe('Kanban', () => {
     const antes = kanbanCalls();
     await userEvent.click(screen.getByRole('button', { name: /Buscar/ }));
     await waitFor(() => expect(kanbanCalls()).toBe(antes + 1));
-    expect(localStorage.getItem('funil:filtersOpen')).toBe('1'); // painel segue aberto
-    expect(screen.getByTitle('Recolher filtros')).toBeInTheDocument();
+    expect(localStorage.getItem('funil:panel')).toBe('none');
+    expect(screen.getByTitle('Expandir filtros')).toBeInTheDocument();
   });
 
   it('filtro de etapa deixa só a coluna escolhida no board', async () => {

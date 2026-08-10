@@ -108,6 +108,28 @@ export function Badge({ tone = 'neutral', className, children }: { tone?: Tone; 
   );
 }
 
+/* ── Alert ──────────────────────────────────────────────── */
+const ALERT: Record<Exclude<Tone, 'brand' | 'neutral'>, string> = {
+  success: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+  info: 'border-sky-200 bg-sky-50 text-sky-800',
+  warn: 'border-amber-200 bg-amber-50 text-amber-900',
+  danger: 'border-rose-200 bg-rose-50 text-rose-800',
+};
+export function Alert({ tone = 'info', icon, className, children }: {
+  tone?: Exclude<Tone, 'brand' | 'neutral'>; icon?: IconName; className?: string; children: ReactNode;
+}): React.JSX.Element {
+  const defaultIcon: Record<typeof tone, IconName> = {
+    success: 'check', info: 'info', warn: 'alertTriangle', danger: 'alertTriangle',
+  };
+  return (
+    <div role={tone === 'danger' ? 'alert' : 'status'}
+      className={cn('flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-sm', ALERT[tone], className)}>
+      <Icon name={icon ?? defaultIcon[tone]} size={17} className="mt-0.5 shrink-0" />
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
+  );
+}
+
 /* ── StatCard — the analytics KPI tile ───────────────────── */
 export function StatCard(
   { label, value, sub, icon, tone = 'brand' }:

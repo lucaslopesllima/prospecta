@@ -4,7 +4,7 @@ import { api, BUSCA_DEBOUNCE_MS } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import { useSellers, SellerFilter } from '../lib/sellers.tsx';
 import type { Order, OrderStatus, RepresentedCompany } from '../lib/types.ts';
-import { Badge, Btn, Card, cn, Collapse, EmptyState, ErrorState, FilterPanel, inputCls, Modal, PageHeader, RowActions, SafeButton, Spinner, StatRow, useIsNarrow, type Tone } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, Collapse, EmptyState, ErrorState, FilterPanel, inputCls, Modal, PageHeader, RowActions, SafeButton, Spinner, StatRow, useIsNarrow, usePanels, type Tone } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { brl, csvNum, fmtDate, maskSearchCNPJ } from '../lib/format.ts';
 import { downloadCsv } from '../lib/export.ts';
@@ -45,9 +45,6 @@ const summarizeOrders = (orders: Order[]): { total: number; aberto: number; fatu
 
 // Estado de abertura dos painéis (persistido) — mesmo padrão da Prospecção:
 // filtros começam fechados, indicadores abertos.
-const FILTERS_OPEN_KEY = 'pedidos:filtersOpen';
-const KPIS_OPEN_KEY = 'pedidos:kpisOpen';
-
 export function Orders(): React.JSX.Element {
   const { user, can, isOffice } = useAuth();
   // Coluna "Vendedor" só faz sentido com equipe: admin em conta escritório.
@@ -85,12 +82,17 @@ export function Orders(): React.JSX.Element {
   const [nfModal, setNfModal] = useState<Order | null>(null);
   // Painéis colapsáveis — mesmo padrão da Prospecção (toggle no header +
   // grid-rows, estado persistido). Filtros fechados / indicadores abertos.
-  const [showFilters, setShowFilters] = useState(() => {
-    try { return localStorage.getItem(FILTERS_OPEN_KEY) === '1'; } catch { return false; }
-  });
-  const [showKpis, setShowKpis] = useState(() => {
-    try { return localStorage.getItem(KPIS_OPEN_KEY) !== '0'; } catch { return true; }
-  });
+  const panels = usePanels('pedidos', 'kpis');
+  const showFilters = panels.aberto === 'filtros';
+  const showKpis = panels.aberto === 'kpis';
+  const setShowFilters = (next: boolean | ((current: boolean) => boolean)): void => {
+    const open = typeof next === 'function' ? next(showFilters) : next;
+    if (open) panels.abrir('filtros'); else if (showFilters) panels.fechar();
+  };
+  const setShowKpis = (next: boolean | ((current: boolean) => boolean)): void => {
+    const open = typeof next === 'function' ? next(showKpis) : next;
+    if (open) panels.abrir('kpis'); else if (showKpis) panels.fechar();
+  };
 
   const [reps, setReps] = useState<RepresentedCompany[]>([]);
 
@@ -141,13 +143,6 @@ export function Orders(): React.JSX.Element {
     const t = setTimeout(() => setCompanyTerm(companyQ.trim().length >= 2 ? companyQ.trim() : ''), BUSCA_DEBOUNCE_MS);
     return () => clearTimeout(t);
   }, [companyQ]);
-
-  useEffect(() => {
-    try { localStorage.setItem(FILTERS_OPEN_KEY, showFilters ? '1' : '0'); } catch { /* storage indisponível */ }
-  }, [showFilters]);
-  useEffect(() => {
-    try { localStorage.setItem(KPIS_OPEN_KEY, showKpis ? '1' : '0'); } catch { /* storage indisponível */ }
-  }, [showKpis]);
 
   const loadMore = async (): Promise<void> => {
     setLoadingMore(true);

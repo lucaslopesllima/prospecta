@@ -521,6 +521,11 @@ function RecommendConfig({ f }: { f: CompanyFilter }): React.JSX.Element {
   const isFull = (uf: string, total: number): boolean => (countByUf[uf] ?? 0) === total && total > 0;
   const fullUfs = ufs.filter((u) => isFull(u.uf, u.total)).map((u) => u.uf);
   const looseCities = sel.filter((m) => !fullUfs.includes(m.uf)).sort((a, b) => a.nome.localeCompare(b.nome));
+  const presets: { label: string; value: Pesos }[] = [
+    { label: 'Equilibrado', value: DEFAULT_PESOS },
+    { label: 'Melhor fit', value: { cnae: 0.6, proximidade: 0.15, porte: 0.1, capital: 0.1, idade: 0.05 } },
+    { label: 'Mais próximas', value: { cnae: 0.2, proximidade: 0.6, porte: 0.1, capital: 0.05, idade: 0.05 } },
+  ];
 
   return (
     <div className="grid gap-3 lg:grid-cols-2">
@@ -602,12 +607,23 @@ function RecommendConfig({ f }: { f: CompanyFilter }): React.JSX.Element {
         </div>
       </div>
 
-      {/* Pesos do score */}
-      <div className="rounded-2xl border border-hairline bg-surface p-3 shadow-card">
-        <h4 className="flex items-center gap-1.5 text-sm font-semibold text-ink-900">
-          Pesos do score <Hint text={PESO_SLIDER_HINT} />
-        </h4>
-        <p className="mt-0.5 text-xs text-ink-400">Quanto cada fator influencia o ranqueamento.</p>
+      {/* Critérios avançados ficam recolhidos: território e filtros básicos
+          resolvem a maioria das buscas; sliders continuam disponíveis a quem
+          precisa afinar o ranking. */}
+      <details className="group self-start rounded-2xl border border-hairline bg-surface p-3 shadow-card">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-xl text-sm font-semibold text-ink-900">
+          <span className="inline-flex items-center gap-1.5">Critérios avançados do score <Hint text={PESO_SLIDER_HINT} /></span>
+          <Icon name="chevronRight" size={16} className="text-ink-400 transition-transform group-open:rotate-90" />
+        </summary>
+        <p className="mt-2 text-xs text-ink-400">Escolha um perfil pronto ou ajuste cada influência.</p>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {presets.map((preset) => (
+            <button key={preset.label} type="button" onClick={() => f.setPesos({ ...preset.value })}
+              className="rounded-lg border border-ink-200 bg-ink-50 px-2.5 py-1.5 text-xs font-semibold text-ink-600 transition hover:border-brand-300 hover:text-brand-700">
+              {preset.label}
+            </button>
+          ))}
+        </div>
         {(['cnae', 'proximidade', 'porte', 'capital', 'idade'] as const).map((k) => (
           <label key={k} className="mt-3 block">
             <div className="flex justify-between text-xs font-semibold text-ink-600">
@@ -619,7 +635,7 @@ function RecommendConfig({ f }: { f: CompanyFilter }): React.JSX.Element {
               className="mt-1.5 w-full accent-brand-600" />
           </label>
         ))}
-      </div>
+      </details>
     </div>
   );
 }

@@ -7,9 +7,11 @@ import { useOptionalUser, useAuth } from '../lib/auth.tsx';
 import { toast } from '../lib/toast.tsx';
 import { clampNum, dec, isEmail, maskPct } from '../lib/format.ts';
 import { confirmDialog } from '../lib/confirm.ts';
+import { ThemeSelector } from '../lib/theme.tsx';
 
-type Section = 'funil' | 'cenarios' | 'acoes' | 'aliquotas' | 'alertas' | 'smtp' | 'whatsapp';
+type Section = 'aparencia' | 'funil' | 'cenarios' | 'acoes' | 'aliquotas' | 'alertas' | 'smtp' | 'whatsapp';
 const SECTIONS: { key: Section; label: string; icon: IconName; desc: string; admin?: boolean }[] = [
+  { key: 'aparencia', label: 'Aparência', icon: 'monitor', desc: 'Tema claro, escuro ou do sistema' },
   { key: 'cenarios', label: 'Cenários', icon: 'list', desc: 'Opções de "cenário atual"' },
   { key: 'acoes', label: 'Ações próximo nível', icon: 'target', desc: 'Opções de ação para avançar' },
   { key: 'funil', label: 'Funil', icon: 'columns', desc: 'Fases do seu pipeline de vendas' },
@@ -46,6 +48,7 @@ export function Settings(): React.JSX.Element {
           })}
         </nav>
         <div className="min-w-0 flex-1">
+          {section === 'aparencia' && <AppearanceEditor />}
           {section === 'cenarios' && (
             <NamedListEditor inputCls={inputCls} path="scenarios" titulo="Cenários" icon="list"
               desc='Opções do dropdown "Cenário atual" na prospecção.' placeholder="Novo cenário (ex.: Já compra do concorrente)" />
@@ -62,6 +65,18 @@ export function Settings(): React.JSX.Element {
         </div>
       </div>
     </div>
+  );
+}
+
+function AppearanceEditor(): React.JSX.Element {
+  return (
+    <Card className="max-w-xl p-4">
+      <h3 className="text-sm font-semibold text-ink-900">Tema da interface</h3>
+      <p className="mt-0.5 text-xs text-ink-400">
+        Sistema acompanha automaticamente a preferência deste dispositivo.
+      </p>
+      <div className="mt-4"><ThemeSelector /></div>
+    </Card>
   );
 }
 

@@ -100,7 +100,8 @@ describe('theme.tsx', () => {
   it('sem preferência salva segue o SO (prefers-color-scheme)', () => {
     Object.defineProperty(window, 'matchMedia', { writable: true, value: () => ({ matches: true, addEventListener() {}, removeEventListener() {} }) });
     render(<ThemeProvider><Probe /></ThemeProvider>);
-    expect(screen.getByTestId('t').textContent).toBe('dark');
+    expect(screen.getByTestId('t').textContent).toBe('system');
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
   });
   it('useTheme fora do provider lança', () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import { useSellers, SellerFilter, sellerLabel } from '../lib/sellers.tsx';
-import { Badge, Btn, Card, EmptyState, ErrorState, PageHeader, Spinner, StatCard, cn } from '../lib/ui.tsx';
+import { Alert, Badge, Btn, Card, EmptyState, ErrorState, PageHeader, Spinner, StatCard, cn } from '../lib/ui.tsx';
 import { brl, brl0, todayStr } from '../lib/format.ts';
 
 interface FunilStage { id: number; nome: string; ordem: number; qtd: number; valor: string }
@@ -67,10 +67,10 @@ export function Dashboard(): React.JSX.Element {
       {loadError && !data ? <ErrorState hint={loadError} onRetry={() => setRetryKey((v) => v + 1)} /> : !data ? <Spinner /> : (
         <>
           {loadError && (
-            <Card className="flex items-center gap-3 border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <Alert tone="warn" className="items-center px-4 py-3">
               <span className="flex-1">Dados anteriores mantidos. Atualização falhou: {loadError}</span>
               <Btn size="sm" variant="ghost" onClick={() => setRetryKey((v) => v + 1)}>Tentar novamente</Btn>
-            </Card>
+            </Alert>
           )}
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
             {/* KPI → ação: cada card leva à tela onde o usuário age sobre o número */}

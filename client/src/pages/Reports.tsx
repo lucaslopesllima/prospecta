@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { MapContainer, TileLayer, CircleMarker, Tooltip } from 'react-leaflet';
+import { MapContainer, CircleMarker, Tooltip } from 'react-leaflet';
 import { api } from '../lib/api.ts';
 import { useSellers, SellerFilter } from '../lib/sellers.tsx';
 import { loadTerritorioIds } from '../lib/companyFilter.tsx';
 import { Btn, Card, EmptyState, ErrorState, PageHeader, Segmented, Spinner, cn } from '../lib/ui.tsx';
 import { brl, brl0, csvNum } from '../lib/format.ts';
 import { downloadCsv } from '../lib/export.ts';
+import { ThemedTileLayer } from '../lib/mapTiles.tsx';
 
 type Tab = 'vendas' | 'abc' | 'cobertura' | 'descartes';
 type GroupBy = 'mes' | 'vendedor' | 'representada';
@@ -226,7 +227,7 @@ function Cobertura({ ownerId }: { ownerId: 'todos' | number }): React.JSX.Elemen
       <Card className="overflow-hidden p-0">
         <div className="h-80 w-full">
           <MapContainer center={center} zoom={6} className="h-full w-full" scrollWheelZoom>
-            <TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+            <ThemedTileLayer />
             {municipios.map((m) => {
               const cobertura = m.potencial > 0 ? m.clientes / m.potencial : 0;
               const cor = m.clientes > 0 ? (cobertura >= 0.05 ? '#10b981' : '#f59e0b') : '#94a3b8';

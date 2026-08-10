@@ -6,6 +6,7 @@ import { Btn, cn } from '../lib/ui.tsx';
 import { Icon, type IconName } from '../lib/icons.tsx';
 import { LogoMark, LogoWord } from '../lib/logo.tsx';
 import { isEmail } from '../lib/format.ts';
+import { ThemeSelector } from '../lib/theme.tsx';
 
 const FEATURES: { icon: IconName; title: string; desc: string }[] = [
   { icon: 'target', title: 'Recomendação explicável', desc: 'Empresas ranqueadas por CNAE, proximidade e porte.' },
@@ -85,6 +86,9 @@ export function Login(): React.JSX.Element {
       {/* form */}
       <div className="grid place-items-center bg-ink-50 p-4">
         <div className="w-full max-w-sm">
+          <div className="mb-5 flex justify-end">
+            <ThemeSelector />
+          </div>
           <div className="mb-6 flex items-center gap-2.5 lg:hidden">
             <LogoMark size={36} className="rounded-xl shadow-sm shadow-black/20" />
             <LogoWord className="text-lg font-bold tracking-tight text-ink-900" />

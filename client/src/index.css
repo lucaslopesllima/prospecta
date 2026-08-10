@@ -38,8 +38,10 @@
   --color-ink-100: #eceef5;
   --color-ink-200: #d9dde9;
   --color-ink-300: #b8bfd2;
-  --color-ink-400: #8c95b1;
-  --color-ink-500: #68708d;
+  /* 400 também aparece como texto auxiliar pequeno; precisa manter AA sobre
+     superfície branca. 500 ganha um passo extra para preservar hierarquia. */
+  --color-ink-400: #68708d;
+  --color-ink-500: #59617b;
   --color-ink-600: #4e566f;
   --color-ink-700: #3b425a;
   --color-ink-800: #262b3d;
@@ -208,6 +210,12 @@ select:-webkit-autofill {
 .dark .leaflet-popup-tip { background: var(--color-surface); color: var(--color-ink-800); }
 .dark .leaflet-popup-close-button { color: var(--color-ink-400); }
 
+/* Mantém mesmo provedor de tiles, mas adapta luminância/saturação ao dark sem
+   introduzir chave ou dependência de segundo serviço cartográfico. */
+.leaflet-dark-tiles {
+  filter: brightness(.62) invert(1) contrast(1.25) hue-rotate(180deg) saturate(.55);
+}
+
 /* toast entra deslizando do topo */
 @keyframes toastIn {
   from { opacity: 0; transform: translateY(-8px); }
@@ -227,6 +235,24 @@ select:-webkit-autofill {
 .dark [data-badge][data-tone='warn']    { background: color-mix(in srgb, #f0a35e 20%, transparent); color: #fcd34d; }
 .dark [data-badge][data-tone='danger']  { background: color-mix(in srgb, #fb7185 20%, transparent); color: #fda4af; }
 .dark [data-badge][data-tone='neutral'] { background: color-mix(in srgb, #8b93ab 18%, transparent); color: #b3bacd; }
+
+/* Estados semânticos fora do Badge/Toast. Muitas telas usam utilities 50/700
+   em alertas e chips. No dark elas viravam cartões quase brancos. */
+.dark :where(.bg-amber-50) { background-color: color-mix(in srgb, #f59e0b 14%, transparent); }
+.dark :where(.bg-amber-100) { background-color: color-mix(in srgb, #f59e0b 20%, transparent); }
+.dark :where(.border-amber-200, .border-amber-300) { border-color: color-mix(in srgb, #fbbf24 35%, transparent); }
+.dark :where(.text-amber-600, .text-amber-700, .text-amber-800, .text-amber-900) { color: #fcd34d; }
+.dark :where(.bg-rose-50) { background-color: color-mix(in srgb, #f43f5e 13%, transparent); }
+.dark :where(.bg-rose-100) { background-color: color-mix(in srgb, #f43f5e 20%, transparent); }
+.dark :where(.border-rose-200, .border-rose-300) { border-color: color-mix(in srgb, #fb7185 35%, transparent); }
+.dark :where(.text-rose-600, .text-rose-700, .text-rose-800, .text-rose-900) { color: #fda4af; }
+.dark :where(.bg-emerald-50, .bg-green-50) { background-color: color-mix(in srgb, #10b981 13%, transparent); }
+.dark :where(.bg-emerald-100, .bg-green-100) { background-color: color-mix(in srgb, #10b981 20%, transparent); }
+.dark :where(.border-emerald-200, .border-emerald-300) { border-color: color-mix(in srgb, #34d399 35%, transparent); }
+.dark :where(.text-emerald-600, .text-emerald-700, .text-emerald-800, .text-emerald-900) { color: #6ee7b7; }
+.dark :where(.bg-sky-50, .bg-blue-50, .bg-violet-50) { background-color: color-mix(in srgb, #38bdf8 12%, transparent); }
+.dark :where(.border-sky-200, .border-blue-200, .border-violet-200) { border-color: color-mix(in srgb, #7dd3fc 30%, transparent); }
+.dark :where(.text-sky-600, .text-sky-700, .text-blue-600, .text-blue-700, .text-blue-800, .text-blue-900) { color: #7dd3fc; }
 
 /* ── Foco de teclado global ─────────────────────────────────
    Só o Btn tinha anel de foco; Segmented, chips, ícones de ação e os botões
