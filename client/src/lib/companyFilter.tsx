@@ -32,7 +32,7 @@ export const PESO_LABEL: Record<keyof Pesos, string> = {
 // Explica o que cada fator mede e como o peso age (tooltip ao lado do slider).
 export const PESO_HINT: Record<keyof Pesos, string> = {
   cnae: 'Quanto a atividade da empresa se parece com os CNAEs-alvo: mesma classe vale 1,0; mesma divisão 0,6; mesma seção 0,3; nada em comum 0.',
-  proximidade: 'Distância do município da empresa até o endereço de partida (ou o centro do território). Colada na origem vale 1,0 e cai até 0 em 150 km.',
+  proximidade: 'Distância em linha reta do município da empresa até o endereço de partida, conta ou centro do território. Colada na origem vale 1,0 e cai até 0 em 150 km.',
   porte: 'Porte declarado na Receita Federal: demais (grande/média) 1,0 · pequeno 0,7 · micro 0,4 · não informado 0,2.',
   capital: 'Capital social registrado, em escala logarítmica: R$ 1 milhão ou mais vale 1,0 e valores baixos caem suavemente. Mede porte financeiro, não faturamento.',
   idade: 'Tempo desde a abertura da empresa: 20 anos ou mais vale 1,0, proporcional abaixo disso. Sem data na base, o fator fica 0 (não pesa contra).',

@@ -6,6 +6,7 @@ import {
   buildRecommendQuery, buildRecommendCountQuery, RECOMMEND_COUNT_CAP,
   type RecommendProfile, type RecommendFilters,
 } from '../sql/recommend.ts';
+import { resolveOrgOrigin } from '../origin.ts';
 
 const PORTES = new Set(['nao_informado', 'micro', 'pequeno', 'demais']);
 const PROX_NORM_M = 150_000; // normalização da proximidade (~150km) — casa com o SQL
@@ -161,6 +162,11 @@ export function recommendRoutes(app: FastifyInstance): void {
     const pesos = parsePesos(query);
     const partida = typeof query.partida_lat === 'number' && typeof query.partida_lon === 'number'
       ? { lat: query.partida_lat, lon: query.partida_lon } : null;
+    // Sem partida manual, usa endereço da conta. Centro do território fica só
+    // como último fallback. A origem efetiva volta na resposta para o traçado
+    // rodoviário usar o mesmo ponto da distância em linha reta.
+    const accountOrigin = partida ? null : await resolveOrgOrigin(orgId);
+    const effectiveOrigin = partida ?? accountOrigin;
     const profile: RecommendProfile = {
       cnaes_alvo: parseInts(query.cnae),
       territorio_municipios: municipios,
@@ -171,7 +177,7 @@ export function recommendRoutes(app: FastifyInstance): void {
     const [tiers, regions, prox] = await Promise.all([
       cnaeTiers(profile.cnaes_alvo ?? []),
       getEnabledRegions(),
-      muniProximity(municipios, pesos.proximidade ?? 0.3, partida),
+      muniProximity(municipios, pesos.proximidade ?? 0.3, effectiveOrigin),
     ]);
 
     const args = {
@@ -203,6 +209,10 @@ export function recommendRoutes(app: FastifyInstance): void {
 
     return {
       results: rows,
+      origin: {
+        ...prox.origin,
+        source: partida ? 'partida' : accountOrigin ? 'conta' : 'territorio',
+      },
       page: {
         limit, offset, count: rows.length,
         // total > CAP: a contagem parou no teto, o número exibido é "CAP+".

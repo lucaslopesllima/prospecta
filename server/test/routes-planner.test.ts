@@ -102,7 +102,7 @@ describe('POST /api/routes/optimize', () => {
     expect(j.skipped).toEqual([]);
     // waypoint_index inverte a ordem: c2 visitada antes de c1
     expect(j.stops.map((s) => s.company_id)).toEqual([c2, c1]);
-    expect(j.stops[0]!.leg_dist_km).not.toBeNull();
+    expect(j.stops.map((s) => s.leg_dist_km)).toEqual([10, 12]);
   });
 });
 

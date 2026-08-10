@@ -2,8 +2,9 @@ import type { FastifyInstance } from 'fastify';
 import { one, query } from '../db.ts';
 import { requireAuth, requireAdmin, hashPassword, verifyPassword, signToken } from '../auth.ts';
 import { audit } from '../audit.ts';
-import { geocodeAddr, geocodeText } from '../geocode.ts';
+import { geocodeText } from '../geocode.ts';
 import { config } from '../config.ts';
+import { resolveOrgOrigin } from '../origin.ts';
 
 const ADDR_FIELDS = ['cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf'];
 
@@ -103,24 +104,7 @@ export function accountRoutes(app: FastifyInstance): void {
 
   // Origem das rotas = endereço da org (representante logado), geocodificado + cacheado.
   app.get('/api/account/origem', { preHandler: requireAuth }, async (req) => {
-    const orgId = req.auth!.orgId;
-    const org = await one<{
-      logradouro: string | null; numero: string | null; bairro: string | null;
-      cep: string | null; cidade: string | null; uf: string | null;
-      origem_lat: number | null; origem_lon: number | null;
-    }>(
-      `SELECT logradouro, numero, bairro, cep, cidade, uf, origem_lat, origem_lon
-       FROM organizations WHERE id = $1`, [orgId],
-    );
-    if (!org) return { origem: null };
-    if (org.origem_lat != null && org.origem_lon != null) {
-      return { origem: { lat: org.origem_lat, lon: org.origem_lon, cached: true } };
-    }
-    if (!org.logradouro && !org.cep && !org.cidade) return { origem: null }; // sem endereço cadastrado
-    const g = await geocodeAddr(org);
-    if (!g) return { origem: null };
-    await query('UPDATE organizations SET origem_lat = $1, origem_lon = $2 WHERE id = $3', [g.lat, g.lon, orgId]);
-    return { origem: { lat: g.lat, lon: g.lon, precisao: g.precisao, cached: false } };
+    return { origem: await resolveOrgOrigin(req.auth!.orgId) };
   });
 
   // Geocodifica um endereço em texto livre -> lat/lon. Usado pelo "endereço de

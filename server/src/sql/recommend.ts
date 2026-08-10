@@ -20,7 +20,8 @@
 //
 // Ranking usa a proximidade em nível de município (dentro de uma cidade, a
 // variação intraurbana é ínfima perto da normalização de 150km); a distância
-// mostrada no card é a exata (geocode do endereço), só p/ as 20 linhas da página.
+// mostrada no card é geodésica em linha reta (com geocode do endereço), só p/
+// as 20 linhas da página.
 
 const DEFAULT_NORM_M = 150_000; // proximity normalization in municipio mode (~150km)
 const CAPITAL_REF = 1_000_000;  // capital_social normalization reference
@@ -65,7 +66,7 @@ export interface RecommendArgs {
   regioesRegiao: string[];  // regiões habilitadas (regiao_br)
   // proximidade por município: pc já é wProx*(1 - min(dist/norm, 1)).
   muniProx: { id: number; pc: number }[];
-  // origem (partida ou centroide do território) — só p/ a distância exibida.
+  // origem efetiva (partida, conta ou centroide) — só p/ a distância exibida.
   origin: { lat: number; lon: number };
 }
 
@@ -255,7 +256,7 @@ SELECT
     'cnae_match', CASE WHEN cand.fit >= 1.0 THEN 'classe' WHEN cand.fit >= 0.6 THEN 'divisao'
                        WHEN cand.fit >= 0.3 THEN 'secao' ELSE 'nenhum' END,
     'cnae_principal', cand.cnae_principal,
-    -- distância exata (geocode) só p/ as 20 linhas exibidas
+    -- distância geodésica em linha reta (geocode) só p/ as 20 linhas exibidas
     'distancia_km', round((ST_Distance(pt.g, ST_SetSRID(ST_MakePoint($14::float8, $13::float8), 4326)::geography, false) / 1000.0)::numeric, 1),
     'porte', c2.porte,
     'capital_social', c2.capital_social,

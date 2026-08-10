@@ -285,10 +285,23 @@ describe('recommend', () => {
     const r = await inj(solo, 'GET', url);
     expect(r.statusCode).toBe(200);
     interface Rec { id: string; reason: { cnae_match: string } }
-    const results = (r.json() as { results: Rec[] }).results;
+    const firstBody = r.json() as {
+      results: Rec[];
+      origin: { lat: number; lon: number; source: 'partida' | 'conta' | 'territorio' };
+    };
+    const results = firstBody.results;
     const mine = results.find((x) => Number(x.id) === cid)!;
     expect(mine).toBeDefined();
     expect(mine.reason.cnae_match).toBe('classe');
+    expect(firstBody.origin.source).toBe('territorio');
+
+    // Sem partida manual, distância e rota usam origem da conta. Partida manual
+    // substitui ambas e volta explicitamente no contrato da API.
+    await query('UPDATE organizations SET origem_lat = -23.1, origem_lon = -46.1 WHERE id = $1', [solo.user.org_id]);
+    const fromAccount = (await inj(solo, 'GET', url)).json() as typeof firstBody;
+    expect(fromAccount.origin).toMatchObject({ lat: -23.1, lon: -46.1, source: 'conta' });
+    const fromPartida = (await inj(solo, 'GET', `${url}&partida_lat=-23.2&partida_lon=-46.2`)).json() as typeof firstBody;
+    expect(fromPartida.origin).toMatchObject({ lat: -23.2, lon: -46.2, source: 'partida' });
 
     // total de empresas do perfil (capado): acompanha o funil.
     interface Page { results: Rec[]; page: { total: number; total_capped: boolean } }

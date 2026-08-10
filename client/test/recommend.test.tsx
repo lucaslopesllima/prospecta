@@ -93,6 +93,7 @@ describe('Recommend', () => {
     mount();
     expect(await screen.findByText('Loja Alvo', undefined, { timeout: 2000 })).toBeInTheDocument();
     expect(screen.getAllByText('82').length).toBeGreaterThan(0); // score no card e no KPI
+    expect(screen.getByText(/4.2 km em linha reta/)).toBeInTheDocument();
     const url = m.get.mock.calls.map((c) => String(c[0])).find((u) => u.startsWith('/api/recommend'))!;
     expect(url).toContain('munis=100');
   });
@@ -220,13 +221,14 @@ describe('Recommend — mapa, rota e interações', () => {
     await waitFor(() => expect(screen.queryByText(/2\.0 km/)).not.toBeInTheDocument());
   });
 
-  it('traça rota via origem da conta quando não há partida', async () => {
+  it('traça rota com a mesma origem da distância retornada pela busca', async () => {
     comTerritorio();
     mockFetch(okRoute);
     m.get.mockImplementation(async (p: string) => {
-      if (p.startsWith('/api/recommend')) return { results: [rec({})], page: { count: 1 } };
+      if (p.startsWith('/api/recommend')) return {
+        results: [rec({})], origin: { lat: -23.3, lon: -46.4, source: 'conta' }, page: { count: 1 },
+      };
       if (p === '/api/municipios/ufs') return { ufs: [] };
-      if (p === '/api/account/origem') return { origem: { lat: -23.3, lon: -46.4 } };
       if (p.includes('/geocode')) return { geocode: { lat: -23.55, lon: -46.63, precisao: 'rua' } };
       return {};
     });
@@ -234,6 +236,8 @@ describe('Recommend — mapa, rota e interações', () => {
     await screen.findByText('Loja Alvo', undefined, { timeout: 2000 });
     await clickCardAction('Rota');
     expect(await screen.findByText(/2\.0 km/, undefined, { timeout: 2000 })).toBeInTheDocument();
+    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('-46.4,-23.3;'));
+    expect(m.get).not.toHaveBeenCalledWith('/api/account/origem');
   });
 
   it('traça rota via geolocalização quando a origem da conta falha', async () => {

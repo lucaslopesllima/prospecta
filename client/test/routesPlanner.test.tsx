@@ -87,6 +87,7 @@ describe('RoutePlanner', () => {
 
     expect(await screen.findByText('Sequência de visitas')).toBeInTheDocument();
     expect(screen.getByText(/24,6 km/)).toBeInTheDocument();
+    expect(screen.getByText('Retorno à origem').closest('li')).toHaveTextContent('+12,3 km');
   });
 
   it('erro da API aparece (ex.: sem origem cadastrada)', async () => {

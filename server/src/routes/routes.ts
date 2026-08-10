@@ -5,6 +5,7 @@ import { geocodeAddr } from '../geocode.ts';
 import { fuelEstimate } from '../fuel.ts';
 import { scopeOwner, canWriteOwned } from '../scope.ts';
 import { config } from '../config.ts';
+import { resolveOrgOrigin } from '../origin.ts';
 
 // Planejador de rota. Empresas selecionadas (do funil) -> melhor ordem de visita
 // (TSP via OSRM /trip público) -> distância/duração ida-e-volta -> custo de combustível
@@ -13,26 +14,6 @@ import { config } from '../config.ts';
 const MAX_STOPS = 25;                 // limite do OSRM público (ida+volta = MAX_STOPS+1 pontos)
 
 type Geo = { lat: number; lon: number };
-
-// Origem da rota = endereço da org (representante), geocodificado + cacheado.
-// Mesma lógica de GET /api/account/origem, reaproveitada aqui.
-async function resolveOrigem(orgId: number): Promise<Geo | null> {
-  const org = await one<{
-    logradouro: string | null; numero: string | null; bairro: string | null;
-    cep: string | null; cidade: string | null; uf: string | null;
-    origem_lat: number | null; origem_lon: number | null;
-  }>(
-    `SELECT logradouro, numero, bairro, cep, cidade, uf, origem_lat, origem_lon
-     FROM organizations WHERE id = $1`, [orgId],
-  );
-  if (!org) return null;
-  if (org.origem_lat != null && org.origem_lon != null) return { lat: org.origem_lat, lon: org.origem_lon };
-  if (!org.logradouro && !org.cep && !org.cidade) return null;
-  const g = await geocodeAddr(org);
-  if (!g) return null;
-  await query('UPDATE organizations SET origem_lat = $1, origem_lon = $2 WHERE id = $3', [g.lat, g.lon, orgId]);
-  return { lat: g.lat, lon: g.lon };
-}
 
 // Geocode de uma empresa: cache -> geocodificação do endereço -> centroide do município.
 async function geocodeCompany(id: number): Promise<Geo | null> {
@@ -186,7 +167,7 @@ async function computeRoute(
 
   // Origem da rota: endereço de partida informado nos filtros (override) tem
   // prioridade; senão cai no endereço cadastrado da conta.
-  const origem = origemOverride ?? await resolveOrigem(orgId);
+  const origem = origemOverride ?? await resolveOrgOrigin(orgId);
   if (!origem) return { ok: false, code: 400, error: 'Cadastre o endereço da sua conta para definir a origem da rota.' };
 
   // veículo (consumo/preço) — opcional. Validado por org.

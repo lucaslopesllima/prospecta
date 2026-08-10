@@ -37,6 +37,7 @@ function FitBounds({ pts, focus }: { pts: [number, number][]; focus: MapFocus | 
 
 type MapFocus = { id: string; lat: number; lon: number };
 type RouteInfo = { destId: string; origem: [number, number]; coords: [number, number][]; distKm: number; durMin: number };
+type DistanceOrigin = { lat: number; lon: number; source: 'partida' | 'conta' | 'territorio' };
 
 // Centraliza/zoom na empresa focada (botão "Ver no mapa").
 function FlyTo({ focus }: { focus: MapFocus | null }): null {
@@ -140,6 +141,7 @@ export function Recommend(): React.JSX.Element {
   const [addingContact, setAddingContact] = useState<ContactForm | null>(null);
   const [focus, setFocus] = useState<MapFocus | null>(null);
   const [route, setRoute] = useState<RouteInfo | null>(null);
+  const [distanceOrigin, setDistanceOrigin] = useState<DistanceOrigin | null>(null);
   const [routingId, setRoutingId] = useState<string | null>(null);
   const [geoCache, setGeoCache] = useState<Record<string, { lat: number; lon: number; precisao: string }>>({});
   const LIMIT = 20;
@@ -247,10 +249,10 @@ export function Recommend(): React.JSX.Element {
     if (rec.lat == null || rec.lon == null) { toast.error('Empresa sem localização geográfica.'); return; }
     setRoutingId(rec.id);
     try {
-      // origem: 1) endereço de partida definido nos filtros; 2) endereço da org
-      // no banco, geocodificado; 3) geolocalização do navegador.
+      // Origem devolvida pela busca = mesmo ponto usado na distância em linha
+      // reta. Fallback abaixo mantém compatibilidade com respostas antigas.
       let o: { lat: number; lon: number } | null =
-        filter.partida ? { lat: filter.partida.lat, lon: filter.partida.lon } : null;
+        distanceOrigin ?? (filter.partida ? { lat: filter.partida.lat, lon: filter.partida.lon } : null);
       if (!o) {
         try {
           const r = await api.get<{ origem: { lat: number; lon: number } | null }>('/api/account/origem');
@@ -319,12 +321,14 @@ export function Recommend(): React.JSX.Element {
       if (filter.fPorte) qs.set('porte', filter.fPorte);
       if (filter.partida) { qs.set('partida_lat', String(filter.partida.lat)); qs.set('partida_lon', String(filter.partida.lon)); }
       const r = await api.get<{
-        results: Recommendation[]; page: { count: number; total: number; total_capped: boolean };
+        results: Recommendation[]; origin?: DistanceOrigin;
+        page: { count: number; total: number; total_capped: boolean };
       }>(`/api/recommend?${qs.toString()}`, { signal: ac.signal });
       // total ausente (resposta antiga/parcial): cai no fallback do totalLabel.
       setTotal(typeof r.page?.total === 'number'
         ? { n: r.page.total, capped: !!r.page.total_capped } : null);
       setRecs((prev) => (off === 0 ? r.results : [...prev, ...r.results]));
+      if (off === 0) setDistanceOrigin(r.origin ?? null);
       setDone(r.results.length < LIMIT);
       setOffset(off + r.results.length);
     } catch (e) {
@@ -507,7 +511,7 @@ export function Recommend(): React.JSX.Element {
           { label: filter.filtroAtivo ? 'Resultados (filtrados)' : 'Recomendações', value: kpi.n, icon: 'building', tone: 'brand' },
           { label: 'Score médio', value: (kpi.avg * 100).toFixed(0), sub: `de 100 · nos ${kpi.n} carregados`, icon: 'trendingUp', tone: 'success' },
           { label: 'CNAE exato', value: kpi.exact, sub: 'match de classe', icon: 'target', tone: 'info' },
-          { label: 'Mais próxima', value: `${kpi.near.toFixed(0)} km`, icon: 'mapPin', tone: 'warn' },
+          { label: 'Mais próxima', value: `${kpi.near.toFixed(0)} km`, sub: 'em linha reta', icon: 'mapPin', tone: 'warn' },
         ]} />
       </Collapse>
     </div>
@@ -571,8 +575,8 @@ export function Recommend(): React.JSX.Element {
           {route && (
             <div className="flex items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm">
               <Icon name="map" size={16} className="text-blue-600" />
-              <span className="font-semibold text-blue-900">{route.distKm.toFixed(1)} km</span>
-              <span className="text-blue-700">· ~{Math.round(route.durMin)} min de carro</span>
+              <span className="font-semibold text-blue-900">{route.distKm.toFixed(1)} km de carro</span>
+              <span className="text-blue-700">· ~{Math.round(route.durMin)} min</span>
               <button onClick={() => setRoute(null)} className="ml-auto text-xs font-semibold text-blue-700 underline">Limpar rota</button>
             </div>
           )}
@@ -594,7 +598,7 @@ export function Recommend(): React.JSX.Element {
                         continua sem quebrar no meio (whitespace-nowrap). */}
                     <div className="max-w-full space-y-1">
                       <p className="break-words font-semibold">{r.razao_social}</p>
-                      <p className="text-xs">Score {(r.score * 100).toFixed(0)} · {r.reason.distancia_km} km</p>
+                      <p className="text-xs">Score {(r.score * 100).toFixed(0)} · {r.reason.distancia_km} km em linha reta</p>
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-0.5">
                         <button onClick={() => setViewing(Number(r.id))} className="whitespace-nowrap text-xs font-semibold text-brand-700 underline dark:text-brand-300">Ver dados da empresa</button>
                         {added.has(r.id)
@@ -693,7 +697,7 @@ function RecCard({ rec, added, onAdd, onAddContact, onView, onViewMap, onRoute, 
       <div className="mt-3 flex flex-wrap gap-1.5">
         <Badge tone={MATCH_TONE[rec.reason.cnae_match]}>{MATCH_LABEL[rec.reason.cnae_match]}</Badge>
         <Badge tone="neutral"><Cnae code={rec.cnae_principal} /></Badge>
-        <Badge tone="neutral"><Icon name="mapPin" size={12} />{rec.reason.distancia_km} km</Badge>
+        <Badge tone="neutral"><Icon name="mapPin" size={12} />{rec.reason.distancia_km} km em linha reta</Badge>
         <Badge tone="neutral">porte {rec.reason.porte}</Badge>
         {rec.reason.idade_anos != null && (
           <Badge tone="neutral">{Math.floor(rec.reason.idade_anos)} anos</Badge>
