@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '../lib/api.ts';
 import type { Activity, KanbanCard, OptimizeResult } from '../lib/types.ts';
-import { Btn, Card, cn, EmptyState, Modal, PageHeader, SafeButton, Segmented, Spinner } from '../lib/ui.tsx';
+import { Btn, Card, cn, EmptyState, ErrorState, Modal, PageHeader, SafeButton, Segmented, Spinner } from '../lib/ui.tsx';
 import { Icon, type IconName } from '../lib/icons.tsx';
 import { ActivityCreateModal, VisitModal, type RepresentedOption } from '../lib/activityModal.tsx';
 import { toast } from '../lib/toast.tsx';
@@ -50,6 +50,7 @@ export function Agenda(): React.JSX.Element {
   const [funnel, setFunnel] = useState<FunnelCompany[]>([]);
   const [represented, setRepresented] = useState<RepresentedOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [cursor, setCursor] = useState(() => startOfMonth(new Date()));
   const [weekAnchor, setWeekAnchor] = useState(() => new Date());
   // View persistida: sobrevive a reload (inclusive offline no PWA — o usuário que
@@ -88,12 +89,17 @@ export function Agenda(): React.JSX.Element {
   }, [view, cursor, weekAnchor]);
 
   const load = async (): Promise<void> => {
+    setLoading(true);
+    setLoadError('');
     const qs = new URLSearchParams({
       from: range.from.toISOString(), to: range.to.toISOString(), limit: '500',
     });
-    const r = await api.get<{ activities: Activity[] }>(`/api/activities?${qs.toString()}`);
-    setItems(r.activities);
-    setLoading(false);
+    try {
+      const r = await api.get<{ activities: Activity[] }>(`/api/activities?${qs.toString()}`);
+      setItems(r.activities);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Falha ao carregar agenda.');
+    } finally { setLoading(false); }
   };
   useEffect(() => { void load(); }, [range]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -132,9 +138,16 @@ export function Agenda(): React.JSX.Element {
   };
 
   // filtered set used by every view
-  const filtered = useMemo(() => items.filter((a) =>
-    tipoFilter.has(a.tipo) && (status === 'todos' || a.status === status)
-  ), [items, tipoFilter, status]);
+  const filtered = useMemo(() => {
+    const monthStart = startOfMonth(cursor);
+    const monthEnd = addMonths(monthStart, 1);
+    return items.filter((a) => {
+      const date = new Date(a.start_at);
+      return tipoFilter.has(a.tipo)
+        && (status === 'todos' || a.status === status)
+        && (view !== 'lista' || (date >= monthStart && date < monthEnd));
+    });
+  }, [items, tipoFilter, status, view, cursor]);
 
   // events grouped by calendar day
   const byDay = useMemo(() => {
@@ -257,6 +270,8 @@ export function Agenda(): React.JSX.Element {
       {/* ── calendar / list ───────────────────────────── */}
       {loading ? (
         <Spinner />
+      ) : loadError ? (
+        <ErrorState hint={loadError} onRetry={() => load()} />
       ) : view === 'mes' ? (
         <MonthGrid grid={grid} cursor={cursor} today={today} byDay={byDay} onDay={setDayOpen} />
       ) : view === 'semana' ? (

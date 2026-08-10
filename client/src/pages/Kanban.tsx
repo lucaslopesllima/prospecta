@@ -1,8 +1,9 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import type { Brand, CatalogItem, Contact, KanbanCard, NamedItem, PrivateLabel, RepresentedCompany, Stage } from '../lib/types.ts';
-import { Badge, Btn, cn, Collapse, FilterPanel, inputCls, Modal, PageHeader, Popover, SafeButton, Spinner, StatRow, useCollapseOnOutside, type Tone } from '../lib/ui.tsx';
+import { Badge, Btn, cn, Collapse, ErrorState, FilterPanel, inputCls, Modal, PageHeader, Popover, SafeButton, Spinner, StatRow, useCollapseOnOutside, type Tone } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { CompanyFilterBar, useCompanyFilter } from '../lib/companyFilter.tsx';
 import { useSellers, SellerFilter } from '../lib/sellers.tsx';
@@ -42,9 +43,12 @@ function loadFiltros(): FunilFiltros {
 type BoardCard = KanbanCard & { amostras_count?: number };
 
 export function Kanban(): React.JSX.Element {
+  const [params] = useSearchParams();
+  const targetRelationshipId = Number(params.get('relationship_id')) || null;
   const [stages, setStages] = useState<Stage[]>([]);
   const [cards, setCards] = useState<BoardCard[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [dragId, setDragId] = useState<number | null>(null);
   const [over, setOver] = useState<number | 'none' | null>(null);
   const [editing, setEditing] = useState<BoardCard | null>(null);
@@ -67,17 +71,36 @@ export function Kanban(): React.JSX.Element {
   const [kpisOpen, setKpisOpen] = useState(() => {
     try { return localStorage.getItem(KPIS_OPEN_KEY) !== '0'; } catch { return true; }
   });
-  const [ownerId, setOwnerId] = useState<'todos' | number>('todos');
+  const [ownerId, setOwnerId] = useState<'todos' | number>(() => {
+    const value = Number(params.get('owner_user_id'));
+    return Number.isFinite(value) && value > 0 ? value : 'todos';
+  });
   const sellers = useSellers();
   const filter = useCompanyFilter('funil');
 
   const load = useCallback(async (): Promise<void> => {
-    const r = await api.get<{ stages: Stage[]; cards: BoardCard[] }>('/api/kanban');
-    setStages(r.stages);
-    setCards(r.cards);
-    setLoading(false);
+    setLoadError('');
+    try {
+      const r = await api.get<{ stages: Stage[]; cards: BoardCard[] }>('/api/kanban');
+      setStages(r.stages);
+      setCards(r.cards);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Falha ao carregar funil.');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
   }, []);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load().catch(() => undefined); }, [load]);
+  const openedTarget = useRef<number | null>(null);
+  useEffect(() => {
+    if (targetRelationshipId == null || openedTarget.current === targetRelationshipId) return;
+    const card = cards.find((c) => c.id === targetRelationshipId);
+    if (card) {
+      openedTarget.current = targetRelationshipId;
+      setEditing(card);
+    }
+  }, [cards, targetRelationshipId]);
   useEffect(() => {
     void Promise.all([
       api.get<{ empresas: RepresentedCompany[] }>('/api/represented').then((r) => setReps(r.empresas)),
@@ -139,16 +162,27 @@ export function Kanban(): React.JSX.Element {
   const move = useCallback(async (cardId: number, stageId: number | null): Promise<void> => {
     const card = cardsRef.current.find((c) => c.id === cardId);
     if (!card || card.stage_id === stageId) return;
+    const lastStage = stages.reduce<Stage | null>((last, stage) => (
+      last == null || stage.ordem > last.ordem ? stage : last
+    ), null);
+    if (stageId != null && stageId === lastStage?.id && card.status !== 'cliente') {
+      const nome = card.nome_fantasia || card.razao_social;
+      const confirmed = await confirmDialog(
+        `Mover ${nome} para ${lastStage.nome} também converterá a empresa em cliente.`,
+        { title: 'Converter em cliente?', confirmText: 'Mover e converter' },
+      );
+      if (!confirmed) return;
+    }
     setCards((cs) => cs.map((c) => (c.id === cardId ? { ...c, stage_id: stageId } : c))); // optimistic
     try {
       // Server pode virar status='cliente' ao chegar na última coluna -> reflete na hora.
       const r = await api.patch<{ relationship: KanbanCard }>(`/api/relationships/${cardId}`, { stage_id: stageId });
       setCards((cs) => cs.map((c) => (c.id === cardId ? { ...c, status: r.relationship.status } : c)));
     } catch {
-      void load(); // revert from server on failure
+      void load().catch(() => undefined); // revert from server on failure
       toast.error('Não foi possível mover o card.');
     }
-  }, [load]);
+  }, [load, stages]);
 
   // Handlers estáveis passados ao CardItem (React.memo).
   const onDragStartCard = useCallback((id: number) => setDragId(id), []);
@@ -174,7 +208,7 @@ export function Kanban(): React.JSX.Element {
     setCards((cs) => cs.filter((c) => c.id !== id)); // optimista
     setEditing(null);
     try { await api.del(`/api/relationships/${id}`); toast.success('Empresa removida do funil.'); }
-    catch { void load(); toast.error('Não foi possível remover do funil.'); }
+    catch { void load().catch(() => undefined); toast.error('Não foi possível remover do funil.'); }
   };
 
   const visibleCards = useMemo(
@@ -203,6 +237,9 @@ export function Kanban(): React.JSX.Element {
   }, [visibleCards]);
 
   if (loading) return <div className="p-6"><Spinner /></div>;
+  if (loadError && cards.length === 0) {
+    return <div className="p-6"><ErrorState hint={loadError} onRetry={() => { setLoading(true); return load().catch(() => undefined); }} /></div>;
+  }
 
   const todasColunas: { key: number | 'none'; nome: string }[] = [
     ...stages.map((s) => ({ key: s.id as number | 'none', nome: s.nome })),
@@ -324,7 +361,7 @@ export function Kanban(): React.JSX.Element {
           card={{ id: sampleFor.id, company_id: sampleFor.company_id, label: sampleFor.nome_fantasia || sampleFor.razao_social }}
           catalog={catalog}
           onClose={() => setSampleFor(null)}
-          onSaved={() => { setSampleFor(null); void load(); }}
+          onSaved={() => { setSampleFor(null); void load().catch(() => undefined); }}
         />
       )}
       {samplesView && (
@@ -332,7 +369,7 @@ export function Kanban(): React.JSX.Element {
           card={{ id: samplesView.id, company_id: samplesView.company_id, label: samplesView.nome_fantasia || samplesView.razao_social }}
           catalog={catalog}
           onClose={() => setSamplesView(null)}
-          onChanged={() => { void load(); }}
+          onChanged={() => { void load().catch(() => undefined); }}
         />
       )}
     </div>
@@ -1010,4 +1047,3 @@ function NovoProduto({ reps, onCreated, onCancel }: {
     </Modal>
   );
 }
-

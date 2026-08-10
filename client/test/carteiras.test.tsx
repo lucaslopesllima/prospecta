@@ -13,6 +13,7 @@ vi.mock('../src/lib/api.ts', async (orig) => {
   return { ...real, api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), del: vi.fn() } };
 });
 vi.mock('../src/lib/toast.tsx', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
+vi.mock('../src/lib/confirm.ts', () => ({ confirmDialog: vi.fn(async () => true) }));
 import { toast } from '../src/lib/toast.tsx';
 
 const m = vi.mocked(api);

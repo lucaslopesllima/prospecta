@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, CircleMarker, Tooltip } from 'react-leaflet';
 import { api } from '../lib/api.ts';
 import { useSellers, SellerFilter } from '../lib/sellers.tsx';
 import { loadTerritorioIds } from '../lib/companyFilter.tsx';
-import { Btn, Card, EmptyState, PageHeader, Segmented, Spinner, cn } from '../lib/ui.tsx';
+import { Btn, Card, EmptyState, ErrorState, PageHeader, Segmented, Spinner, cn } from '../lib/ui.tsx';
 import { brl, brl0, csvNum } from '../lib/format.ts';
 import { downloadCsv } from '../lib/export.ts';
 
@@ -44,15 +44,19 @@ function Vendas({ ownerId }: { ownerId: 'todos' | number }): React.JSX.Element {
   const [groupBy, setGroupBy] = useState<GroupBy>('mes');
   const [rows, setRows] = useState<SalesRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setError('');
     void api.get<{ rows: SalesRow[] }>(`/api/reports/sales?group_by=${groupBy}${ownerQs(ownerId)}`)
       .then((r) => { if (!cancelled) setRows(r.rows); })
+      .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : 'Falha ao carregar relatório.'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [groupBy, ownerId]);
+  }, [groupBy, ownerId, retryKey]);
 
   const total = rows.reduce((s, r) => s + Number(r.total), 0);
   const max = rows.reduce((m, r) => Math.max(m, Number(r.total)), 0);
@@ -70,7 +74,7 @@ function Vendas({ ownerId }: { ownerId: 'todos' | number }): React.JSX.Element {
         ]} />
         {rows.length > 0 && <Btn variant="soft" size="sm" icon="download" onClick={exportar}>Exportar CSV</Btn>}
       </div>
-      {loading ? <Spinner /> : rows.length === 0 ? (
+      {loading ? <Spinner /> : error ? <ErrorState hint={error} onRetry={() => setRetryKey((v) => v + 1)} /> : rows.length === 0 ? (
         <EmptyState icon="trendingUp" title="Sem vendas no período" hint="Faturamento dos últimos 12 meses." />
       ) : (
         <Card className="p-4">
@@ -97,15 +101,19 @@ const ABC_TONE: Record<string, string> = { A: 'bg-emerald-500', B: 'bg-amber-500
 function Abc({ ownerId }: { ownerId: 'todos' | number }): React.JSX.Element {
   const [clientes, setClientes] = useState<AbcCliente[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setError('');
     void api.get<{ clientes: AbcCliente[] }>(`/api/reports/abc?${ownerQs(ownerId).slice(1)}`)
       .then((r) => { if (!cancelled) setClientes(r.clientes); })
+      .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : 'Falha ao carregar curva ABC.'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [ownerId]);
+  }, [ownerId, retryKey]);
 
   const exportar = (): void => downloadCsv('curva-abc', ['Cliente', 'Faturamento', 'Share %', 'Classe'],
     clientes.map((c) => [c.nome_fantasia || c.razao_social, csvNum(c.total), c.share, c.classe]));
@@ -123,6 +131,7 @@ function Abc({ ownerId }: { ownerId: 'todos' | number }): React.JSX.Element {
   }, [clientes]);
 
   if (loading) return <Spinner />;
+  if (error) return <ErrorState hint={error} onRetry={() => setRetryKey((v) => v + 1)} />;
   if (clientes.length === 0) return <EmptyState icon="barChart" title="Sem faturamento" hint="Curva ABC dos últimos 12 meses." />;
 
   return (
@@ -173,6 +182,8 @@ function Abc({ ownerId }: { ownerId: 'todos' | number }): React.JSX.Element {
 function Cobertura({ ownerId }: { ownerId: 'todos' | number }): React.JSX.Element {
   const [municipios, setMunicipios] = useState<CoverageMun[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [retryKey, setRetryKey] = useState(0);
 
   // território vem do filtro da tela de busca (mesma config da recomendação).
   const munis = loadTerritorioIds();
@@ -180,16 +191,18 @@ function Cobertura({ ownerId }: { ownerId: 'todos' | number }): React.JSX.Elemen
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setError('');
     if (munis.length === 0) { setMunicipios([]); setLoading(false); return; }
     const qs = new URLSearchParams(ownerQs(ownerId).slice(1));
     qs.set('munis', munis.join(','));
     void api.get<{ municipios: CoverageMun[] }>(`/api/reports/coverage?${qs.toString()}`)
       .then((r) => { if (!cancelled) setMunicipios(r.municipios); })
+      .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : 'Falha ao carregar cobertura.'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   // munis derivado de localStorage; recalcula por ownerId/quantidade de municípios.
   /* eslint-disable-next-line react-hooks/exhaustive-deps */
-  }, [ownerId, munis.join(',')]);
+  }, [ownerId, munis.join(','), retryKey]);
 
   const center = useMemo<[number, number]>(() => {
     const m = municipios[0];
@@ -197,6 +210,7 @@ function Cobertura({ ownerId }: { ownerId: 'todos' | number }): React.JSX.Elemen
   }, [municipios]);
 
   if (loading) return <Spinner />;
+  if (error) return <ErrorState hint={error} onRetry={() => setRetryKey((v) => v + 1)} />;
   if (municipios.length === 0) {
     return <EmptyState icon="map" title="Sem território" hint="Defina os municípios no filtro da tela de Empresas recomendadas." />;
   }
@@ -234,17 +248,22 @@ function Cobertura({ ownerId }: { ownerId: 'todos' | number }): React.JSX.Elemen
 function Descartes({ ownerId }: { ownerId: 'todos' | number }): React.JSX.Element {
   const [motivos, setMotivos] = useState<DescarteRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setError('');
     void api.get<{ motivos: DescarteRow[] }>(`/api/reports/descartes?${ownerQs(ownerId).slice(1)}`)
       .then((r) => { if (!cancelled) setMotivos(r.motivos); })
+      .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : 'Falha ao carregar perdas.'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [ownerId]);
+  }, [ownerId, retryKey]);
 
   if (loading) return <Spinner />;
+  if (error) return <ErrorState hint={error} onRetry={() => setRetryKey((v) => v + 1)} />;
   if (motivos.length === 0) return <EmptyState icon="x" title="Sem perdas registradas" hint="Negócios descartados aparecem aqui por motivo." />;
 
   const total = motivos.reduce((s, m) => s + m.qtd, 0);

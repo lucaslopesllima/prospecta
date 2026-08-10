@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import type { CatalogItem, PriceTable, RepresentedCompany } from '../lib/types.ts';
-import { Badge, Btn, Card, cn, EmptyState, inputCls, SafeButton, Spinner } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, EmptyState, ErrorState, inputCls, SafeButton, Spinner } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { brl, dec, fmtDate, maskMoney, maskPct, numStr } from '../lib/format.ts';
 import { toast } from '../lib/toast.tsx';
@@ -20,12 +20,18 @@ export function PriceTables({ reps, catalog, adding, onCloseAdd }: {
   const { can } = useAuth();
   const [tables, setTables] = useState<PriceTable[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [editing, setEditing] = useState<PriceTable | null>(null);
 
   const load = async (): Promise<void> => {
-    const r = await api.get<{ tables: PriceTable[] }>('/api/price-tables');
-    setTables(r.tables);
-    setLoading(false);
+    setLoading(true);
+    setLoadError('');
+    try {
+      const r = await api.get<{ tables: PriceTable[] }>('/api/price-tables');
+      setTables(r.tables);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Falha ao carregar tabelas.');
+    } finally { setLoading(false); }
   };
   useEffect(() => { void load(); }, []);
 
@@ -38,6 +44,7 @@ export function PriceTables({ reps, catalog, adding, onCloseAdd }: {
   };
 
   if (loading) return <Spinner />;
+  if (loadError) return <ErrorState hint={loadError} onRetry={() => load()} />;
 
   return (
     <div className="space-y-2">

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import { useSellers, SellerFilter, sellerLabel } from '../lib/sellers.tsx';
-import { Badge, Card, EmptyState, PageHeader, Spinner, StatCard, cn } from '../lib/ui.tsx';
+import { Badge, Btn, Card, EmptyState, ErrorState, PageHeader, Spinner, StatCard, cn } from '../lib/ui.tsx';
 import { brl, brl0, todayStr } from '../lib/format.ts';
 
 interface FunilStage { id: number; nome: string; ordem: number; qtd: number; valor: string }
@@ -30,22 +30,28 @@ export function Dashboard(): React.JSX.Element {
   const [competencia, setCompetencia] = useState(todayStr().slice(0, 7));
   const [ownerId, setOwnerId] = useState<'todos' | number>('todos');
   const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    setLoadError('');
     const qs = new URLSearchParams({ competencia });
     if (ownerId !== 'todos') qs.set('user_id', String(ownerId));
     void api.get<DashboardData>(`/api/dashboard?${qs.toString()}`)
       .then((d) => { if (!cancelled) setData(d); })
-      .finally(() => { if (!cancelled) setLoading(false); });
+      .catch((e) => { if (!cancelled) setLoadError(e instanceof Error ? e.message : 'Falha ao carregar dashboard.'); });
     return () => { cancelled = true; };
-  }, [competencia, ownerId]);
+  }, [competencia, ownerId, retryKey]);
 
   const funilTotal = data ? data.funil.reduce((s, f) => s + f.qtd, 0) : 0;
   const funilValor = data ? data.funil.reduce((s, f) => s + Number(f.valor), 0) : 0;
   const metaPct = data && data.vendas.meta > 0 ? Math.round((data.vendas.total / data.vendas.meta) * 100) : null;
+  const context = new URLSearchParams({ competencia });
+  if (ownerId !== 'todos') context.set('owner_user_id', String(ownerId));
+  const ordersHref = `/pedidos?${context.toString()}`;
+  const funnelHref = `/funil?${context.toString()}`;
+  const commissionsHref = `/comissoes?${context.toString()}`;
 
   return (
     <div className="space-y-5 p-4 sm:p-6">
@@ -58,28 +64,34 @@ export function Dashboard(): React.JSX.Element {
           </div>
         } />
 
-      {loading || !data ? <Spinner /> : (
+      {loadError && !data ? <ErrorState hint={loadError} onRetry={() => setRetryKey((v) => v + 1)} /> : !data ? <Spinner /> : (
         <>
+          {loadError && (
+            <Card className="flex items-center gap-3 border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              <span className="flex-1">Dados anteriores mantidos. Atualização falhou: {loadError}</span>
+              <Btn size="sm" variant="ghost" onClick={() => setRetryKey((v) => v + 1)}>Tentar novamente</Btn>
+            </Card>
+          )}
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
             {/* KPI → ação: cada card leva à tela onde o usuário age sobre o número */}
             {/* VGV (Valor Geral de Vendas): soma faturada/entregue da competência, mesmos filtros (mês + vendedor). */}
-            <Link to="/pedidos" className="rounded-2xl transition hover:shadow-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300">
-              <StatCard label="VGV" value={brl0(data.vendas.total)} icon="wallet" tone="brand"
-                sub={metaPct != null ? `${metaPct}% da meta` : `${data.vendas.qtd} pedido(s)`} />
+            <Link to={ordersHref} className="rounded-2xl transition hover:shadow-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300">
+              <StatCard label="Ticket médio" value={brl0(data.vendas.qtd > 0 ? data.vendas.total / data.vendas.qtd : 0)} icon="wallet" tone="brand"
+                sub={`${data.vendas.qtd} venda(s) no mês`} />
             </Link>
-            <Link to="/pedidos" className="rounded-2xl transition hover:shadow-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300">
+            <Link to={ordersHref} className="rounded-2xl transition hover:shadow-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300">
               <StatCard label="Vendas do mês" value={brl0(data.vendas.total)} icon="trendingUp" tone="success"
                 sub={metaPct != null ? `${metaPct}% da meta (${brl0(data.vendas.meta)})` : `${data.vendas.qtd} pedido(s)`} />
             </Link>
-            <Link to="/comissoes" className="rounded-2xl transition hover:shadow-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300">
+            <Link to={commissionsHref} className="rounded-2xl transition hover:shadow-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300">
               <StatCard label="Comissões previstas" value={brl0(data.comissoes.previsto)} icon="percent" tone="info"
                 sub={`Recebido ${brl0(data.comissoes.recebido)}`} />
             </Link>
-            <Link to="/funil" className="rounded-2xl transition hover:shadow-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300">
+            <Link to={funnelHref} className="rounded-2xl transition hover:shadow-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300">
               <StatCard label="Negócios no funil" value={String(funilTotal)} icon="columns" tone="brand"
                 sub={brl0(funilValor)} />
             </Link>
-            <Link to="/comissoes" className="rounded-2xl transition hover:shadow-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300">
+            <Link to={`${commissionsHref}&status=divergente`} className="rounded-2xl transition hover:shadow-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300">
               <StatCard label="Divergências" value={String(data.comissoes.divergentes)} icon="alertTriangle"
                 tone={data.comissoes.divergentes > 0 ? 'danger' : 'neutral'}
                 sub={data.comissoes.divergentes > 0 ? 'tocar para conferir →' : 'tudo certo'} />
@@ -104,7 +116,8 @@ export function Dashboard(): React.JSX.Element {
             <Card className="p-4">
               <h3 className="mb-3 text-sm font-semibold text-ink-900">Funil por etapa</h3>
               {funilTotal === 0 ? (
-                <EmptyState icon="columns" title="Funil vazio" hint="Adicione empresas pela Prospecção." />
+                <EmptyState icon="columns" title="Funil vazio" hint="Adicione empresas pela Prospecção."
+                  action={<Link to="/prospeccao" className="text-sm font-semibold text-brand-700 hover:underline">Prospectar empresas</Link>} />
               ) : (
                 <div className="space-y-2">
                   {data.funil.map((f) => {
@@ -160,7 +173,7 @@ export function Dashboard(): React.JSX.Element {
                 <ul className="space-y-1.5">
                   {data.alertas.sem_contato.map((x) => (
                     <li key={x.id} className="flex items-center justify-between gap-2 text-sm">
-                      <Link to="/funil" className="truncate text-ink-700 hover:text-brand-600">{x.nome_fantasia || x.razao_social}</Link>
+                      <Link to={`/funil?relationship_id=${x.id}`} className="truncate text-ink-700 hover:text-brand-600">{x.nome_fantasia || x.razao_social}</Link>
                       <Badge tone="warn">{x.dias} dias</Badge>
                     </li>
                   ))}
@@ -177,7 +190,7 @@ export function Dashboard(): React.JSX.Element {
                 <ul className="space-y-1.5">
                   {data.alertas.parados.map((x) => (
                     <li key={x.id} className="flex items-center justify-between gap-2 text-sm">
-                      <Link to="/funil" className="min-w-0 truncate text-ink-700 hover:text-brand-600">
+                      <Link to={`/funil?relationship_id=${x.id}`} className="min-w-0 truncate text-ink-700 hover:text-brand-600">
                         {x.nome_fantasia || x.razao_social}
                         {x.stage && <span className="ml-1 text-xs text-ink-400">· {x.stage}</span>}
                       </Link>

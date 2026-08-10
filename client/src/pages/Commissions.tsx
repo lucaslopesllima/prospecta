@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import type {
   CatalogItem, CommissionEntry, CommissionRule, CommissionStatus,
   KanbanCard, OrgUser, RepresentedCompany,
 } from '../lib/types.ts';
-import { Badge, Btn, Card, cn, EmptyState, inputCls, Modal, PageHeader, SafeButton, Segmented, Spinner, StatRow, type Tone } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, EmptyState, ErrorState, inputCls, Modal, PageHeader, SafeButton, Segmented, Spinner, StatRow, type Tone } from '../lib/ui.tsx';
 import { useSellers, SellerFilter } from '../lib/sellers.tsx';
 import { downloadCsv } from '../lib/export.ts';
 import { Icon } from '../lib/icons.tsx';
@@ -52,13 +53,24 @@ export function Commissions(): React.JSX.Element {
 
 function Extrato({ reps }: { reps: RepresentedCompany[] }): React.JSX.Element {
   const { can } = useAuth();
-  const [competencia, setCompetencia] = useState(todayStr().slice(0, 7));
+  const [params] = useSearchParams();
+  const competenciaParam = params.get('competencia');
+  const [competencia, setCompetencia] = useState(
+    competenciaParam && /^\d{4}-\d{2}$/.test(competenciaParam) ? competenciaParam : todayStr().slice(0, 7),
+  );
   const [representedId, setRepresentedId] = useState<'todas' | number>('todas');
-  const [status, setStatus] = useState<'todos' | CommissionStatus>('todos');
-  const [ownerId, setOwnerId] = useState<'todos' | number>('todos');
+  const [status, setStatus] = useState<'todos' | CommissionStatus>(() => {
+    const value = params.get('status');
+    return value && value in STATUS_META ? value as CommissionStatus : 'todos';
+  });
+  const [ownerId, setOwnerId] = useState<'todos' | number>(() => {
+    const value = Number(params.get('owner_user_id'));
+    return Number.isFinite(value) && value > 0 ? value : 'todos';
+  });
   const sellers = useSellers();
   const [entries, setEntries] = useState<CommissionEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [settling, setSettling] = useState<CommissionEntry | null>(null);
   const [reconciling, setReconciling] = useState(false);
 
@@ -67,6 +79,7 @@ function Extrato({ reps }: { reps: RepresentedCompany[] }): React.JSX.Element {
     // input type=month pode ser limpo pelo usuário; sem valor, não consulta.
     if (!competencia) return;
     setLoading(true);
+    setLoadError('');
     const qs = new URLSearchParams({ competencia });
     if (representedId !== 'todas') qs.set('represented_id', String(representedId));
     if (status !== 'todos') qs.set('status', status);
@@ -74,6 +87,8 @@ function Extrato({ reps }: { reps: RepresentedCompany[] }): React.JSX.Element {
     try {
       const r = await api.get<{ entries: CommissionEntry[] }>(`/api/commissions?${qs.toString()}`);
       setEntries(r.entries);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Falha ao carregar comissões.');
     } finally { setLoading(false); }
   };
   useEffect(() => { void load(); }, [competencia, representedId, status, ownerId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -140,6 +155,8 @@ function Extrato({ reps }: { reps: RepresentedCompany[] }): React.JSX.Element {
 
       {loading ? (
         <Spinner />
+      ) : loadError ? (
+        <ErrorState hint={loadError} onRetry={() => load()} />
       ) : entries.length === 0 ? (
         <EmptyState icon="percent" title="Nenhuma comissão na competência"
           hint="Comissões são geradas automaticamente quando um pedido é faturado e existe regra vigente." />

@@ -223,8 +223,12 @@ describe('orders: criação, numeração e resolução de preço', () => {
   it('GET lista com filtros; GET :id com itens; cross-org 404', async () => {
     const o = await mkOrder(a, { items: [{ catalog_item_id: prod1, qtd: 1 }] });
 
-    const byStatus = (await inj(a, 'GET', '/api/orders?status=rascunho')).json() as { orders: Order[] };
+    const byStatus = (await inj(a, 'GET', '/api/orders?status=rascunho')).json() as {
+      orders: Order[]; page: { total: number; aberto: number; faturado: number };
+    };
     expect(byStatus.orders.some((x) => Number(x.id) === Number(o.id))).toBe(true);
+    expect(byStatus.page.total).toBeGreaterThanOrEqual(1);
+    expect(byStatus.page.aberto).toBeGreaterThanOrEqual(0);
     const byRepr = (await inj(a, 'GET', `/api/orders?represented_id=${repA}&owner_user_id=${a.user.id}&from=2026-01-01&to=2099-01-01`)).json() as { orders: Order[] };
     expect(byRepr.orders.some((x) => Number(x.id) === Number(o.id))).toBe(true);
     const none = (await inj(a, 'GET', '/api/orders?status=entregue')).json() as { orders: Order[] };
@@ -308,6 +312,15 @@ describe('orders: máquina de estados', () => {
     const r4 = (await inj(a, 'POST', `/api/orders/${o.id}/transition`, { status: 'entregue' })).json() as { order: Order };
     expect(r4.order.status).toBe('entregue');
     expect((await inj(a, 'POST', `/api/orders/${o.id}/transition`, { status: 'cancelado' })).statusCode).toBe(409);
+
+    const competencia = r3.order.faturado_em!.slice(0, 7);
+    const realized = (await inj(a, 'GET', `/api/orders?status_group=realizado&competencia=${competencia}`)).json() as {
+      orders: Order[]; page: { total: number; faturado: number };
+    };
+    expect(realized.orders.some((x) => Number(x.id) === Number(o.id))).toBe(true);
+    expect(realized.page.total).toBeGreaterThanOrEqual(1);
+    expect(realized.page.faturado).toBeGreaterThanOrEqual(200);
+    expect((await inj(a, 'GET', '/api/orders?competencia=2026-99')).statusCode).toBe(400);
 
     const trilha = await one<{ n: string }>(
       "SELECT count(*) AS n FROM audit_log WHERE entity = 'order' AND entity_id = $1 AND action = 'transition'",

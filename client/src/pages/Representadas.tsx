@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.ts';
 import type { Brand, CompanyHit, RepresentedCompany } from '../lib/types.ts';
-import { Badge, Btn, Card, cn, EmptyState, inputCls, PageHeader, RowActions, SafeButton, Spinner } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, EmptyState, ErrorState, inputCls, inputErrCls, PageHeader, RowActions, SafeButton, Spinner } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { useAuth } from '../lib/auth.tsx';
 import { CompanySearch } from '../lib/companySearch.tsx';
@@ -21,12 +21,18 @@ export function Representadas(): React.JSX.Element {
   const { can } = useAuth();
   const [list, setList] = useState<RepresentedCompany[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [editing, setEditing] = useState<number | 'new' | null>(null);
 
   const load = async (): Promise<void> => {
-    const r = await api.get<{ empresas: RepresentedCompany[] }>('/api/represented');
-    setList(r.empresas);
-    setLoading(false);
+    setLoading(true);
+    setLoadError('');
+    try {
+      const r = await api.get<{ empresas: RepresentedCompany[] }>('/api/represented');
+      setList(r.empresas);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Falha ao carregar representadas.');
+    } finally { setLoading(false); }
   };
   useEffect(() => { void load(); }, []);
 
@@ -64,7 +70,7 @@ export function Representadas(): React.JSX.Element {
       <PageHeader title="Representadas" subtitle="Marcas/fornecedores que você representa. Pode cadastrar várias."
         actions={can('represented.create') && editing !== 'new' ? <Btn size="sm" icon="plus" onClick={() => setEditing('new')}>Nova</Btn> : undefined} />
 
-      {loading ? <Spinner /> : (
+      {loading ? <Spinner /> : loadError ? <ErrorState hint={loadError} onRetry={() => load()} /> : (
         <Card className="p-4">
           {editing === 'new' && (
             <EmpresaForm inputCls={inputCls} initial={EMPTY} onSave={create} onCancel={() => setEditing(null)} />
@@ -120,11 +126,12 @@ function EmpresaForm({ inputCls, initial, onSave, onCancel }: {
 }): React.JSX.Element {
   const [f, setF] = useState<EmpForm>(initial);
   const [busy, setBusy] = useState(false);
+  const [tried, setTried] = useState(false);
   const set = (k: keyof EmpForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF((p) => ({ ...p, [k]: e.target.value }));
 
   const submit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
-    if (!f.nome.trim()) return;
+    if (!f.nome.trim()) { setTried(true); return; }
     if (invalidCNPJ(f.cnpj)) { toast.error('CNPJ inválido.'); return; }
     setBusy(true);
     try { await onSave(f); } finally { setBusy(false); }
@@ -141,7 +148,12 @@ function EmpresaForm({ inputCls, initial, onSave, onCancel }: {
   return (
     <form onSubmit={submit} className="space-y-2.5">
       <CompanySearch onPick={fillFrom} placeholder="Buscar na base de empresas (CNPJ ou nome)…" />
-      <input autoFocus value={f.nome} onChange={set('nome')} maxLength={200} placeholder="Nome da empresa / marca *" className={inputCls} />
+      <label className="block">
+        <span className="text-xs font-semibold text-ink-600">Nome da empresa / marca *</span>
+        <input autoFocus value={f.nome} onChange={set('nome')} maxLength={200} aria-invalid={tried && !f.nome.trim()}
+          className={cn('mt-1', tried && !f.nome.trim() ? inputErrCls : inputCls)} />
+        {tried && !f.nome.trim() && <span className="mt-1 block text-xs text-rose-600">Informe o nome.</span>}
+      </label>
       <div className="grid gap-2.5 sm:grid-cols-2">
         <input value={f.segmento} onChange={set('segmento')} maxLength={120} placeholder="Segmento (ex.: Calçados)" className={inputCls} />
         <input value={f.cnpj} autoCapitalize="characters" onChange={(e) => setF((p) => ({ ...p, cnpj: maskCNPJ(e.target.value) }))} placeholder="CNPJ" className={inputCls} />

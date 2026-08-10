@@ -258,7 +258,7 @@ describe('EmailAgendado — ScheduleModal (criar)', () => {
     // backdrop fecha. `fireEvent.click` não basta: o véu do Modal só fecha
     // quando o gesto COMEÇA nele (pointerdown+pointerup), para arrastar
     // seleção de dentro do form e soltar fora não descartar o que foi digitado.
-    await userEvent.click(screen.getByRole('dialog'));
+    await userEvent.click(screen.getByRole('dialog').parentElement!);
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Novo agendamento' })).not.toBeInTheDocument());
   });
 });

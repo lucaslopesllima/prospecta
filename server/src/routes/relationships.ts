@@ -162,22 +162,41 @@ export function relationshipRoutes(app: FastifyInstance): void {
     if (stage_id !== undefined) { params.push(stage_id); where.push(`r.stage_id = $${params.length}`); }
     if (status) { params.push(status); where.push(`r.status = $${params.length}::rel_status`); }
     if (q) { params.push(`%${q}%`); where.push(`(c.razao_social ILIKE $${params.length} OR c.nome_fantasia ILIKE $${params.length})`); }
+    const aggregateParams = [...params];
     params.push(limit); const limIdx = params.length;
     params.push(offset); const offIdx = params.length;
 
-    const rows = await query(
-      `SELECT ${REL_COLS}, r.owner_user_id, r.updated_at, ${REL_LABELS},
-              c.razao_social, c.nome_fantasia, c.cnpj, c.cnae_principal, c.municipio_id, c.uf,
-              ST_Y(c.geom::geometry) AS lat, ST_X(c.geom::geometry) AS lon
-       FROM company_relationships r
-       JOIN companies c ON c.id = r.company_id
-       ${REL_JOINS}
-       WHERE ${where.join(' AND ')}
-       ORDER BY r.updated_at DESC
-       LIMIT $${limIdx} OFFSET $${offIdx}`,
-      params,
-    );
-    return { relationships: rows };
+    const [rows, aggregate] = await Promise.all([
+      query(
+        `SELECT ${REL_COLS}, r.owner_user_id, r.updated_at, ${REL_LABELS},
+                c.razao_social, c.nome_fantasia, c.cnpj, c.cnae_principal, c.municipio_id, c.uf,
+                ST_Y(c.geom::geometry) AS lat, ST_X(c.geom::geometry) AS lon
+         FROM company_relationships r
+         JOIN companies c ON c.id = r.company_id
+         ${REL_JOINS}
+         WHERE ${where.join(' AND ')}
+         ORDER BY r.updated_at DESC
+         LIMIT $${limIdx} OFFSET $${offIdx}`,
+        params,
+      ),
+      one<{ total: number; ativos: number; valor_estimado: string }>(
+        `SELECT count(*)::int AS total,
+                count(*) FILTER (WHERE r.ativo)::int AS ativos,
+                COALESCE(sum(r.valor_estimado), 0) AS valor_estimado
+         FROM company_relationships r
+         JOIN companies c ON c.id = r.company_id
+         WHERE ${where.join(' AND ')}`,
+        aggregateParams,
+      ),
+    ]);
+    return {
+      relationships: rows,
+      page: {
+        total: aggregate?.total ?? 0,
+        ativos: aggregate?.ativos ?? 0,
+        valor_estimado: Number(aggregate?.valor_estimado ?? 0),
+      },
+    };
   });
 
   // Add a company from the global pool to my funnel (create a reference).

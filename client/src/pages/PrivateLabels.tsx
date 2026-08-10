@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.ts';
 import type { Contact, CompanyHit, PrivateLabel, PrivateLabelCompany } from '../lib/types.ts';
-import { Badge, Btn, Card, EmptyState, inputCls, PageHeader, RowActions, SafeButton, Spinner } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, EmptyState, ErrorState, inputCls, inputErrCls, PageHeader, RowActions, SafeButton, Spinner } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { useAuth } from '../lib/auth.tsx';
 import { toast } from '../lib/toast.tsx';
@@ -18,16 +18,22 @@ function LabelFormFields({ initial, onSave, onCancel }: {
 }): React.JSX.Element {
   const [f, setF] = useState<LabelForm>(initial);
   const [busy, setBusy] = useState(false);
+  const [tried, setTried] = useState(false);
   const submit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
-    if (!f.nome.trim()) return;
+    if (!f.nome.trim()) { setTried(true); return; }
     setBusy(true);
     try { await onSave(f); } finally { setBusy(false); }
   };
   return (
     <form onSubmit={submit} className="space-y-2.5">
-      <input autoFocus value={f.nome} onChange={(e) => setF((p) => ({ ...p, nome: e.target.value }))}
-        maxLength={120} placeholder="Nome da private label *" className={inputCls} />
+      <label className="block">
+        <span className="text-xs font-semibold text-ink-600">Nome da private label *</span>
+        <input autoFocus value={f.nome} onChange={(e) => setF((p) => ({ ...p, nome: e.target.value }))}
+          maxLength={120} aria-invalid={tried && !f.nome.trim()}
+          className={cn('mt-1', tried && !f.nome.trim() ? inputErrCls : inputCls)} />
+        {tried && !f.nome.trim() && <span className="mt-1 block text-xs text-rose-600">Informe o nome.</span>}
+      </label>
       <input value={f.descricao} onChange={(e) => setF((p) => ({ ...p, descricao: e.target.value }))}
         maxLength={500} placeholder="Descrição (opcional)" className={inputCls} />
       <div className="flex items-center gap-2">
@@ -152,13 +158,19 @@ export function PrivateLabels(): React.JSX.Element {
   const { can } = useAuth();
   const [list, setList] = useState<PrivateLabel[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [editing, setEditing] = useState<number | 'new' | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
 
   const load = async (): Promise<void> => {
-    const r = await api.get<{ labels: PrivateLabel[] }>('/api/private-labels');
-    setList(r.labels ?? []);
-    setLoading(false);
+    setLoading(true);
+    setLoadError('');
+    try {
+      const r = await api.get<{ labels: PrivateLabel[] }>('/api/private-labels');
+      setList(r.labels ?? []);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Falha ao carregar private labels.');
+    } finally { setLoading(false); }
   };
   useEffect(() => { void load(); }, []);
 
@@ -192,7 +204,7 @@ export function PrivateLabels(): React.JSX.Element {
         subtitle="Marcas próprias que você fornece para terceiros. Vincule empresas e contatos a cada label."
         actions={can('private_labels.create') && editing !== 'new' ? <Btn size="sm" icon="plus" onClick={() => setEditing('new')}>Nova</Btn> : undefined} />
 
-      {loading ? <Spinner /> : (
+      {loading ? <Spinner /> : loadError ? <ErrorState hint={loadError} onRetry={() => load()} /> : (
         <Card className="p-4">
           {editing === 'new' && (
             <div className="mb-4"><LabelFormFields initial={EMPTY} onSave={create} onCancel={() => setEditing(null)} /></div>

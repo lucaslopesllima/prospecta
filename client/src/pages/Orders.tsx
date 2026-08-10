@@ -4,7 +4,7 @@ import { api, BUSCA_DEBOUNCE_MS } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import { useSellers, SellerFilter } from '../lib/sellers.tsx';
 import type { Order, OrderStatus, RepresentedCompany } from '../lib/types.ts';
-import { Badge, Btn, Card, cn, Collapse, EmptyState, FilterPanel, inputCls, Modal, PageHeader, RowActions, SafeButton, Spinner, StatRow, useIsNarrow, type Tone } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, Collapse, EmptyState, ErrorState, FilterPanel, inputCls, Modal, PageHeader, RowActions, SafeButton, Spinner, StatRow, useIsNarrow, type Tone } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { brl, csvNum, fmtDate, maskSearchCNPJ } from '../lib/format.ts';
 import { downloadCsv } from '../lib/export.ts';
@@ -32,6 +32,16 @@ const NEXT: Partial<Record<OrderStatus, { to: OrderStatus; label: string }>> = {
 
 // Página de pedidos vinda do servidor (default do GET /api/orders).
 const PAGE = 100;
+const summarizeOrders = (orders: Order[]): { total: number; aberto: number; faturado: number } => {
+  let aberto = 0;
+  let faturado = 0;
+  for (const order of orders) {
+    const value = Number(order.total) || 0;
+    if (order.status === 'faturado' || order.status === 'entregue') faturado += value;
+    else if (order.status !== 'cancelado') aberto += value;
+  }
+  return { total: orders.length, aberto, faturado };
+};
 
 // Estado de abertura dos painéis (persistido) — mesmo padrão da Prospecção:
 // filtros começam fechados, indicadores abertos.
@@ -45,11 +55,24 @@ export function Orders(): React.JSX.Element {
   const [params, setParams] = useSearchParams();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [page, setPage] = useState({ total: 0, aberto: 0, faturado: 0 });
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [status, setStatus] = useState<'todos' | OrderStatus>('todos');
-  const [representedId, setRepresentedId] = useState<'todos' | number>('todos');
-  const [ownerId, setOwnerId] = useState<'todos' | number>('todos');
+  const statusParam = params.get('status');
+  const [status, setStatus] = useState<'todos' | OrderStatus>(() => (
+    statusParam && statusParam in STATUS_META ? statusParam as OrderStatus : 'todos'
+  ));
+  const [representedId, setRepresentedId] = useState<'todos' | number>(() => {
+    const value = Number(params.get('represented_id'));
+    return Number.isFinite(value) && value > 0 ? value : 'todos';
+  });
+  const [ownerId, setOwnerId] = useState<'todos' | number>(() => {
+    const value = Number(params.get('owner_user_id'));
+    return Number.isFinite(value) && value > 0 ? value : 'todos';
+  });
+  const competencia = params.get('competencia');
+  const realizadoContext = params.get('status_group') === 'realizado' || competencia != null;
   // Filtro de empresa (cliente) por nome ou CNPJ — vai debouncado ao servidor.
   const [companyQ, setCompanyQ] = useState('');
   const [companyTerm, setCompanyTerm] = useState('');
@@ -91,16 +114,27 @@ export function Orders(): React.JSX.Element {
     if (representedId !== 'todos') qs.set('represented_id', String(representedId));
     if (ownerId !== 'todos') qs.set('owner_user_id', String(ownerId));
     if (companyTerm) qs.set('q', companyTerm);
+    if (competencia && /^\d{4}-\d{2}$/.test(competencia)) qs.set('competencia', competencia);
+    if (realizadoContext) qs.set('status_group', 'realizado');
     return qs.toString();
   };
 
   const load = async (): Promise<void> => {
-    const r = await api.get<{ orders: Order[] }>(`/api/orders?${buildQs(0)}`);
-    setOrders(r.orders);
-    setHasMore(r.orders.length === PAGE);
-    setLoading(false);
+    setLoading(true);
+    setLoadError('');
+    try {
+      const r = await api.get<{ orders: Order[]; page?: { total: number; aberto: number; faturado: number } }>(`/api/orders?${buildQs(0)}`);
+      const summary = r.page ?? summarizeOrders(r.orders);
+      setOrders(r.orders);
+      setPage(summary);
+      setHasMore(r.page ? r.orders.length < r.page.total : r.orders.length === PAGE);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Falha ao carregar pedidos.');
+    } finally {
+      setLoading(false);
+    }
   };
-  useEffect(() => { void load(); }, [status, representedId, ownerId, companyTerm]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void load(); }, [status, representedId, ownerId, companyTerm, competencia, realizadoContext]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debounce do campo de busca de empresa (300ms). <2 chars não filtra.
   useEffect(() => {
@@ -118,9 +152,13 @@ export function Orders(): React.JSX.Element {
   const loadMore = async (): Promise<void> => {
     setLoadingMore(true);
     try {
-      const r = await api.get<{ orders: Order[] }>(`/api/orders?${buildQs(orders.length)}`);
-      setOrders((xs) => [...xs, ...r.orders]);
-      setHasMore(r.orders.length === PAGE);
+      const r = await api.get<{ orders: Order[]; page?: { total: number; aberto: number; faturado: number } }>(`/api/orders?${buildQs(orders.length)}`);
+      const combined = [...orders, ...r.orders];
+      setOrders(combined);
+      setPage(r.page ?? summarizeOrders(combined));
+      setHasMore(r.page ? combined.length < r.page.total : r.orders.length === PAGE);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Falha ao carregar mais pedidos.');
     } finally { setLoadingMore(false); }
   };
   useEffect(() => {
@@ -140,17 +178,7 @@ export function Orders(): React.JSX.Element {
     && (ownerId === 'todos' || Number(o.owner_user_id) === ownerId)
   ), [orders, status, representedId, ownerId]);
 
-  const kpis = useMemo(() => {
-    let aberto = 0, faturado = 0;
-    for (const o of filtered) {
-      const v = Number(o.total);
-      if (o.status === 'faturado' || o.status === 'entregue') faturado += v;
-      else if (o.status !== 'cancelado') aberto += v;
-    }
-    return { aberto, faturado };
-  }, [filtered]);
-
-  const filtroAtivo = status !== 'todos' || representedId !== 'todos' || ownerId !== 'todos' || companyTerm !== '';
+  const filtroAtivo = status !== 'todos' || representedId !== 'todos' || ownerId !== 'todos' || companyTerm !== '' || realizadoContext;
 
   const transition = async (o: Order, to: OrderStatus, nf?: string | null): Promise<void> => {
     // faturar pede o nº da NF — abre modal em vez de prompt nativo
@@ -159,6 +187,7 @@ export function Orders(): React.JSX.Element {
       const r = await api.post<{ order: Order }>(`/api/orders/${o.id}/transition`, { status: to, nf_numero: nf ?? undefined });
       setOrders((xs) => xs.map((x) => (x.id === o.id ? r.order : x)));
       toast.success(to === 'cancelado' ? `Pedido #${o.numero} cancelado.` : `Pedido #${o.numero}: ${STATUS_META[to].label}.`);
+      void load();
     } catch (e) { toast.error(e instanceof Error ? e.message : 'Não foi possível atualizar o pedido.'); }
   };
 
@@ -166,7 +195,7 @@ export function Orders(): React.JSX.Element {
     if (!(await confirmDialog(`Excluir o pedido #${o.numero}?`))) return;
     const before = orders;
     setOrders((xs) => xs.filter((x) => x.id !== o.id));
-    try { await api.del(`/api/orders/${o.id}`); toast.success(`Pedido #${o.numero} excluído.`); }
+    try { await api.del(`/api/orders/${o.id}`); toast.success(`Pedido #${o.numero} excluído.`); void load(); }
     catch { setOrders(before); toast.error('Não foi possível excluir o pedido.'); }
   };
 
@@ -210,6 +239,21 @@ export function Orders(): React.JSX.Element {
       <PageHeader title="Pedidos" subtitle="Cotações e pedidos de venda por representada"
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            {realizadoContext && (
+              <span className="inline-flex items-center gap-1">
+                <Badge tone="success">Vendas realizadas em {competencia}</Badge>
+                <SafeButton aria-label="Limpar período" title="Limpar período"
+                  onClick={() => {
+                    const next = new URLSearchParams(params);
+                    next.delete('competencia');
+                    next.delete('status_group');
+                    setParams(next, { replace: true });
+                  }}
+                  className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-ink-100 hover:text-ink-700">
+                  <Icon name="x" size={14} />
+                </SafeButton>
+              </span>
+            )}
             <Btn variant={filtroAtivo ? 'primary' : 'soft'} icon="search"
               aria-expanded={showFilters} title={showFilters ? 'Recolher filtros' : 'Expandir filtros'}
               onClick={() => setShowFilters((v) => !v)}>
@@ -266,14 +310,16 @@ export function Orders(): React.JSX.Element {
 
       <Collapse open={showKpis} duration={200}>
         <StatRow cols={3} items={[
-          { label: 'Em aberto', value: brl(kpis.aberto), icon: 'trendingUp', tone: 'info' },
-          { label: 'Total faturado', value: brl(kpis.faturado), icon: 'check', tone: 'success' },
-          { label: 'Pedidos', value: String(filtered.length), icon: 'list', tone: 'brand' },
+          { label: 'Em aberto', value: brl(page.aberto), icon: 'trendingUp', tone: 'info' },
+          { label: 'Total faturado', value: brl(page.faturado), icon: 'check', tone: 'success' },
+          { label: 'Pedidos', value: String(page.total), icon: 'list', tone: 'brand' },
         ]} />
       </Collapse>
 
       {loading ? (
         <Spinner />
+      ) : loadError ? (
+        <ErrorState hint={loadError} onRetry={() => load()} />
       ) : filtered.length === 0 ? (
         <EmptyState icon="list" title="Nenhum pedido" hint="Crie uma cotação ou pedido para começar." />
       ) : (

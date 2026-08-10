@@ -336,6 +336,8 @@ export function orderRoutes(app: FastifyInstance): void {
         type: 'object',
         properties: {
           status: { type: 'string', enum: Object.keys(TRANSITIONS) },
+          status_group: { type: 'string', enum: ['realizado'] },
+          competencia: { type: 'string', pattern: '^\\d{4}-(0[1-9]|1[0-2])$' },
           represented_id: { type: 'integer' },
           owner_user_id: { type: 'integer' },
           q: { type: 'string' },
@@ -349,7 +351,7 @@ export function orderRoutes(app: FastifyInstance): void {
   }, async (req) => {
     const orgId = req.auth!.orgId;
     const q = req.query as {
-      status?: string; represented_id?: number; owner_user_id?: number;
+      status?: string; status_group?: 'realizado'; competencia?: string; represented_id?: number; owner_user_id?: number;
       q?: string; from?: string; to?: string; limit?: number; offset?: number;
     };
     const { limit = 100, offset = 0 } = q;
@@ -357,6 +359,11 @@ export function orderRoutes(app: FastifyInstance): void {
     const params: unknown[] = [orgId];
     scopeOwner(req, where, params, 'o.owner_user_id', q.owner_user_id);
     if (q.status) { params.push(q.status); where.push(`o.status = $${params.length}::order_status`); }
+    if (q.status_group === 'realizado') where.push("o.status IN ('faturado','entregue')");
+    if (q.competencia) {
+      params.push(`${q.competencia}-01`);
+      where.push(`date_trunc('month', o.faturado_em) = $${params.length}::date`);
+    }
     if (q.represented_id !== undefined) { params.push(q.represented_id); where.push(`o.represented_id = $${params.length}`); }
     // Filtro por empresa (cliente): só dígitos vira prefixo de CNPJ; senão ILIKE
     // em razão/fantasia (mesma lógica de /api/companies/search).
@@ -373,14 +380,37 @@ export function orderRoutes(app: FastifyInstance): void {
     }
     if (q.from) { params.push(q.from); where.push(`o.created_at >= $${params.length}`); }
     if (q.to) { params.push(q.to); where.push(`o.created_at < ($${params.length}::date + 1)`); }
+    const aggregateParams = [...params];
     params.push(limit); const limIdx = params.length;
     params.push(offset); const offIdx = params.length;
-    const orders = await query(
-      `${SELECT} WHERE ${where.join(' AND ')} ORDER BY o.numero DESC
-       LIMIT $${limIdx} OFFSET $${offIdx}`,
-      params,
-    );
-    return { orders };
+    const [orders, aggregate] = await Promise.all([
+      query(
+        `${SELECT} WHERE ${where.join(' AND ')} ORDER BY o.numero DESC
+         LIMIT $${limIdx} OFFSET $${offIdx}`,
+        params,
+      ),
+      one<{ total: number; aberto: string; faturado: string }>(
+        `SELECT count(*)::int AS total,
+                COALESCE(sum(o.total) FILTER (
+                  WHERE o.status NOT IN ('faturado','entregue','cancelado')
+                ), 0) AS aberto,
+                COALESCE(sum(o.total) FILTER (
+                  WHERE o.status IN ('faturado','entregue')
+                ), 0) AS faturado
+         FROM orders o
+         JOIN companies c ON c.id = o.company_id
+         WHERE ${where.join(' AND ')}`,
+        aggregateParams,
+      ),
+    ]);
+    return {
+      orders,
+      page: {
+        total: aggregate?.total ?? 0,
+        aberto: Number(aggregate?.aberto ?? 0),
+        faturado: Number(aggregate?.faturado ?? 0),
+      },
+    };
   });
 
   app.get('/api/orders/:id', {

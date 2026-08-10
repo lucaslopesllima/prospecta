@@ -51,6 +51,7 @@ function Usuarios(): React.JSX.Element {
   const [role, setRole] = useState<'rep' | 'admin'>('rep');
   const [groupId, setGroupId] = useState<number | ''>('');
   const [busy, setBusy] = useState(false);
+  const [pendingId, setPendingId] = useState<number | null>(null);
   const [transfer, setTransfer] = useState<OrgUser | null>(null);
   const [resetting, setResetting] = useState<OrgUser | null>(null);
 
@@ -91,12 +92,28 @@ function Usuarios(): React.JSX.Element {
 
   const patch = async (id: number, body: Partial<Pick<OrgUser, 'role' | 'ativo' | 'nome' | 'group_id'>>): Promise<void> => {
     setErr('');
+    const target = users.find((u) => Number(u.id) === Number(id));
+    if (body.role === 'admin' && target?.role !== 'admin') {
+      const confirmed = await confirmDialog(
+        `${target?.nome ?? target?.email ?? 'Este usuário'} terá acesso administrativo completo.`,
+        { title: 'Tornar administrador?', confirmText: 'Conceder acesso' },
+      );
+      if (!confirmed) return;
+    }
+    if (body.ativo === false) {
+      const confirmed = await confirmDialog(
+        `Desativar ${target?.nome ?? target?.email ?? 'este usuário'}? O acesso será bloqueado.`,
+        { title: 'Desativar usuário?', confirmText: 'Desativar' },
+      );
+      if (!confirmed) return;
+    }
+    setPendingId(id);
     try {
       await api.patch(`/api/users/${id}`, body);
       await load();
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : 'Erro ao atualizar usuário');
-    }
+    } finally { setPendingId(null); }
   };
 
   const resetPwd = async (u: OrgUser, senha2: string): Promise<void> => {
@@ -131,7 +148,7 @@ function Usuarios(): React.JSX.Element {
             <Field label="Nome"><input value={nome} onChange={(e) => setNome(e.target.value)} required maxLength={120} className={inputCls} /></Field>
             <Field label="E-mail"><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required maxLength={160} className={inputCls} /></Field>
             <Field label="Senha provisória">
-              <input type="text" value={senha} onChange={(e) => setSenha(e.target.value)} required minLength={6} maxLength={200} className={inputCls} />
+              <input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} required minLength={6} maxLength={200} className={inputCls} />
               <span className={cn('mt-1 block text-[11px]', senha.length === 0 ? 'text-ink-400' : senha.length >= 6 ? 'text-emerald-600' : 'text-amber-600')}>
                 Mínimo 6 caracteres{senha.length > 0 && senha.length < 6 ? ` (faltam ${6 - senha.length})` : ''}
               </span>
@@ -187,7 +204,7 @@ function Usuarios(): React.JSX.Element {
                     <td className="px-4 py-3">
                       <select
                         value={u.role}
-                        disabled={self || !can('users.update')}
+                        disabled={self || !can('users.update') || pendingId === Number(u.id)}
                         onChange={(e) => void patch(u.id, { role: e.target.value as 'admin' | 'rep' })}
                         className="rounded-lg border border-ink-200 bg-surface px-2 py-1 text-xs disabled:cursor-not-allowed disabled:bg-ink-50"
                       >
@@ -199,7 +216,7 @@ function Usuarios(): React.JSX.Element {
                       <td className="px-4 py-3">
                         <select
                           value={u.group_id ?? ''}
-                          disabled={!can('users.update')}
+                          disabled={!can('users.update') || pendingId === Number(u.id)}
                           onChange={(e) => void patch(u.id, { group_id: e.target.value === '' ? null : Number(e.target.value) })}
                           className="rounded-lg border border-ink-200 bg-surface px-2 py-1 text-xs disabled:cursor-not-allowed disabled:bg-ink-50"
                         >
@@ -224,6 +241,7 @@ function Usuarios(): React.JSX.Element {
                         )}
                         {!self && can('users.update') && (
                           <Btn size="sm" variant={u.ativo ? 'danger' : 'soft'}
+                            disabled={pendingId === Number(u.id)}
                             onClick={() => patch(u.id, { ativo: !u.ativo })}>
                             {u.ativo ? 'Desativar' : 'Reativar'}
                           </Btn>
@@ -267,7 +285,7 @@ function ResetPwdModal({ user, onClose, onConfirm }: { user: OrgUser; onClose: (
       <h3 className="mb-1 text-sm font-bold text-ink-900">Redefinir senha</h3>
       <p className="mb-3 text-xs text-ink-400">Nova senha provisória para {user.nome ?? user.email}. O usuário troca no próximo acesso.</p>
       <form onSubmit={submit} className="space-y-3">
-        <input type="text" value={senha} onChange={(e) => setSenha(e.target.value)} autoFocus minLength={6} maxLength={200}
+        <input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} autoFocus minLength={6} maxLength={200}
           placeholder="Nova senha provisória" className={inputCls} />
         <span className={cn('block text-[11px]', senha.length === 0 ? 'text-ink-400' : ok ? 'text-emerald-600' : 'text-amber-600')}>
           Mínimo 6 caracteres{senha.length > 0 && !ok ? ` (faltam ${6 - senha.length})` : ''}

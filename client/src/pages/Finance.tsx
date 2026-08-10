@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import type { Activity, FinanceCategory, FinanceEntry, KanbanCard, RepresentedCompany } from '../lib/types.ts';
-import { Badge, Btn, Card, cn, EmptyState, inputCls, Modal, PageHeader, SafeButton, Segmented, Spinner, StatRow, type Tone } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, EmptyState, ErrorState, inputCls, Modal, PageHeader, SafeButton, Segmented, Spinner, StatRow, type Tone } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { brl, fmtDate, numStr, todayStr, maskMoney, clampNum } from '../lib/format.ts';
 import { toast } from '../lib/toast.tsx';
@@ -36,6 +36,7 @@ export function Finance(): React.JSX.Element {
   const [entries, setEntries] = useState<FinanceEntry[]>([]);
   const [totais, setTotais] = useState<Totais | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [kind, setKind] = useState<'todos' | 'receber' | 'pagar'>('todos');
@@ -69,11 +70,16 @@ export function Finance(): React.JSX.Element {
   };
 
   const load = async (): Promise<void> => {
-    const r = await api.get<{ entries: FinanceEntry[]; totais?: Totais }>(`/api/finance?${buildQs(0)}&totais=true`);
-    setEntries(r.entries);
-    setTotais(r.totais ?? null);
-    setHasMore(r.entries.length === PAGE);
-    setLoading(false);
+    setLoading(true);
+    setLoadError('');
+    try {
+      const r = await api.get<{ entries: FinanceEntry[]; totais?: Totais }>(`/api/finance?${buildQs(0)}&totais=true`);
+      setEntries(r.entries);
+      setTotais(r.totais ?? null);
+      setHasMore(r.entries.length === PAGE);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Falha ao carregar financeiro.');
+    } finally { setLoading(false); }
   };
   useEffect(() => { void load(); }, [kind, status]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -83,6 +89,8 @@ export function Finance(): React.JSX.Element {
       const r = await api.get<{ entries: FinanceEntry[] }>(`/api/finance?${buildQs(entries.length)}`);
       setEntries((xs) => [...xs, ...r.entries]);
       setHasMore(r.entries.length === PAGE);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Falha ao carregar mais lançamentos.');
     } finally { setLoadingMore(false); }
   };
 
@@ -226,6 +234,8 @@ export function Finance(): React.JSX.Element {
 
       {loading ? (
         <Spinner />
+      ) : loadError ? (
+        <ErrorState hint={loadError} onRetry={() => load()} />
       ) : filtered.length === 0 ? (
         <EmptyState icon="wallet" title="Nenhum lançamento" hint="Adicione uma conta a pagar ou a receber." />
       ) : (

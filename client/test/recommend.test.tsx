@@ -114,7 +114,7 @@ describe('Recommend', () => {
     expect(url).toContain('cap_max=2000000');
   });
 
-  it('adicionar ao funil marca o card e cria o contato da empresa', async () => {
+  it('adicionar ao funil marca o card sem criar contato implicitamente', async () => {
     comTerritorio();
     m.post.mockResolvedValue({ relationship: { id: 1 } });
     mount();
@@ -122,22 +122,17 @@ describe('Recommend', () => {
     await userEvent.click(screen.getByRole('button', { name: /Adicionar ao funil/ }));
     expect(m.post).toHaveBeenCalledWith('/api/relationships', { company_id: 1 });
     expect(await screen.findByText('Adicionado ao funil')).toBeInTheDocument();
-    // contato da empresa criado junto (best-effort)
-    await waitFor(() => expect(m.post).toHaveBeenCalledWith('/api/contacts',
-      expect.objectContaining({ nome: 'Loja Alvo', company_id: 1 })));
+    expect(m.post).not.toHaveBeenCalledWith('/api/contacts', expect.anything());
   });
 
-  it('funil segue mesmo se a criação do contato falhar', async () => {
+  it('erro ao adicionar ao funil mantém card disponível e avisa', async () => {
     comTerritorio();
-    m.post.mockImplementation(async (p: string) => {
-      if (p === '/api/relationships') return { relationship: { id: 1 } };
-      throw new Error('contato falhou'); // /api/contacts
-    });
+    m.post.mockRejectedValueOnce(new Error('funil falhou'));
     mount();
     await screen.findByText('Loja Alvo', undefined, { timeout: 2000 });
     await userEvent.click(screen.getByRole('button', { name: /Adicionar ao funil/ }));
-    expect(await screen.findByText('Adicionado ao funil')).toBeInTheDocument();
-    expect(vi.mocked(toast.error)).not.toHaveBeenCalled();
+    await waitFor(() => expect(vi.mocked(toast.error)).toHaveBeenCalledWith('funil falhou'));
+    expect(screen.getByRole('button', { name: /Adicionar ao funil/ })).toBeInTheDocument();
   });
 
   it('erro da busca (400) mostra card com ação de ajustar filtros', async () => {

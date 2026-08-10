@@ -76,6 +76,21 @@ describe('CompanySearch', () => {
     expect(onPick).not.toHaveBeenCalled();
   });
 
+  it('navega pelo teclado, ignora empresa bloqueada e seleciona com Enter', async () => {
+    m.get.mockResolvedValue({ companies: [
+      hit({ id: 1, nome_fantasia: 'Já no funil', in_funnel: true }),
+      hit({ id: 2, nome_fantasia: 'Empresa livre', in_funnel: false }),
+    ] });
+    const onPick = vi.fn();
+    render(<CompanySearch onPick={onPick} disableInFunnel />);
+    const inp = screen.getByPlaceholderText(/Buscar empresa/);
+    await userEvent.type(inp, 'alvo');
+    await screen.findByText('Empresa livre', undefined, { timeout: 2000 });
+    expect(screen.getByRole('option', { name: /Empresa livre/ })).toHaveAttribute('aria-selected', 'true');
+    await userEvent.type(inp, '{enter}');
+    expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ id: 2 }));
+  });
+
   it('mostra "Buscando…" enquanto a próxima busca não resolve', async () => {
     // 1ª busca resolve vazio (abre dropdown); 2ª fica pendente → estado loading com dropdown aberto
     let resolve2: (v: unknown) => void = () => {};

@@ -6,6 +6,7 @@ import { Badge, Btn, Card, cn, EmptyState, PageHeader, Spinner, StatRow } from '
 import { Icon } from '../lib/icons.tsx';
 import { toast } from '../lib/toast.tsx';
 import { brl0, dec, maskCNPJ, maskSearchCNPJ } from '../lib/format.ts';
+import { confirmDialog } from '../lib/confirm.ts';
 
 // bigint do pg pode vir string — normaliza p/ comparar/agrupar por dono.
 const oid = (v: number | null): number | null => (v == null ? null : Number(v));
@@ -93,7 +94,14 @@ export function Carteiras(): React.JSX.Element {
   const valorCarteira = (cs: Cliente[]): number => cs.reduce((s, c) => s + (dec(c.valor_estimado) || 0), 0);
 
   // Move um cliente para outra carteira (reatribui o owner). Admin only no backend.
-  const moverCliente = async (c: Cliente, toOwner: number | null): Promise<void> => {
+  const moverCliente = async (c: Cliente, toOwner: number | null, confirmMove = false): Promise<void> => {
+    if (confirmMove) {
+      const confirmed = await confirmDialog(
+        `Mover ${c.nome_fantasia || c.razao_social} para ${nomeVendedor(toOwner)}?`,
+        { title: 'Trocar vendedor?', confirmText: 'Mover cliente' },
+      );
+      if (!confirmed) return;
+    }
     const before = clientes;
     setClientes((xs) => xs.map((x) => (x.id === c.id ? { ...x, owner_user_id: toOwner } : x)));
     try {
@@ -111,6 +119,11 @@ export function Carteiras(): React.JSX.Element {
   const trocarVendedor = async (toOwner: number): Promise<void> => {
     if (sel.ownerId === SEM_DONO) { toast.error('Selecione uma carteira de vendedor.'); return; }
     if (sel.clientes.length === 0) { toast.error('Carteira sem clientes para transferir.'); return; }
+    const confirmed = await confirmDialog(
+      `Transferir ${sel.clientes.length} cliente(s) de ${sel.nome} para ${nomeVendedor(toOwner)}?`,
+      { title: 'Transferir carteira inteira?', confirmText: 'Transferir carteira' },
+    );
+    if (!confirmed) return;
     try {
       const r = await api.post<{ transferred: number }>('/api/relationships/transfer', {
         from_user_id: sel.ownerId, to_user_id: toOwner, ids: sel.clientes.map((c) => c.id),
@@ -247,7 +260,7 @@ export function Carteiras(): React.JSX.Element {
                   <Icon name="users" size={14} />
                   <select value={c.owner_user_id ?? ''} aria-label="Vendedor da carteira"
                     disabled={!can('relationships.transfer')}
-                    onChange={(e) => void moverCliente(c, e.target.value === '' ? null : Number(e.target.value))}
+                    onChange={(e) => void moverCliente(c, e.target.value === '' ? null : Number(e.target.value), true)}
                     className="rounded-lg border border-ink-200 bg-surface px-2 py-1.5 text-xs text-ink-700">
                     <option value="">Sem vendedor</option>
                     {ativos.map((u) => <option key={u.id} value={u.id}>{u.nome ?? u.email}</option>)}

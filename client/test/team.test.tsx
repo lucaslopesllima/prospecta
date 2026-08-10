@@ -39,6 +39,7 @@ beforeEach(() => {
   toastMock.success.mockReset();
   toastMock.error.mockReset();
   confirmMock.mockReset();
+  confirmMock.mockResolvedValue(true);
   setCan(() => true);
   // a página também busca /api/groups (seletor de grupo RBAC; vazio = sem coluna)
   m.get.mockImplementation(async (p: string) =>

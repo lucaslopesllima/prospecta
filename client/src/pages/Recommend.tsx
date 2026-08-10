@@ -10,7 +10,7 @@ import { Badge, Btn, Card, cn, Collapse, EmptyState, FilterPanel, PageHeader, Sa
 import { Icon } from '../lib/icons.tsx';
 import { CompanyFilterBar, useCompanyFilter, faixasParams, faixasInvalidas } from '../lib/companyFilter.tsx';
 import { CompanyModal } from '../lib/companyModal.tsx';
-import { NewContactModal, EMPTY_CONTACT, contactBody, type ContactForm } from '../lib/contactForm.tsx';
+import { NewContactModal, EMPTY_CONTACT, type ContactForm } from '../lib/contactForm.tsx';
 import { Cnae } from '../lib/cnae.tsx';
 import { maskPhone } from '../lib/format.ts';
 import { toast } from '../lib/toast.tsx';
@@ -316,9 +316,6 @@ export function Recommend(): React.JSX.Element {
       await api.post('/api/relationships', { company_id: Number(rec.id) });
       setAdded((s) => new Set(s).add(rec.id));
       toast.success(`${rec.nome_fantasia || rec.razao_social} adicionada ao funil.`);
-      // Cria o contato da empresa junto (best-effort): não bloqueia nem quebra o funil.
-      try { await api.post('/api/contacts', contactBody(await companyContactForm(rec))); }
-      catch { /* contato é acessório ao funil */ }
     } catch (e) {
       toast.error((e as Error).message || 'Não foi possível adicionar ao funil.');
     }
@@ -475,6 +472,17 @@ export function Recommend(): React.JSX.Element {
 
       {view === 'mapa' ? (
         <div className="flex min-h-0 flex-1 flex-col gap-2 px-4 pb-4 pt-4 sm:px-6 sm:pb-6">
+          {!done && !semTerritorio && (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 text-xs text-brand-800">
+              <Icon name="info" size={15} className="shrink-0" />
+              <span className="flex-1">
+                Mapa exibindo {recs.length} de {totalLabel}. Carregue mais para ampliar a cobertura.
+              </span>
+              <Btn size="sm" variant="soft" disabled={loading} onClick={() => load(offset)}>
+                {loading ? 'Carregando…' : 'Carregar mais pontos'}
+              </Btn>
+            </div>
+          )}
           {route && (
             <div className="flex items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm">
               <Icon name="map" size={16} className="text-blue-600" />

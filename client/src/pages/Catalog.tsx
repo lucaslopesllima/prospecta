@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import type { CatalogItem, RepresentedCompany } from '../lib/types.ts';
-import { Badge, Btn, Card, cn, EmptyState, inputCls, PageHeader, RowActions, Segmented, Spinner } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, EmptyState, ErrorState, inputCls, inputErrCls, PageHeader, RowActions, Segmented, Spinner } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { brl, dec, maskMoney, numStr } from '../lib/format.ts';
 import { toast } from '../lib/toast.tsx';
@@ -47,19 +47,25 @@ export function Catalog(): React.JSX.Element {
   const [list, setList] = useState<CatalogItem[]>([]);
   const [reps, setReps] = useState<RepresentedCompany[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [editing, setEditing] = useState<number | 'new' | null>(null);
   const [tab, setTab] = useState<'itens' | 'tabelas'>('itens');
   const [addingTable, setAddingTable] = useState(false);
   const [q, setQ] = useState('');
 
   const load = async (): Promise<void> => {
-    const [c, r] = await Promise.all([
-      api.get<{ items: CatalogItem[] }>('/api/catalog'),
-      api.get<{ empresas: RepresentedCompany[] }>('/api/represented'),
-    ]);
-    setList(c.items);
-    setReps(r.empresas);
-    setLoading(false);
+    setLoading(true);
+    setLoadError('');
+    try {
+      const [c, r] = await Promise.all([
+        api.get<{ items: CatalogItem[] }>('/api/catalog'),
+        api.get<{ empresas: RepresentedCompany[] }>('/api/represented'),
+      ]);
+      setList(c.items);
+      setReps(r.empresas);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Falha ao carregar mostruário.');
+    } finally { setLoading(false); }
   };
   useEffect(() => { void load(); }, []);
 
@@ -122,7 +128,7 @@ export function Catalog(): React.JSX.Element {
         <Card className="p-4">
           <PriceTables reps={reps} catalog={list} adding={addingTable} onCloseAdd={() => setAddingTable(false)} />
         </Card>
-      ) : loading ? <Spinner /> : (
+      ) : loading ? <Spinner /> : loadError ? <ErrorState hint={loadError} onRetry={() => load()} /> : (
         <Card className="p-4">
           {editing === 'new' && (
             <div className="mb-4"><ItemForm reps={reps} initial={EMPTY} onSave={create} onCancel={() => setEditing(null)} /></div>
@@ -180,18 +186,24 @@ function ItemForm({ reps, initial, onSave, onCancel }: {
 }): React.JSX.Element {
   const [f, setF] = useState<Form>(initial);
   const [busy, setBusy] = useState(false);
+  const [tried, setTried] = useState(false);
   const set = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setF((p) => ({ ...p, [k]: e.target.value }));
 
   const submit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
-    if (!f.nome.trim()) return;
+    if (!f.nome.trim()) { setTried(true); return; }
     setBusy(true);
     try { await onSave(f); } finally { setBusy(false); }
   };
 
   return (
     <form onSubmit={submit} className="space-y-2.5">
-      <input autoFocus value={f.nome} onChange={set('nome')} maxLength={120} placeholder="Nome do produto / serviço *" className={inputCls} />
+      <label className="block">
+        <span className="text-xs font-semibold text-ink-600">Nome do produto / serviço *</span>
+        <input autoFocus value={f.nome} onChange={set('nome')} maxLength={120} aria-invalid={tried && !f.nome.trim()}
+          className={cn('mt-1', tried && !f.nome.trim() ? inputErrCls : inputCls)} />
+        {tried && !f.nome.trim() && <span className="mt-1 block text-xs text-rose-600">Informe o nome.</span>}
+      </label>
       <div className="grid gap-2.5 sm:grid-cols-2">
         <input value={f.codigo} onChange={set('codigo')} maxLength={120} placeholder="Código / SKU" className={inputCls} />
         <input type="text" inputMode="decimal" value={f.preco}

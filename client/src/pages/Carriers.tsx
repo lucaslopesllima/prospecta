@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import type { Carrier, CompanyHit } from '../lib/types.ts';
-import { Badge, Btn, Card, cn, EmptyState, inputCls, PageHeader, RowActions, Spinner } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, EmptyState, ErrorState, inputCls, inputErrCls, PageHeader, RowActions, Spinner } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { CompanySearch } from '../lib/companySearch.tsx';
 import { toast } from '../lib/toast.tsx';
@@ -30,12 +30,18 @@ export function Carriers(): React.JSX.Element {
   const { can } = useAuth();
   const [list, setList] = useState<Carrier[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [editing, setEditing] = useState<number | 'new' | null>(null);
 
   const load = async (): Promise<void> => {
-    const r = await api.get<{ carriers: Carrier[] }>('/api/carriers');
-    setList(r.carriers);
-    setLoading(false);
+    setLoading(true);
+    setLoadError('');
+    try {
+      const r = await api.get<{ carriers: Carrier[] }>('/api/carriers');
+      setList(r.carriers);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Falha ao carregar transportadoras.');
+    } finally { setLoading(false); }
   };
   useEffect(() => { void load(); }, []);
 
@@ -75,7 +81,7 @@ export function Carriers(): React.JSX.Element {
       <PageHeader title="Transportadoras" subtitle="Cadastro para vincular nos pedidos de venda."
         actions={editing !== 'new' && can('carriers.create') && <Btn icon="plus" onClick={() => setEditing('new')}>Nova transportadora</Btn>} />
 
-      {loading ? <Spinner /> : (
+      {loading ? <Spinner /> : loadError ? <ErrorState hint={loadError} onRetry={() => load()} /> : (
         <Card className="p-4">
           {editing === 'new' && (
             <div className="mb-4"><CarrierForm initial={EMPTY} onSave={create} onCancel={() => setEditing(null)} /></div>
@@ -122,11 +128,12 @@ function CarrierForm({ initial, onSave, onCancel }: {
 }): React.JSX.Element {
   const [f, setF] = useState<Form>(initial);
   const [busy, setBusy] = useState(false);
+  const [tried, setTried] = useState(false);
   const set = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF((p) => ({ ...p, [k]: e.target.value }));
 
   const submit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
-    if (!f.nome.trim()) return;
+    if (!f.nome.trim()) { setTried(true); return; }
     if (f.email.trim() && !isEmail(f.email)) {
       toast.error('E-mail inválido.');
       return;
@@ -149,7 +156,12 @@ function CarrierForm({ initial, onSave, onCancel }: {
   return (
     <form onSubmit={submit} className="space-y-2.5">
       <CompanySearch onPick={fillFrom} placeholder="Buscar na base de empresas (CNPJ ou nome)…" />
-      <input autoFocus value={f.nome} onChange={set('nome')} maxLength={120} placeholder="Nome da transportadora *" className={inputCls} />
+      <label className="block">
+        <span className="text-xs font-semibold text-ink-600">Nome da transportadora *</span>
+        <input autoFocus value={f.nome} onChange={set('nome')} maxLength={120} aria-invalid={tried && !f.nome.trim()}
+          className={cn('mt-1', tried && !f.nome.trim() ? inputErrCls : inputCls)} />
+        {tried && !f.nome.trim() && <span className="mt-1 block text-xs text-rose-600">Informe o nome.</span>}
+      </label>
       <div className="grid gap-2.5 sm:grid-cols-3">
         <input value={f.cnpj} autoCapitalize="characters" onChange={(e) => setF((p) => ({ ...p, cnpj: maskCNPJ(e.target.value) }))} placeholder="CNPJ" className={inputCls} />
         <input value={f.telefone} inputMode="tel" onChange={(e) => setF((p) => ({ ...p, telefone: maskPhone(e.target.value) }))} placeholder="Telefone" className={inputCls} />

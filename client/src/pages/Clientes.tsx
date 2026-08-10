@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import type { Cliente, CompanyHit } from '../lib/types.ts';
-import { Badge, Btn, Card, cn, EmptyState, inputCls, PageHeader, RowActions, Spinner, StatRow } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, EmptyState, ErrorState, inputCls, PageHeader, RowActions, Spinner, StatRow } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { CompanySearch } from '../lib/companySearch.tsx';
 import { CompanyModal } from '../lib/companyModal.tsx';
@@ -10,6 +10,11 @@ import { toast } from '../lib/toast.tsx';
 import { brl0, dec, maskCNPJ, maskMoney, maskSearchCNPJ, numStr } from '../lib/format.ts';
 import { confirmDialog } from '../lib/confirm.ts';
 
+const summarizeClients = (relationships: Cliente[]): { total: number; ativos: number; valor_estimado: number } => ({
+  total: relationships.length,
+  ativos: relationships.filter((client) => client.ativo).length,
+  valor_estimado: relationships.reduce((sum, client) => sum + (dec(client.valor_estimado) || 0), 0),
+});
 
 // Tela de Clientes. Um cliente é um company_relationships com status='cliente':
 // NÃO copia dados da empresa, só referencia (company_id). Os campos da empresa
@@ -18,6 +23,9 @@ export function Clientes(): React.JSX.Element {
   const { can } = useAuth();
   const [list, setList] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [page, setPage] = useState({ total: 0, ativos: 0, valor_estimado: 0 });
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [q, setQ] = useState('');
@@ -26,10 +34,24 @@ export function Clientes(): React.JSX.Element {
   const [importing, setImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const load = async (): Promise<void> => {
-    const r = await api.get<{ relationships: Cliente[] }>('/api/relationships?status=cliente&limit=200');
-    setList(r.relationships);
-    setLoading(false);
+  const load = async (offset = 0): Promise<void> => {
+    if (offset === 0) setLoading(true); else setLoadingMore(true);
+    setLoadError('');
+    try {
+      const r = await api.get<{
+        relationships: Cliente[];
+        page?: { total: number; ativos: number; valor_estimado: number };
+      }>(`/api/relationships?status=cliente&limit=200&offset=${offset}`);
+      const combined = offset === 0 ? r.relationships : [...list, ...r.relationships];
+      setList(combined);
+      setPage(r.page ?? summarizeClients(combined));
+    } catch (e) {
+      if (offset === 0) setLoadError(e instanceof Error ? e.message : 'Falha ao carregar clientes.');
+      else toast.error(e instanceof Error ? e.message : 'Falha ao carregar mais clientes.');
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
   };
   useEffect(() => { void load(); }, []);
 
@@ -116,8 +138,6 @@ export function Clientes(): React.JSX.Element {
       || (dig.length > 0 && c.cnpj.includes(dig)));
   }, [list, q]);
 
-  const totalValor = useMemo(() => list.reduce((s, c) => s + (dec(c.valor_estimado) || 0), 0), [list]);
-
   return (
     <div className="space-y-4 p-4 sm:p-6">
       <PageHeader title="Clientes" subtitle="Empresas convertidas em cliente. Os dados cadastrais vêm da base — aqui só o relacionamento."
@@ -133,11 +153,13 @@ export function Clientes(): React.JSX.Element {
           </div>
         )} />
 
-      {loading ? <Spinner /> : (
+      {loading ? <Spinner /> : loadError ? (
+        <ErrorState hint={loadError} onRetry={() => load()} />
+      ) : (
         <>
           <StatRow items={[
-            { label: 'Clientes ativos', value: list.length, icon: 'users' },
-            { label: 'Valor estimado total', value: brl0(totalValor), icon: 'wallet', tone: 'success' },
+            { label: 'Clientes ativos', value: page.ativos, sub: `${page.total} no total`, icon: 'users' },
+            { label: 'Valor estimado total', value: brl0(page.valor_estimado), icon: 'wallet', tone: 'success' },
           ]} />
 
           <Card className="p-4">
@@ -162,7 +184,8 @@ export function Clientes(): React.JSX.Element {
             <div className="space-y-2">
               {list.length === 0 && !adding && (
                 <EmptyState icon="users" title="Nenhum cliente ainda"
-                  hint="Adicione uma empresa da base como cliente ou converta um prospecto no Funil." />
+                  hint="Adicione uma empresa da base como cliente ou converta um prospecto no Funil."
+                  action={can('relationships.create') && <Btn icon="plus" onClick={() => setAdding(true)}>Novo cliente</Btn>} />
               )}
               {list.length > 0 && filtered.length === 0 && (
                 <p className="py-8 text-center text-sm text-ink-400">Nenhum cliente corresponde ao filtro.</p>
@@ -201,6 +224,12 @@ export function Clientes(): React.JSX.Element {
                     ]} />
                 </div>
               ))}
+              {list.length < page.total && q.trim() === '' && (
+                <Btn variant="ghost" className="w-full border border-ink-200" disabled={loadingMore}
+                  onClick={() => load(list.length)}>
+                  {loadingMore ? 'Carregando…' : `Carregar mais (${list.length} de ${page.total})`}
+                </Btn>
+              )}
             </div>
           </Card>
         </>

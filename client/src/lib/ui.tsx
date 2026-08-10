@@ -1,6 +1,6 @@
 // Shared UI primitives — the visual vocabulary of the design system.
 // Pages compose these so spacing, radius, color and motion stay consistent.
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon, type IconName } from './icons.tsx';
 
@@ -453,7 +453,7 @@ export function Spinner({ label }: { label?: string }): React.JSX.Element {
     </div>
   );
 }
-export function EmptyState({ icon, title, hint }: { icon: IconName; title: string; hint?: ReactNode }): React.JSX.Element {
+export function EmptyState({ icon, title, hint, action }: { icon: IconName; title: string; hint?: ReactNode; action?: ReactNode }): React.JSX.Element {
   return (
     <div className="flex flex-col items-center gap-2.5 px-4 py-14 text-center">
       {/* Halo em vez de bloco chapado: o ícone marca o vazio sem virar botão. */}
@@ -462,7 +462,17 @@ export function EmptyState({ icon, title, hint }: { icon: IconName; title: strin
       </span>
       <p className="text-sm font-semibold text-ink-700">{title}</p>
       {hint && <p className="max-w-sm text-xs leading-relaxed text-ink-400">{hint}</p>}
+      {action && <div className="mt-1">{action}</div>}
     </div>
+  );
+}
+
+export function ErrorState({ title = 'Não foi possível carregar', hint, onRetry }: {
+  title?: string; hint?: ReactNode; onRetry?: () => unknown;
+}): React.JSX.Element {
+  return (
+    <EmptyState icon="alertTriangle" title={title} hint={hint ?? 'Verifique sua conexão e tente novamente.'}
+      action={onRetry && <Btn variant="soft" onClick={onRetry}>Tentar novamente</Btn>} />
   );
 }
 
@@ -618,17 +628,48 @@ export function Modal(
   const downOnScrim = useRef(false);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previousFocus = useRef<HTMLElement | null>(null);
+  const titleId = useId();
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') closeRef.current(); };
+    previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusable = (): HTMLElement[] => Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ) ?? []).filter((el) => !el.hasAttribute('hidden'));
+    const isTopDialog = (): boolean => {
+      const dialogs = document.querySelectorAll<HTMLElement>('[role="dialog"]');
+      return dialogs[dialogs.length - 1] === dialogRef.current;
+    };
+    const onKey = (e: KeyboardEvent): void => {
+      if (!isTopDialog()) return;
+      if (e.key === 'Escape') { closeRef.current(); return; }
+      if (e.key !== 'Tab') return;
+      const items = focusable();
+      if (items.length === 0) { e.preventDefault(); dialogRef.current?.focus(); return; }
+      const first = items[0]!;
+      const last = items[items.length - 1]!;
+      if (!dialogRef.current?.contains(document.activeElement)) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+      } else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
     document.addEventListener('keydown', onKey);
+    const focusTimer = window.setTimeout(() => {
+      if (dialogRef.current?.contains(document.activeElement)) return;
+      const autoFocus = dialogRef.current?.querySelector<HTMLElement>('[autofocus]');
+      (autoFocus ?? focusable()[0] ?? dialogRef.current)?.focus();
+    }, 0);
     // trava o scroll do fundo enquanto a camada está aberta
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
+      clearTimeout(focusTimer);
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = prev;
+      if (previousFocus.current?.isConnected) previousFocus.current.focus();
     };
   }, [open]);
 
@@ -636,11 +677,13 @@ export function Modal(
   const z = 2000 + level * 10;
 
   return createPortal(
-    <div role="dialog" aria-modal="true" style={{ zIndex: z }}
+    <div style={{ zIndex: z }}
       onPointerDown={(e) => { downOnScrim.current = e.target === e.currentTarget; }}
       onPointerUp={(e) => { if (downOnScrim.current && e.target === e.currentTarget) onClose(); }}
       className="fixed inset-0 flex items-end justify-center bg-scrim backdrop-blur-[2px] [animation:scrimIn_.15s_ease-out] sm:items-center sm:p-4">
-      <div onPointerDown={(e) => e.stopPropagation()}
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={title ? titleId : undefined}
+        aria-label={title ? undefined : 'Janela de diálogo'} tabIndex={-1}
+        onPointerDown={(e) => e.stopPropagation()}
         className={cn(
           'flex w-full flex-col overflow-hidden border border-hairline bg-glass shadow-pop backdrop-blur-xl',
           // mobile: folha colada no rodapé, cantos só em cima, respeita o notch
@@ -655,7 +698,7 @@ export function Modal(
         {(title || subtitle) && (
           <div className="flex shrink-0 items-start justify-between gap-3 px-4 pb-3 pt-3">
             <div className="min-w-0">
-              {title && <h3 className="truncate text-sm font-bold text-ink-900">{title}</h3>}
+              {title && <h3 id={titleId} className="truncate text-sm font-bold text-ink-900">{title}</h3>}
               {subtitle && <p className="mt-0.5 text-xs text-ink-400">{subtitle}</p>}
             </div>
             <button type="button" onClick={onClose} aria-label="Fechar"

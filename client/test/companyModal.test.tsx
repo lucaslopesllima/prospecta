@@ -359,8 +359,8 @@ describe('CompanyModal', () => {
     expect(onClose).not.toHaveBeenCalled();
     // X fecha (o Modal compartilhado dá aria-label ao botão — antes era anônimo)
     await userEvent.click(screen.getByRole('button', { name: 'Fechar' }));
-    // backdrop fecha (o véu é o nó com role=dialog — o Modal sai em portal)
-    await userEvent.click(screen.getByRole('dialog'));
+    // backdrop fecha; o role=dialog fica no painel interno acessível.
+    await userEvent.click(screen.getByRole('dialog').parentElement!);
     expect(onClose).toHaveBeenCalled();
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from './api.ts';
 import { useAuth } from './auth.tsx';
 import type { Carrier, CatalogItem, CommissionEntry, Contact, KanbanCard, Order, PriceTable, RepresentedCompany, TaxDefaults } from './types.ts';
@@ -76,6 +76,7 @@ export function OrderModal({ order = null, prefill = null, onClose, onSaved }: {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [contactId, setContactId] = useState<number | null>(order?.contact_id ?? null);
   const [contactBusy, setContactBusy] = useState(false);
+  const previousCompanyId = useRef<number | null>(companyId);
   const [frete, setFrete] = useState(order ? numStr(order.frete) : '');
   const [observacoes, setObservacoes] = useState(order?.observacoes ?? '');
   const [items, setItems] = useState<ItemDraft[]>(
@@ -111,11 +112,18 @@ export function OrderModal({ order = null, prefill = null, onClose, onSaved }: {
 
   // Contatos da empresa cliente — populam o select "Contato" do pedido.
   useEffect(() => {
+    const companyChanged = previousCompanyId.current !== companyId;
+    previousCompanyId.current = companyId;
+    if (companyChanged) setContactId(null);
     if (companyId == null) { setContacts([]); return; }
+    setContacts([]);
+    const ctrl = new AbortController();
     // `?? []`: resposta sem a chave derrubava o modal inteiro no render do
     // <select> de contato (contacts.map em cima de undefined).
-    void api.get<{ contacts: Contact[] }>(`/api/contacts?company_id=${companyId}`)
-      .then((r) => setContacts(r.contacts ?? [])).catch(() => undefined);
+    void api.get<{ contacts: Contact[] }>(`/api/contacts?company_id=${companyId}`, { signal: ctrl.signal })
+      .then((r) => { if (!ctrl.signal.aborted) setContacts(r.contacts ?? []); })
+      .catch(() => { if (!ctrl.signal.aborted) setContacts([]); });
+    return () => ctrl.abort();
   }, [companyId]);
 
   // Troca o contato do pedido. Em pedido já salvo grava na hora (endpoint próprio,

@@ -69,8 +69,15 @@ describe('GET /api/relationships', () => {
     const rel = await addRel(a, cid, { status: 'cliente' });
 
     const byStatus = await inj(a, 'GET', '/api/relationships?status=cliente&limit=200&offset=0');
-    const found = (byStatus.json() as { relationships: { id: number }[] }).relationships;
+    const statusBody = byStatus.json() as {
+      relationships: { id: number }[];
+      page: { total: number; ativos: number; valor_estimado: number };
+    };
+    const found = statusBody.relationships;
     expect(found.some((x) => x.id === rel.id)).toBe(true);
+    expect(statusBody.page.total).toBeGreaterThanOrEqual(1);
+    expect(statusBody.page.ativos).toBeGreaterThanOrEqual(1);
+    expect(statusBody.page.valor_estimado).toBeGreaterThanOrEqual(0);
 
     const byQ = await inj(a, 'GET', '/api/relationships?q=Filtravel');
     expect((byQ.json() as { relationships: { id: number }[] }).relationships.some((x) => x.id === rel.id)).toBe(true);
