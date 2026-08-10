@@ -3,377 +3,598 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Rovva — Do território ao pedido pago</title>
-<meta name="description" content="A plataforma que mostra quais empresas abordar no seu território — pelo ramo, pela distância e pelo tamanho — e leva o cliente até o pedido pago. Prospecção quente para representantes comerciais.">
+<meta name="theme-color" content="#0d1220">
+<title>Rovva — Prospecção e gestão para representantes</title>
+<meta name="description" content="Encontre empresas com potencial, organize seu território e gerencie funil, visitas, pedidos, comissões e equipe em um só lugar.">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <style>
-  :root{
-    --brand:#3E66EA; --brand-700:#2448BC; --brand-50:#ECF0FD;
-    --accent:#FF6A2B; --ink:#0D1220; --slate:#475069; --slate-400:#8A93A6;
-    --bg:#FFFFFF; --bg-alt:#F7F8FB; --line:#E7E9F0; --ok:#16A34A;
-    --font:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,Helvetica,Arial,sans-serif;
+  :root {
+    --brand: #3e66ea;
+    --brand-700: #2448bc;
+    --brand-50: #ecf0fd;
+    --accent: #ff6a2b;
+    --ink: #0d1220;
+    --slate: #475069;
+    --muted: #737d94;
+    --bg: #ffffff;
+    --bg-soft: #f5f7fb;
+    --line: #e4e7ef;
+    --success: #16a34a;
+    --font: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --shadow-sm: 0 1px 2px rgba(13, 18, 32, .04), 0 8px 24px rgba(13, 18, 32, .06);
+    --shadow-lg: 0 24px 80px -30px rgba(20, 35, 80, .4);
   }
-  *{box-sizing:border-box;margin:0;padding:0}
-  html{scroll-behavior:smooth}
-  body{font-family:var(--font);color:var(--ink);background:var(--bg);line-height:1.55;-webkit-font-smoothing:antialiased}
-  a{color:inherit;text-decoration:none}
-  .wrap{max-width:1120px;margin:0 auto;padding:0 24px}
-  .btn{display:inline-block;font-weight:700;border-radius:12px;padding:14px 24px;font-size:1rem;transition:.15s;cursor:pointer;border:0}
-  .btn-primary{background:var(--brand);color:#fff}
-  .btn-primary:hover{background:var(--brand-700)}
-  .btn-ghost{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
-  .btn-ghost:hover{border-color:var(--brand);color:var(--brand)}
-  .eyebrow{color:var(--brand);font-weight:700;font-size:.85rem;letter-spacing:.08em;text-transform:uppercase}
-  h1,h2,h3{letter-spacing:-.02em;line-height:1.1}
-  section{padding:88px 0}
 
-  /* NAV */
-  header{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.85);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
-  .nav{display:flex;align-items:center;justify-content:space-between;height:68px}
-  .nav svg{height:34px;width:auto;display:block}
-  .nav-links{display:flex;gap:28px;align-items:center}
-  .nav-links a{color:var(--slate);font-weight:600;font-size:.95rem}
-  .nav-links a:hover{color:var(--ink)}
-  @media(max-width:820px){.nav-links a:not(.btn){display:none}}
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; scroll-padding-top: 96px; }
+  body { font-family: var(--font); color: var(--ink); background: var(--bg); line-height: 1.55; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  a { color: inherit; text-decoration: none; }
+  button, a { -webkit-tap-highlight-color: transparent; }
+  svg { display: block; }
+  section { padding: 112px 0; }
+  .wrap { width: min(1180px, calc(100% - 40px)); margin: 0 auto; }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
-  /* HERO */
-  .hero{padding:72px 0 40px}
-  .hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:48px;align-items:center}
-  .hero h1{font-size:3.2rem;font-weight:800;margin:18px 0 20px}
-  .hero h1 .hl{color:var(--brand)}
-  .hero p.sub{font-size:1.2rem;color:var(--slate);max-width:34ch}
-  .hero-cta{display:flex;gap:14px;margin-top:30px;flex-wrap:wrap}
-  .hero-note{margin-top:16px;color:var(--slate-400);font-size:.9rem}
-  .mock{background:var(--ink);border-radius:20px;padding:16px;box-shadow:0 30px 60px -20px rgba(13,18,32,.4)}
-  .mock-bar{display:flex;gap:6px;padding:6px 8px 12px}
-  .mock-bar span{width:11px;height:11px;border-radius:50%;background:#3a4257}
-  @media(max-width:900px){.hero-grid{grid-template-columns:1fr;gap:32px}.hero h1{font-size:2.5rem}}
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 48px; padding: 0 22px; border: 1px solid transparent; border-radius: 13px; font: 700 .95rem/1 var(--font); transition: transform .2s ease, background .2s ease, border-color .2s ease, box-shadow .2s ease; }
+  .btn:hover { transform: translateY(-2px); }
+  .btn-primary { color: #fff; background: var(--brand); box-shadow: 0 10px 28px -10px rgba(62, 102, 234, .75); }
+  .btn-primary:hover { color: #fff; background: var(--brand-700); box-shadow: 0 14px 32px -10px rgba(36, 72, 188, .7); }
+  .btn-secondary { color: var(--ink); background: rgba(255, 255, 255, .84); border-color: var(--line); box-shadow: 0 6px 18px rgba(13, 18, 32, .05); }
+  .btn-secondary:hover { border-color: #bac6ed; background: #fff; }
+  .btn svg { width: 18px; height: 18px; }
+  .kicker { display: inline-flex; align-items: center; gap: 8px; color: var(--brand-700); font-size: .78rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+  .kicker::before { content: ""; width: 22px; height: 2px; border-radius: 9px; background: var(--accent); }
+  .section-head { max-width: 720px; margin-bottom: 52px; }
+  .section-head.center { margin-inline: auto; text-align: center; }
+  .section-head.center .kicker::before { display: none; }
+  h1, h2, h3 { letter-spacing: -.035em; line-height: 1.08; }
+  h2 { margin-top: 14px; font-size: clamp(2rem, 4vw, 3.25rem); }
+  .section-head p { max-width: 600px; margin-top: 18px; color: var(--slate); font-size: 1.08rem; }
+  .section-head.center p { margin-inline: auto; }
 
-  /* LOGOS/trust strip */
-  .strip{padding:28px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--bg-alt)}
-  .strip p{text-align:center;color:var(--slate-400);font-size:.9rem;font-weight:600}
-  .strip .row{display:flex;gap:40px;justify-content:center;flex-wrap:wrap;margin-top:14px;color:var(--slate);font-weight:700}
+  /* Header */
+  header { position: fixed; top: 0; left: 0; z-index: 100; width: 100%; padding: 14px 0; }
+  .nav { display: flex; align-items: center; justify-content: space-between; min-height: 64px; padding: 9px 10px 9px 18px; border: 1px solid rgba(223, 228, 240, .85); border-radius: 18px; background: rgba(255, 255, 255, .88); box-shadow: 0 12px 36px rgba(13, 18, 32, .08); backdrop-filter: blur(18px); }
+  .brand { display: inline-flex; align-items: center; }
+  .brand svg { width: 132px; height: auto; }
+  .nav-links { display: flex; align-items: center; gap: 30px; }
+  .nav-links > a { color: var(--slate); font-size: .9rem; font-weight: 650; }
+  .nav-links > a:hover { color: var(--ink); }
+  .nav-actions { display: flex; align-items: center; gap: 8px; }
+  .nav-actions .login { padding: 12px 13px; color: var(--slate); font-size: .9rem; font-weight: 700; }
+  .nav-actions .login:hover { color: var(--brand-700); }
+  .nav-actions .btn-primary { min-height: 44px; padding-inline: 18px; color: #fff; }
+  .nav-actions .btn-primary:hover { color: #fff; }
 
-  /* PILARES */
-  .pillars{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:48px}
-  .card{border:1px solid var(--line);border-radius:16px;padding:28px;background:var(--bg)}
-  .card .ic{width:46px;height:46px;border-radius:12px;background:var(--brand-50);display:flex;align-items:center;justify-content:center;margin-bottom:16px}
-  .card h3{font-size:1.25rem;margin-bottom:8px}
-  .card p{color:var(--slate)}
-  @media(max-width:820px){.pillars{grid-template-columns:1fr}}
+  /* Hero */
+  .hero { position: relative; min-height: 820px; padding: 178px 0 92px; overflow: hidden; background: linear-gradient(180deg, #fbfcff 0%, #fff 78%); }
+  .hero::before { content: ""; position: absolute; top: -240px; left: 52%; width: 780px; height: 780px; border-radius: 50%; background: radial-gradient(circle, rgba(62, 102, 234, .17), rgba(62, 102, 234, 0) 68%); pointer-events: none; }
+  .hero::after { content: ""; position: absolute; right: -150px; bottom: 20px; width: 460px; height: 460px; border-radius: 50%; background: radial-gradient(circle, rgba(255, 106, 43, .08), rgba(255, 106, 43, 0) 68%); pointer-events: none; }
+  .hero-grid { position: relative; z-index: 1; display: grid; grid-template-columns: .88fr 1.12fr; align-items: center; gap: 64px; }
+  .hero-copy { max-width: 570px; }
+  .hero-badge { display: inline-flex; align-items: center; gap: 9px; padding: 7px 12px 7px 8px; border: 1px solid #dce3fa; border-radius: 999px; color: var(--brand-700); background: rgba(236, 240, 253, .75); font-size: .8rem; font-weight: 750; }
+  .hero-badge span { display: grid; width: 24px; height: 24px; place-items: center; border-radius: 50%; color: #fff; background: var(--brand); }
+  .hero-badge svg { width: 13px; height: 13px; }
+  .hero h1 { margin-top: 24px; font-size: clamp(3.1rem, 5.6vw, 5.15rem); font-weight: 850; letter-spacing: -.065em; }
+  .hero h1 span { color: var(--brand); }
+  .hero-sub { max-width: 540px; margin-top: 24px; color: var(--slate); font-size: clamp(1.08rem, 1.5vw, 1.23rem); line-height: 1.65; }
+  .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
+  .hero-note { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 20px; color: var(--muted); font-size: .83rem; font-weight: 600; }
+  .hero-note span { display: flex; align-items: center; gap: 6px; }
+  .hero-note svg { width: 15px; height: 15px; color: var(--success); }
 
-  .center{text-align:center;max-width:640px;margin:0 auto}
-  .center h2{font-size:2.3rem;font-weight:800}
-  .center p.lead{color:var(--slate);font-size:1.1rem;margin-top:14px}
+  .product { position: relative; min-width: 0; }
+  .product-glow { position: absolute; inset: 12% 8% 2%; border-radius: 48px; background: rgba(62, 102, 234, .2); filter: blur(54px); }
+  .app-window { position: relative; overflow: hidden; border: 1px solid #252e46; border-radius: 22px; color: #fff; background: #101624; box-shadow: var(--shadow-lg), 0 0 0 7px rgba(255, 255, 255, .7); transform: perspective(1300px) rotateY(-2.5deg) rotateX(1deg); }
+  .window-bar { display: flex; align-items: center; justify-content: space-between; height: 38px; padding: 0 13px; border-bottom: 1px solid rgba(255, 255, 255, .07); background: #0d1220; }
+  .dots { display: flex; gap: 5px; }
+  .dots i { width: 7px; height: 7px; border-radius: 50%; background: #394155; }
+  .window-url { width: 34%; height: 7px; border-radius: 99px; background: #262e42; }
+  .app-shell { display: grid; grid-template-columns: 112px 1fr; min-height: 435px; }
+  .app-sidebar { padding: 18px 10px; border-right: 1px solid rgba(255, 255, 255, .07); background: #111827; }
+  .mini-brand { display: flex; align-items: center; gap: 7px; margin: 0 7px 22px; font-size: .72rem; font-weight: 800; }
+  .mini-mark { width: 22px; height: 22px; border-radius: 7px; background: linear-gradient(135deg, #597ef8, #2448bc); }
+  .mini-nav { display: grid; gap: 7px; }
+  .mini-nav span { display: flex; align-items: center; gap: 7px; height: 26px; padding: 0 8px; border-radius: 7px; color: #8f9ab2; font-size: .5rem; font-weight: 650; }
+  .mini-nav span::before { content: ""; width: 9px; height: 9px; border: 1.5px solid currentColor; border-radius: 3px; }
+  .mini-nav .active { color: #fff; background: rgba(255, 255, 255, .09); }
+  .mini-nav .active::before { color: #8fa8ff; }
+  .app-content { padding: 20px; background: #f3f5fa; color: var(--ink); }
+  .app-title { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 14px; }
+  .app-title strong { display: block; font-size: .75rem; }
+  .app-title small { color: #7c8498; font-size: .48rem; }
+  .app-title button { height: 22px; padding: 0 9px; border: 0; border-radius: 6px; color: #fff; background: var(--brand); font: 700 .45rem var(--font); }
+  .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .metric { padding: 10px; border: 1px solid #e4e7ef; border-radius: 9px; background: #fff; box-shadow: 0 3px 10px rgba(13, 18, 32, .04); }
+  .metric small { display: block; color: #788197; font-size: .43rem; font-weight: 650; }
+  .metric b { display: block; margin-top: 3px; font-size: .8rem; letter-spacing: -.03em; }
+  .metric em { color: var(--success); font-size: .4rem; font-style: normal; font-weight: 700; }
+  .app-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 8px; margin-top: 8px; }
+  .map-card, .lead-card { min-width: 0; border: 1px solid #e4e7ef; border-radius: 10px; background: #fff; box-shadow: 0 3px 10px rgba(13, 18, 32, .04); }
+  .card-label { display: flex; align-items: center; justify-content: space-between; padding: 9px 10px 5px; font-size: .48rem; font-weight: 750; }
+  .card-label span { color: var(--brand); font-size: .4rem; }
+  .map { position: relative; height: 193px; margin: 4px 8px 8px; overflow: hidden; border-radius: 7px; background: #e9edf3; }
+  .map::before { content: ""; position: absolute; inset: -15%; opacity: .62; background: linear-gradient(22deg, transparent 48%, #cdd3df 49%, #cdd3df 52%, transparent 53%), linear-gradient(-38deg, transparent 46%, #d2d8e1 47%, #d2d8e1 50%, transparent 51%); background-size: 86px 74px, 105px 90px; }
+  .route-line { position: absolute; left: 17%; top: 19%; width: 64%; height: 62%; border: 3px solid var(--brand); border-left-color: transparent; border-bottom-color: transparent; border-radius: 50%; transform: rotate(24deg); }
+  .pin { position: absolute; display: grid; width: 17px; height: 17px; place-items: center; border: 3px solid #fff; border-radius: 50% 50% 50% 3px; background: var(--accent); box-shadow: 0 4px 8px rgba(13, 18, 32, .22); transform: rotate(-45deg); }
+  .pin::after { content: ""; width: 4px; height: 4px; border-radius: 50%; background: #fff; }
+  .pin.p1 { left: 20%; top: 68%; }
+  .pin.p2 { left: 46%; top: 40%; }
+  .pin.p3 { left: 73%; top: 22%; }
+  .pin.p4 { left: 70%; top: 71%; background: var(--brand); transform: rotate(-45deg) scale(.8); }
+  .lead-list { display: grid; gap: 6px; padding: 5px 8px 8px; }
+  .lead { padding: 8px; border: 1px solid #edf0f5; border-radius: 7px; }
+  .lead-top { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+  .lead b { overflow: hidden; font-size: .47rem; white-space: nowrap; text-overflow: ellipsis; }
+  .score { display: grid; width: 19px; height: 19px; flex: 0 0 auto; place-items: center; border-radius: 50%; color: #fff; background: var(--success); font-size: .4rem; font-weight: 800; }
+  .lead small { display: block; margin-top: 4px; color: #8991a3; font-size: .38rem; }
+  .lead-tags { display: flex; gap: 3px; margin-top: 5px; }
+  .lead-tags i { padding: 2px 4px; border-radius: 99px; color: var(--brand-700); background: var(--brand-50); font-size: .31rem; font-style: normal; font-weight: 700; }
+  .floating-card { position: absolute; right: -24px; bottom: -25px; display: flex; align-items: center; gap: 11px; width: 190px; padding: 13px; border: 1px solid rgba(226, 231, 242, .9); border-radius: 14px; background: rgba(255, 255, 255, .94); box-shadow: 0 16px 40px rgba(13, 18, 32, .15); backdrop-filter: blur(12px); }
+  .floating-icon { display: grid; width: 37px; height: 37px; flex: 0 0 auto; place-items: center; border-radius: 11px; color: #fff; background: var(--success); }
+  .floating-icon svg { width: 18px; height: 18px; }
+  .floating-card strong { display: block; font-size: .7rem; }
+  .floating-card span { color: var(--muted); font-size: .55rem; }
 
-  /* COMO FUNCIONA */
-  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:48px;counter-reset:s}
-  .step{position:relative;padding:28px;border-radius:16px;background:var(--bg-alt)}
-  .step .n{counter-increment:s;font-weight:800;color:var(--brand);font-size:1rem;background:#fff;border:1.5px solid var(--brand);width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:14px}
-  .step .n::before{content:counter(s)}
-  .step h3{font-size:1.15rem;margin-bottom:6px}
-  .step p{color:var(--slate)}
-  @media(max-width:820px){.steps{grid-template-columns:1fr}}
+  /* Proof */
+  .proof { padding: 0 0 34px; }
+  .proof-grid { display: grid; grid-template-columns: 1.2fr repeat(3, 1fr); align-items: stretch; overflow: hidden; border: 1px solid var(--line); border-radius: 20px; background: #fff; box-shadow: var(--shadow-sm); }
+  .proof-intro, .proof-item { padding: 27px 30px; }
+  .proof-intro { display: flex; align-items: center; color: #fff; background: var(--ink); }
+  .proof-intro p { font-size: .95rem; font-weight: 650; }
+  .proof-item { border-left: 1px solid var(--line); }
+  .proof-item b { display: block; color: var(--brand-700); font-size: 1.45rem; letter-spacing: -.04em; }
+  .proof-item span { color: var(--muted); font-size: .78rem; }
 
-  /* PLANOS */
-  #planos{background:var(--bg-alt)}
-  .plans{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:48px;align-items:start}
-  .plan{background:#fff;border:1px solid var(--line);border-radius:18px;padding:30px;display:flex;flex-direction:column}
-  .plan.pop{border:2px solid var(--brand);box-shadow:0 20px 40px -18px rgba(61,90,241,.4);position:relative}
-  .plan .tag{position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:var(--brand);color:#fff;font-size:.72rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:5px 14px;border-radius:999px}
-  .plan h3{font-size:1.4rem}
-  .plan .who{color:var(--slate-400);font-size:.9rem;margin:4px 0 18px}
-  .plan .price{font-size:2.4rem;font-weight:800}
-  .plan .price small{font-size:.95rem;color:var(--slate);font-weight:600}
-  .plan .year{color:var(--ok);font-size:.85rem;font-weight:700;margin-top:4px}
-  .plan ul{list-style:none;margin:22px 0;display:flex;flex-direction:column;gap:10px}
-  .plan li{color:var(--slate);font-size:.95rem;padding-left:26px;position:relative}
-  .plan li::before{content:"✓";position:absolute;left:0;color:var(--brand);font-weight:800}
-  .plan .btn{width:100%;text-align:center;margin-top:auto}
-  @media(max-width:820px){.plans{grid-template-columns:1fr}}
+  /* Feature bento */
+  #recursos { background: var(--bg-soft); }
+  .bento { display: grid; grid-template-columns: repeat(12, 1fr); gap: 18px; }
+  .feature { position: relative; min-height: 265px; overflow: hidden; padding: 30px; border: 1px solid #e2e6ef; border-radius: 22px; background: #fff; box-shadow: 0 8px 28px rgba(13, 18, 32, .04); transition: transform .25s ease, box-shadow .25s ease; }
+  .feature:hover { transform: translateY(-4px); box-shadow: 0 18px 40px rgba(13, 18, 32, .08); }
+  .feature.large { grid-column: span 7; min-height: 350px; }
+  .feature.medium { grid-column: span 5; min-height: 350px; }
+  .feature.small { grid-column: span 4; }
+  .feature-icon { display: grid; width: 44px; height: 44px; place-items: center; border-radius: 13px; color: var(--brand); background: var(--brand-50); }
+  .feature-icon.orange { color: #d54a0e; background: #fff1eb; }
+  .feature-icon.green { color: #087c3b; background: #eaf8f0; }
+  .feature-icon svg { width: 21px; height: 21px; }
+  .feature h3 { margin-top: 23px; font-size: 1.34rem; }
+  .feature p { max-width: 47ch; margin-top: 10px; color: var(--slate); font-size: .92rem; }
+  .feature-list { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 20px; }
+  .feature-list span { padding: 6px 9px; border: 1px solid var(--line); border-radius: 99px; color: var(--slate); background: #fafbfc; font-size: .7rem; font-weight: 700; }
+  .feature-visual { position: absolute; right: -22px; bottom: -18px; width: 52%; min-width: 260px; padding: 15px; border: 1px solid #e4e7ef; border-radius: 17px; background: #f8f9fc; box-shadow: 0 16px 36px rgba(13, 18, 32, .09); transform: rotate(-2deg); }
+  .kanban { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+  .kanban-col { min-height: 145px; padding: 7px; border-radius: 8px; background: #eef1f6; }
+  .kanban-col b { color: #6f788e; font-size: .43rem; }
+  .kanban-card { height: 33px; margin-top: 6px; padding: 6px; border-radius: 6px; background: #fff; box-shadow: 0 2px 5px rgba(13, 18, 32, .06); }
+  .kanban-card::before, .kanban-card::after { content: ""; display: block; height: 3px; border-radius: 9px; background: #c8cedb; }
+  .kanban-card::after { width: 65%; margin-top: 4px; background: #e1e5ec; }
+  .chat-visual { display: grid; gap: 7px; margin-top: 24px; padding: 15px; border-radius: 15px; background: #f4f6fa; }
+  .bubble { width: 82%; padding: 9px 11px; border-radius: 11px 11px 11px 3px; color: var(--slate); background: #fff; font-size: .63rem; box-shadow: 0 3px 10px rgba(13, 18, 32, .05); }
+  .bubble.me { margin-left: auto; border-radius: 11px 11px 3px 11px; color: #173b2b; background: #dff7e8; }
+  .bubble small { display: block; margin-top: 3px; color: #8a93a6; font-size: .45rem; text-align: right; }
 
-  /* FAQ */
-  .faq{max-width:760px;margin:44px auto 0}
-  details{border-bottom:1px solid var(--line);padding:20px 0}
-  summary{font-weight:700;font-size:1.05rem;cursor:pointer;list-style:none;display:flex;justify-content:space-between}
-  summary::-webkit-details-marker{display:none}
-  summary::after{content:"+";color:var(--brand);font-weight:800}
-  details[open] summary::after{content:"–"}
-  details p{color:var(--slate);margin-top:12px}
+  /* Workflow */
+  .workflow-grid { display: grid; grid-template-columns: .82fr 1.18fr; align-items: center; gap: 90px; }
+  .workflow-copy h2 { margin-top: 14px; font-size: clamp(2rem, 4vw, 3.25rem); }
+  .workflow-copy > p { margin-top: 18px; color: var(--slate); font-size: 1.05rem; }
+  .workflow-copy .btn { margin-top: 28px; }
+  .timeline { position: relative; display: grid; gap: 10px; }
+  .timeline::before { content: ""; position: absolute; top: 38px; bottom: 38px; left: 27px; width: 2px; background: linear-gradient(var(--brand), #aebcf0); }
+  .timeline-item { position: relative; display: grid; grid-template-columns: 54px 1fr auto; align-items: center; gap: 16px; min-height: 80px; padding: 13px 18px 13px 13px; border: 1px solid var(--line); border-radius: 17px; background: #fff; box-shadow: var(--shadow-sm); }
+  .timeline-icon { z-index: 1; display: grid; width: 46px; height: 46px; place-items: center; border: 5px solid #fff; border-radius: 50%; color: #fff; background: var(--brand); box-shadow: 0 0 0 1px #ccd5f6; }
+  .timeline-icon svg { width: 17px; height: 17px; }
+  .timeline-item:nth-child(2) .timeline-icon { background: #536fda; }
+  .timeline-item:nth-child(3) .timeline-icon { background: #3951aa; }
+  .timeline-item:nth-child(4) .timeline-icon { background: var(--success); }
+  .timeline-item strong { display: block; font-size: .93rem; }
+  .timeline-item p { margin-top: 3px; color: var(--muted); font-size: .76rem; }
+  .timeline-item > span { padding: 4px 7px; border-radius: 99px; color: var(--brand-700); background: var(--brand-50); font-size: .58rem; font-weight: 750; }
 
-  /* CTA FINAL */
-  .final{background:var(--ink);color:#fff;text-align:center;border-radius:24px;padding:64px 24px;margin:0 24px}
-  .final h2{font-size:2.4rem;font-weight:800}
-  .final p{color:#aab2c5;margin:14px auto 28px;max-width:44ch}
+  /* Team */
+  .team-section { padding-top: 22px; }
+  .team-panel { position: relative; overflow: hidden; padding: 78px; border-radius: 32px; color: #fff; background: var(--ink); }
+  .team-panel::before { content: ""; position: absolute; top: -220px; right: -80px; width: 570px; height: 570px; border-radius: 50%; background: radial-gradient(circle, rgba(62, 102, 234, .38), transparent 68%); }
+  .team-grid { position: relative; display: grid; grid-template-columns: .9fr 1.1fr; align-items: center; gap: 70px; }
+  .team-copy .kicker { color: #aebdf6; }
+  .team-copy h2 { max-width: 500px; }
+  .team-copy > p { max-width: 520px; margin-top: 18px; color: #b1b8c9; }
+  .team-points { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 28px; }
+  .team-points span { display: flex; align-items: center; gap: 8px; color: #e6e9f1; font-size: .8rem; font-weight: 650; }
+  .team-points svg { width: 16px; height: 16px; color: #83e3ab; }
+  .team-dashboard { padding: 16px; border: 1px solid rgba(255, 255, 255, .1); border-radius: 19px; background: rgba(255, 255, 255, .07); box-shadow: 0 30px 60px rgba(0, 0, 0, .25); backdrop-filter: blur(16px); transform: rotate(1.5deg); }
+  .team-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .team-metric { padding: 13px; border-radius: 10px; background: rgba(255, 255, 255, .08); }
+  .team-metric small { display: block; color: #aeb5c7; font-size: .5rem; }
+  .team-metric b { display: block; margin-top: 4px; font-size: .9rem; }
+  .chart { display: flex; align-items: end; gap: 9px; height: 154px; margin-top: 9px; padding: 16px 16px 12px; border-radius: 12px; background: rgba(255, 255, 255, .06); }
+  .chart i { flex: 1; min-height: 15%; border-radius: 5px 5px 2px 2px; background: linear-gradient(#698cff, #3659cb); }
+  .chart i:nth-child(1) { height: 38%; }
+  .chart i:nth-child(2) { height: 55%; }
+  .chart i:nth-child(3) { height: 46%; }
+  .chart i:nth-child(4) { height: 71%; }
+  .chart i:nth-child(5) { height: 64%; }
+  .chart i:nth-child(6) { height: 86%; background: linear-gradient(#ff9a70, #ff6a2b); }
+  .chart i:nth-child(7) { height: 78%; }
+  .chart i:nth-child(8) { height: 96%; }
 
-  footer{padding:48px 0 60px;color:var(--slate-400);font-size:.9rem}
-  .foot-grid{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:32px}
-  .foot-grid a{color:var(--slate);display:block;margin:6px 0}
-  .badge{display:inline-block;background:var(--brand-50);color:var(--brand-700);font-weight:700;font-size:.8rem;padding:6px 12px;border-radius:999px}
+  /* Pricing */
+  #planos { background: var(--bg-soft); }
+  .plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; align-items: stretch; }
+  .plan { position: relative; display: flex; flex-direction: column; padding: 30px; border: 1px solid var(--line); border-radius: 22px; background: #fff; box-shadow: var(--shadow-sm); }
+  .plan.popular { border-color: var(--brand); box-shadow: 0 22px 50px -24px rgba(36, 72, 188, .55); }
+  .popular-tag { position: absolute; top: 18px; right: 18px; padding: 5px 8px; border-radius: 99px; color: #fff; background: var(--brand); font-size: .61rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+  .plan h3 { font-size: 1.45rem; }
+  .plan-who { min-height: 44px; margin-top: 5px; color: var(--muted); font-size: .82rem; }
+  .price { margin-top: 20px; font-size: 2.35rem; font-weight: 850; letter-spacing: -.055em; }
+  .price small { color: var(--slate); font-size: .8rem; font-weight: 650; letter-spacing: 0; }
+  .annual { min-height: 22px; margin-top: 3px; color: var(--success); font-size: .72rem; font-weight: 750; }
+  .plan ul { display: grid; gap: 10px; margin: 24px 0 28px; list-style: none; }
+  .plan li { position: relative; padding-left: 25px; color: var(--slate); font-size: .84rem; }
+  .plan li::before { content: "✓"; position: absolute; left: 0; display: grid; width: 17px; height: 17px; place-items: center; border-radius: 50%; color: var(--brand-700); background: var(--brand-50); font-size: .65rem; font-weight: 900; }
+  .plan .btn { width: 100%; margin-top: auto; }
+
+  /* FAQ and final CTA */
+  .faq { max-width: 810px; margin: 0 auto; }
+  details { border-bottom: 1px solid var(--line); }
+  summary { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 22px 0; cursor: pointer; list-style: none; font-weight: 750; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "+"; display: grid; width: 28px; height: 28px; flex: 0 0 auto; place-items: center; border-radius: 50%; color: var(--brand-700); background: var(--brand-50); font-size: 1.1rem; }
+  details[open] summary::after { content: "−"; }
+  details p { max-width: 720px; padding: 0 0 24px; color: var(--slate); font-size: .94rem; }
+  .cta-section { padding-top: 24px; }
+  .final { position: relative; overflow: hidden; padding: 86px 30px; border-radius: 30px; text-align: center; color: #fff; background: linear-gradient(135deg, #3158d5, #2448bc 48%, #192e75); box-shadow: 0 30px 70px -28px rgba(36, 72, 188, .7); }
+  .final::before, .final::after { content: ""; position: absolute; border: 1px solid rgba(255, 255, 255, .12); border-radius: 50%; }
+  .final::before { top: -260px; left: -140px; width: 520px; height: 520px; }
+  .final::after { right: -170px; bottom: -320px; width: 620px; height: 620px; }
+  .final-content { position: relative; z-index: 1; }
+  .final h2 { max-width: 700px; margin: 0 auto; font-size: clamp(2.2rem, 4vw, 3.5rem); }
+  .final p { max-width: 580px; margin: 18px auto 30px; color: #dbe3ff; font-size: 1.05rem; }
+  .final .btn { color: var(--brand-700); background: #fff; box-shadow: 0 12px 28px rgba(14, 25, 68, .24); }
+
+  footer { padding: 66px 0 34px; }
+  .footer-grid { display: grid; grid-template-columns: 1.4fr repeat(2, .6fr); gap: 54px; }
+  .footer-brand svg { width: 126px; height: auto; }
+  .footer-brand p { max-width: 300px; margin-top: 14px; color: var(--muted); font-size: .85rem; }
+  .footer-col strong { display: block; margin-bottom: 13px; font-size: .82rem; }
+  .footer-col a { display: block; margin-top: 8px; color: var(--muted); font-size: .82rem; }
+  .footer-col a:hover { color: var(--brand-700); }
+  .copyright { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--line); color: var(--muted); font-size: .75rem; }
+
+  @media (max-width: 1040px) {
+    .nav-links { display: none; }
+    .hero-grid { grid-template-columns: 1fr; gap: 60px; }
+    .hero-copy { max-width: 760px; text-align: center; margin-inline: auto; }
+    .hero-sub { margin-inline: auto; }
+    .hero-actions, .hero-note { justify-content: center; }
+    .product { width: min(760px, 100%); margin-inline: auto; }
+    .proof-grid { grid-template-columns: repeat(3, 1fr); }
+    .proof-intro { grid-column: 1 / -1; justify-content: center; text-align: center; }
+    .proof-item:nth-child(2) { border-left: 0; }
+    .feature.large, .feature.medium { grid-column: span 6; }
+    .feature.small { grid-column: span 6; }
+    .feature-visual { width: 64%; opacity: .75; }
+    .workflow-grid, .team-grid { grid-template-columns: 1fr; gap: 48px; }
+    .team-panel { padding: 58px; }
+  }
+
+  @media (max-width: 760px) {
+    section { padding: 82px 0; }
+    .wrap { width: min(100% - 28px, 1180px); }
+    header { padding: 9px 0; }
+    .nav { min-height: 58px; padding-left: 13px; border-radius: 15px; }
+    .brand svg { width: 112px; }
+    .nav-actions .login { display: none; }
+    .nav-actions .btn-primary { min-height: 40px; padding-inline: 13px; font-size: .78rem; }
+    .hero { min-height: 0; padding: 132px 0 72px; }
+    .hero h1 { font-size: clamp(2.8rem, 13vw, 4.4rem); }
+    .hero-sub { font-size: 1rem; }
+    .hero-actions { display: grid; }
+    .hero-actions .btn { width: 100%; }
+    .hero-note { gap: 10px; font-size: .73rem; }
+    .app-window { transform: none; border-radius: 15px; }
+    .app-shell { grid-template-columns: 1fr; min-height: 365px; }
+    .app-sidebar { display: none; }
+    .app-content { padding: 12px; }
+    .metrics { grid-template-columns: repeat(3, 1fr); }
+    .metric { padding: 8px; }
+    .app-grid { grid-template-columns: 1fr; }
+    .lead-card { display: none; }
+    .map { height: 190px; }
+    .floating-card { right: 10px; bottom: -35px; }
+    .proof { padding-top: 24px; }
+    .proof-grid { grid-template-columns: 1fr; }
+    .proof-item { padding: 20px 24px; border-top: 1px solid var(--line); border-left: 0; text-align: center; }
+    .section-head { margin-bottom: 36px; }
+    .section-head.center { text-align: left; }
+    .section-head.center .kicker::before { display: block; }
+    .section-head.center p { margin-inline: 0; }
+    .feature.large, .feature.medium, .feature.small { grid-column: 1 / -1; min-height: 0; }
+    .feature { padding: 24px; }
+    .feature.large { min-height: 430px; }
+    .feature-visual { right: -12px; width: 88%; opacity: 1; }
+    .workflow-grid { gap: 38px; }
+    .timeline-item { grid-template-columns: 48px 1fr; gap: 12px; }
+    .timeline-item > span { display: none; }
+    .team-panel { padding: 42px 24px; border-radius: 24px; }
+    .team-points { grid-template-columns: 1fr; }
+    .plans { grid-template-columns: 1fr; }
+    .plan-who { min-height: 0; }
+    .team-dashboard { transform: none; }
+    .final { padding: 62px 22px; border-radius: 24px; }
+    .footer-grid { grid-template-columns: 1fr 1fr; gap: 38px 24px; }
+    .footer-brand { grid-column: 1 / -1; }
+    .copyright { align-items: flex-start; flex-direction: column; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after { transition-duration: .01ms !important; }
+  }
 </style>
 </head>
 <body>
 
-<!-- NAV -->
 <header>
   <div class="wrap nav">
-    <a href="#top" aria-label="Rovva">
+    <a class="brand" href="#top" aria-label="Rovva — início">
       <svg viewBox="0 0 920 240" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Rovva">
-        <defs><linearGradient id="ng" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#597EF8"/><stop offset="1" stop-color="#2448BC"/></linearGradient></defs>
-        <g transform="translate(40 40)">
-          <rect width="160" height="160" rx="42" fill="url(#ng)"/>
-          <path d="M52 116 C 104 116 80 66 124 62" stroke="#fff" stroke-width="16" fill="none" stroke-linecap="round"/>
-          <circle cx="52" cy="116" r="14" fill="#fff"/><circle cx="52" cy="116" r="6" fill="#2448BC"/>
-          <path d="M104 52 L126 62 L114 82" stroke="#fff" stroke-width="16" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-        </g>
-        <text x="250" y="153" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="120" font-weight="800" letter-spacing="-5" fill="#0D1220">Ro<tspan fill="#3E66EA">vv</tspan>a</text>
+        <defs><linearGradient id="logo-gradient" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#597ef8"/><stop offset="1" stop-color="#2448bc"/></linearGradient></defs>
+        <g transform="translate(40 40)"><rect width="160" height="160" rx="42" fill="url(#logo-gradient)"/><path d="M52 116C104 116 80 66 124 62" stroke="#fff" stroke-width="16" fill="none" stroke-linecap="round"/><circle cx="52" cy="116" r="14" fill="#fff"/><circle cx="52" cy="116" r="6" fill="#2448bc"/><path d="M104 52L126 62 114 82" stroke="#fff" stroke-width="16" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g>
+        <text x="250" y="153" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="120" font-weight="800" letter-spacing="-5" fill="#0d1220">Ro<tspan fill="#3e66ea">vv</tspan>a</text>
       </svg>
     </a>
-    <nav class="nav-links">
+    <nav class="nav-links" aria-label="Navegação principal">
+      <a href="#recursos">Recursos</a>
       <a href="#como">Como funciona</a>
       <a href="#planos">Planos</a>
-      <a href="#faq">FAQ</a>
-      <a href="https://app.rovva.tech/login">Entrar</a>
-      <a href="#cadastro" class="btn btn-primary" style="padding:10px 18px">Testar grátis</a>
+      <a href="#faq">Dúvidas</a>
     </nav>
+    <div class="nav-actions">
+      <a class="login" href="https://app.rovva.tech/login">Entrar</a>
+      <a class="btn btn-primary" href="https://app.rovva.tech/login">Começar grátis
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </a>
+    </div>
   </div>
 </header>
 
-<span id="top"></span>
-
-<!-- HERO -->
-<section class="hero">
-  <div class="wrap hero-grid">
-    <div>
-      <span class="badge">Prospecção + gestão para representantes</span>
-      <h1>Pare de prospectar <span class="hl">no escuro.</span></h1>
-      <p class="sub">O Rovva busca nos <strong>CNPJs de todo o Brasil</strong> e te diz <strong>quais empresas abordar no seu território</strong> — e leva o cliente do primeiro contato ao pedido pago.</p>
-      <div class="hero-cta">
-        <a href="#cadastro" class="btn btn-primary">Testar 14 dias grátis</a>
-        <a href="#como" class="btn btn-ghost">Ver como funciona</a>
+<main id="top">
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div class="hero-copy">
+        <div class="hero-badge">
+          <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 21s7-4.2 7-11a7 7 0 1 0-14 0c0 6.8 7 11 7 11Z"/><circle cx="12" cy="10" r="2"/></svg></span>
+          Feito para representantes comerciais
+        </div>
+        <h1>Seu território virou <span>oportunidade.</span></h1>
+        <p class="hero-sub">Encontre empresas com potencial, organize visitas e acompanhe cada venda — do primeiro contato ao pedido, comissão e resultado.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="https://app.rovva.tech/login">Testar 14 dias grátis
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </a>
+          <a class="btn btn-secondary" href="#recursos">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4Z"/></svg>
+            Conhecer recursos
+          </a>
+        </div>
+        <div class="hero-note">
+          <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m5 12 4 4L19 6"/></svg>Sem cartão</span>
+          <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m5 12 4 4L19 6"/></svg>Configuração rápida</span>
+          <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m5 12 4 4L19 6"/></svg>Dados reais de empresas</span>
+        </div>
       </div>
-      <p class="hero-note">Prospecção A comissão.</p>
-    </div>
 
-    <!-- MOCKUP: mapa + lista priorizada -->
-    <div class="mock">
-      <div class="mock-bar"><span></span><span></span><span></span></div>
-      <svg viewBox="0 0 520 360" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Recomendação no mapa">
-        <rect width="520" height="360" rx="12" fill="#0f1526"/>
-        <!-- mapa -->
-        <rect x="16" y="16" width="300" height="328" rx="10" fill="#182036"/>
-        <path d="M40 90 H300 M40 160 H300 M40 230 H300 M40 300 H300 M110 30 V344 M190 30 V344 M255 30 V344" stroke="#232d47" stroke-width="2"/>
-        <!-- rota -->
-        <path d="M70 300 C 150 300 120 150 240 120" stroke="#3E66EA" stroke-width="4" fill="none" stroke-dasharray="2 8" stroke-linecap="round"/>
-        <!-- pins -->
-        <g fill="#FF6A2B">
-          <circle cx="70" cy="300" r="9"/><circle cx="150" cy="210" r="9"/><circle cx="240" cy="120" r="11"/><circle cx="120" cy="120" r="7" opacity=".7"/><circle cx="255" cy="250" r="7" opacity=".7"/>
-        </g>
-        <circle cx="240" cy="120" r="20" fill="none" stroke="#FF6A2B" stroke-width="2" opacity=".5"/>
-        <!-- lista priorizada -->
-        <g font-family="Inter,Arial,sans-serif">
-          <rect x="332" y="16" width="172" height="328" rx="10" fill="#182036"/>
-          <text x="348" y="42" fill="#8A93A6" font-size="11" font-weight="700">PRIORIDADE HOJE</text>
-          <g>
-            <rect x="344" y="54" width="148" height="58" rx="8" fill="#1e2740" stroke="#3E66EA" stroke-width="1.5"/>
-            <text x="356" y="76" fill="#fff" font-size="12" font-weight="700">Metalúrgica Vale</text>
-            <text x="356" y="94" fill="#8A93A6" font-size="10">Indústria · 1,2 km · Médio</text>
-            <circle cx="476" cy="70" r="12" fill="#16A34A"/><text x="470" y="74" fill="#fff" font-size="10" font-weight="700">92</text>
-          </g>
-          <g>
-            <rect x="344" y="120" width="148" height="52" rx="8" fill="#1e2740"/>
-            <text x="356" y="140" fill="#fff" font-size="12" font-weight="700">Distrib. Aurora</text>
-            <text x="356" y="157" fill="#8A93A6" font-size="10">Comércio · 3,4 km · Pequeno</text>
-            <circle cx="476" cy="134" r="12" fill="#3E66EA"/><text x="470" y="138" fill="#fff" font-size="10" font-weight="700">84</text>
-          </g>
-          <g>
-            <rect x="344" y="180" width="148" height="52" rx="8" fill="#1e2740"/>
-            <text x="356" y="200" fill="#fff" font-size="12" font-weight="700">Ferragens Sul</text>
-            <text x="356" y="217" fill="#8A93A6" font-size="10">Atacado · 5,0 km · Médio</text>
-            <circle cx="476" cy="194" r="12" fill="#3E66EA"/><text x="470" y="198" fill="#fff" font-size="10" font-weight="700">79</text>
-          </g>
-          <rect x="344" y="248" width="148" height="80" rx="8" fill="#111a2e"/>
-          <text x="356" y="272" fill="#8A93A6" font-size="10">Por que esta empresa?</text>
-          <text x="356" y="292" fill="#cdd3e0" font-size="10">✓ Vende o que você oferece</text>
-          <text x="356" y="308" fill="#cdd3e0" font-size="10">✓ Perto do seu roteiro</text>
-          <text x="356" y="324" fill="#cdd3e0" font-size="10">✓ Do tamanho que atende</text>
-        </g>
-      </svg>
+      <div class="product" aria-label="Visão do painel Rovva">
+        <div class="product-glow"></div>
+        <div class="app-window">
+          <div class="window-bar"><div class="dots"><i></i><i></i><i></i></div><div class="window-url"></div><span></span></div>
+          <div class="app-shell">
+            <aside class="app-sidebar">
+              <div class="mini-brand"><span class="mini-mark"></span>Rovva</div>
+              <div class="mini-nav">
+                <span>Dashboard</span><span class="active">Buscar empresas</span><span>Funil</span><span>WhatsApp</span><span>Agenda</span><span>Pedidos</span><span>Clientes</span><span>Rotas</span><span>Relatórios</span>
+              </div>
+            </aside>
+            <div class="app-content">
+              <div class="app-title"><div><strong>Bom dia, Rafael</strong><small>Estas oportunidades merecem sua atenção hoje.</small></div><button>+ Nova busca</button></div>
+              <div class="metrics">
+                <div class="metric"><small>Oportunidades</small><b>184</b><em>+12 esta semana</em></div>
+                <div class="metric"><small>Visitas agendadas</small><b>12</b><em>4 para hoje</em></div>
+                <div class="metric"><small>Vendas no mês</small><b>R$ 48 mil</b><em>+18% vs. mês anterior</em></div>
+              </div>
+              <div class="app-grid">
+                <div class="map-card">
+                  <div class="card-label">Empresas no território <span>Ver mapa completo</span></div>
+                  <div class="map"><div class="route-line"></div><i class="pin p1"></i><i class="pin p2"></i><i class="pin p3"></i><i class="pin p4"></i></div>
+                </div>
+                <div class="lead-card">
+                  <div class="card-label">Prioridade hoje <span>Ver todas</span></div>
+                  <div class="lead-list">
+                    <div class="lead"><div class="lead-top"><b>Metalúrgica Vale</b><span class="score">92</span></div><small>Indústria · 1,2 km</small><div class="lead-tags"><i>CNAE ideal</i><i>Médio porte</i></div></div>
+                    <div class="lead"><div class="lead-top"><b>Distribuidora Aurora</b><span class="score">87</span></div><small>Atacado · 3,4 km</small><div class="lead-tags"><i>Perto da rota</i></div></div>
+                    <div class="lead"><div class="lead-top"><b>Ferragens Sul</b><span class="score">81</span></div><small>Comércio · 5 km</small><div class="lead-tags"><i>CNAE ideal</i></div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="floating-card">
+          <div class="floating-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 4 4L19 6"/></svg></div>
+          <div><strong>Nova oportunidade</strong><span>Empresa adicionada ao funil</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="proof">
+    <div class="wrap proof-grid">
+      <div class="proof-intro"><p>Informação para decidir. Ferramentas para vender.</p></div>
+      <div class="proof-item"><b>+28 milhões</b><span>de empresas ativas na base</span></div>
+      <div class="proof-item"><b>360°</b><span>da prospecção à comissão</span></div>
+      <div class="proof-item"><b>1 só lugar</b><span>para operação comercial inteira</span></div>
     </div>
   </div>
-</section>
 
-<!-- TRUST STRIP -->
-<div class="strip">
-  <div class="wrap">
-    <p>EMPRESAS DE TODO O BRASIL, NUM LUGAR SÓ</p>
-    <div class="row"><span>+28 milhões de empresas ativas</span><span>Ramo + distância + tamanho da empresa</span><span>Sua praça, cidade por cidade</span></div>
-  </div>
-</div>
+  <section id="recursos">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="kicker">Plataforma completa</span>
+        <h2>Tudo que acontece entre encontrar e receber.</h2>
+        <p>Rovva reúne rotina comercial, operação de campo e gestão do escritório sem planilhas paralelas.</p>
+      </div>
+      <div class="bento">
+        <article class="feature large">
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5M11 7v8M7 11h8"/></svg></div>
+          <h3>Prospecção inteligente</h3>
+          <p>Descubra empresas por ramo, proximidade e porte. Veja no mapa por que cada oportunidade combina com seu negócio.</p>
+          <div class="feature-list"><span>Empresas reais</span><span>Mapa</span><span>CNAE</span><span>Filtros por território</span></div>
+          <div class="feature-visual">
+            <div class="kanban"><div class="kanban-col"><b>NOVAS</b><div class="kanban-card"></div><div class="kanban-card"></div></div><div class="kanban-col"><b>CONTATO</b><div class="kanban-card"></div></div><div class="kanban-col"><b>PROPOSTA</b><div class="kanban-card"></div><div class="kanban-card"></div></div></div>
+          </div>
+        </article>
+        <article class="feature medium">
+          <div class="feature-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z"/><path d="M8 9h8M8 13h5"/></svg></div>
+          <h3>WhatsApp e e-mail no fluxo</h3>
+          <p>Converse, envie mídia e programe mensagens, atividades e e-mails recorrentes sem perder contexto.</p>
+          <div class="chat-visual"><div class="bubble">Olá, posso enviar nosso catálogo atualizado?<small>09:41</small></div><div class="bubble me">Pode sim. Também quero uma cotação.<small>09:43 ✓✓</small></div></div>
+        </article>
+        <article class="feature small">
+          <div class="feature-icon orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11 12 3l9 8-9 10Z"/><circle cx="12" cy="11" r="2"/></svg></div>
+          <h3>Rotas e agenda de campo</h3>
+          <p>Planeje visitas, monte trajetos e registre check-in. Funciona também quando conexão falha.</p>
+          <div class="feature-list"><span>Agenda</span><span>Rotas</span><span>Check-in offline</span></div>
+        </article>
+        <article class="feature small">
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16v13H4zM7 4h10v3H7zM8 11h8M8 15h5"/></svg></div>
+          <h3>Pedidos sem retrabalho</h3>
+          <p>Catálogo, tabelas de preço, amostras, transportadoras e pedidos conectados à carteira.</p>
+          <div class="feature-list"><span>Catálogo</span><span>Tabelas</span><span>Pedidos</span></div>
+        </article>
+        <article class="feature small">
+          <div class="feature-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V9M10 19V5M16 19v-7M22 19V3"/></svg></div>
+          <h3>Gestão que fecha a conta</h3>
+          <p>Acompanhe metas, vendas, comissões, financeiro e relatórios para decidir com dados.</p>
+          <div class="feature-list"><span>Dashboard</span><span>Comissões</span><span>Financeiro</span></div>
+        </article>
+      </div>
+    </div>
+  </section>
 
-<!-- PILARES -->
-<section>
-  <div class="wrap">
-    <div class="center">
-      <span class="eyebrow">Por que Rovva</span>
-      <h2>Lista quente, não fria.</h2>
-      <p class="lead">Três coisas que o sistema genérico não faz por você.</p>
-    </div>
-    <div class="pillars">
-      <div class="card">
-        <div class="ic">🎯</div>
-        <h3>A lista pronta, não uma lista comprada</h3>
-        <p>Em vez de comprar cadastro e ligar no escuro, você recebe empresas reais e ativas, escolhidas pelo que você vende — prontas para abordar.</p>
+  <section id="como">
+    <div class="wrap workflow-grid">
+      <div class="workflow-copy">
+        <span class="kicker">Como funciona</span>
+        <h2>Menos ferramenta. Mais ritmo comercial.</h2>
+        <p>Seu processo inteiro segue conectado. Cada avanço alimenta agenda, indicadores, pedido e comissão.</p>
+        <a class="btn btn-primary" href="https://app.rovva.tech/login">Começar agora
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
       </div>
-      <div class="card">
-        <div class="ic">🧭</div>
-        <h3>Você sabe o porquê</h3>
-        <p>Cada empresa vem com o motivo: ramo que combina com o que você vende, perto de você e do tamanho certo. Você sabe onde investir a próxima visita.</p>
-      </div>
-      <div class="card">
-        <div class="ic">📍</div>
-        <h3>Território no mapa</h3>
-        <p>Veja sua praça no mapa, monte o roteiro e do funil ao pedido faturado tudo mora no mesmo lugar — inclusive WhatsApp e agenda.</p>
+      <div class="timeline">
+        <div class="timeline-item"><div class="timeline-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg></div><div><strong>Encontre empresas certas</strong><p>Ramo, localização e porte priorizam oportunidades.</p></div><span>Prospectar</span></div>
+        <div class="timeline-item"><div class="timeline-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16M4 12h10M4 19h7"/></svg></div><div><strong>Conduza relacionamento</strong><p>Funil, agenda, contatos, WhatsApp e e-mail.</p></div><span>Relacionar</span></div>
+        <div class="timeline-item"><div class="timeline-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg></div><div><strong>Registre pedido</strong><p>Produtos, preços, entrega e representada no mesmo fluxo.</p></div><span>Vender</span></div>
+        <div class="timeline-item"><div class="timeline-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 18 10 12l4 4 6-9"/></svg></div><div><strong>Acompanhe resultado</strong><p>Metas, comissões, financeiro e relatórios atualizados.</p></div><span>Gerir</span></div>
       </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<!-- COMO FUNCIONA -->
-<section id="como">
-  <div class="wrap">
-    <div class="center">
-      <span class="eyebrow">Como funciona</span>
-      <h2>Do território ao pedido em 3 passos.</h2>
-    </div>
-    <div class="steps">
-      <div class="step">
-        <div class="n"></div>
-        <h3>Diga o que você vende</h3>
-        <p>Escolha o ramo que você representa e as cidades que atende. O Rovva procura nos CNPJs de todo o Brasil.</p>
-      </div>
-      <div class="step">
-        <div class="n"></div>
-        <h3>Receba a lista quente</h3>
-        <p>Empresas escolhidas pelo ramo, pela distância e pelo tamanho, com lista e mapa. Cada uma com o motivo de estar ali.</p>
-      </div>
-      <div class="step">
-        <div class="n"></div>
-        <h3>Feche o ciclo</h3>
-        <p>Mova o cliente no funil, marque a visita na agenda, fale no WhatsApp e registre o pedido e a comissão — sem planilha paralela.</p>
+  <section class="team-section">
+    <div class="wrap team-panel">
+      <div class="team-grid">
+        <div class="team-copy">
+          <span class="kicker">Para escritórios</span>
+          <h2>Time alinhado. Operação sob controle.</h2>
+          <p>Compartilhe funil e carteiras, distribua territórios, acompanhe cada vendedor e proteja acessos por perfil.</p>
+          <div class="team-points">
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m5 12 4 4L19 6"/></svg>Metas por vendedor</span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m5 12 4 4L19 6"/></svg>Funil compartilhado</span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m5 12 4 4L19 6"/></svg>Permissões por perfil</span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m5 12 4 4L19 6"/></svg>Histórico de alterações</span>
+          </div>
+        </div>
+        <div class="team-dashboard">
+          <div class="team-metrics"><div class="team-metric"><small>Vendas da equipe</small><b>R$ 186 mil</b></div><div class="team-metric"><small>Meta atingida</small><b>82%</b></div><div class="team-metric"><small>Novos clientes</small><b>31</b></div></div>
+          <div class="chart"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        </div>
       </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<!-- PLANOS -->
-<section id="planos">
-  <div class="wrap">
-    <div class="center">
-      <span class="eyebrow">Planos</span>
-      <h2>Preço por usuário. Sem surpresa.</h2>
-      <p class="lead">14 dias grátis. No plano anual, 2 meses grátis.</p>
-    </div>
-    <div class="plans">
-      <div class="plan">
-        <h3>Solo</h3>
-        <p class="who">Representante autônomo</p>
-        <div class="price">R$ 150<small> /mês</small></div>
-        <div class="year">R$ 125/mês no anual</div>
-        <ul>
-          <li>1 usuário · 1 território</li>
-          <li>Lista de empresas pra abordar (com mapa)</li>
-          <li>Funil de vendas, agenda e carteiras</li>
-          <li>Pedidos e tabelas de preço</li>
-          <li>WhatsApp + e-mail agendado</li>
-          <li>Até 500 empresas no funil</li>
-        </ul>
-        <a href="#cadastro" class="btn btn-ghost">Começar grátis</a>
+  <section id="planos">
+    <div class="wrap">
+      <div class="section-head center">
+        <span class="kicker">Planos</span>
+        <h2>Comece pequeno. Cresça sem trocar de sistema.</h2>
+        <p>14 dias grátis. Plano anual inclui 2 meses de economia.</p>
       </div>
-      <div class="plan pop">
-        <span class="tag">Mais popular</span>
-        <h3>Equipe</h3>
-        <p class="who">Escritório pequeno</p>
-        <div class="price">R$ 140<small> /usuário/mês</small></div>
-        <div class="year">R$ 117/usuário no anual · mín. 2</div>
-        <ul>
-          <li>Tudo do Solo, para o time</li>
-          <li>Funil compartilhado</li>
-          <li>Vários vendedores com metas</li>
-          <li>Comissões (com divisão entre vendedores)</li>
-          <li>Rotas com check-in · até 3 territórios</li>
-          <li>Permissões por perfil · até 5.000 empresas</li>
-        </ul>
-        <a href="#cadastro" class="btn btn-primary">Testar 14 dias</a>
-      </div>
-      <div class="plan">
-        <h3>Escritório</h3>
-        <p class="who">Operação completa</p>
-        <div class="price">Sob consulta</div>
-        <ul>
-          <li>Tudo do Equipe</li>
-          <li>Territórios e funil ilimitados</li>
-          <li>Conferência de comissões + financeiro</li>
-          <li>Dashboard e relatórios avançados</li>
-          <li>Auditoria</li>
-          <li>Suporte prioritário + ajuda na configuração</li>
-        </ul>
-        <a href="#cadastro" class="btn btn-ghost">Falar com vendas</a>
+      <div class="plans">
+        <article class="plan">
+          <h3>Solo</h3><p class="plan-who">Para representante autônomo</p>
+          <div class="price">R$ 150 <small>/mês</small></div><div class="annual">R$ 125/mês no anual</div>
+          <ul><li>1 usuário e 1 território</li><li>Prospecção com lista e mapa</li><li>Funil, agenda e carteiras</li><li>Catálogo, preços e pedidos</li><li>WhatsApp e e-mail agendado</li><li>Até 500 empresas no funil</li></ul>
+          <a class="btn btn-secondary" href="https://app.rovva.tech/login">Começar grátis</a>
+        </article>
+        <article class="plan popular">
+          <span class="popular-tag">Mais escolhido</span>
+          <h3>Equipe</h3><p class="plan-who">Para escritório pequeno</p>
+          <div class="price">R$ 140 <small>/usuário/mês</small></div><div class="annual">R$ 117/usuário no anual · mínimo 2</div>
+          <ul><li>Tudo do Solo para o time</li><li>Funil e carteiras compartilhados</li><li>Metas por vendedor</li><li>Comissões com divisão</li><li>Rotas com check-in</li><li>Permissões por perfil</li></ul>
+          <a class="btn btn-primary" href="https://app.rovva.tech/login">Testar 14 dias</a>
+        </article>
+        <article class="plan">
+          <h3>Escritório</h3><p class="plan-who">Para operação completa e multi-território</p>
+          <div class="price">Sob consulta</div><div class="annual"></div>
+          <ul><li>Tudo do Equipe</li><li>Territórios e funil ilimitados</li><li>Conferência de comissões</li><li>Financeiro completo</li><li>Dashboard e relatórios avançados</li><li>Auditoria e suporte prioritário</li></ul>
+          <a class="btn btn-secondary" href="#cadastro">Falar com vendas</a>
+        </article>
       </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<!-- FAQ -->
-<section id="faq">
-  <div class="wrap">
-    <div class="center">
-      <span class="eyebrow">Dúvidas</span>
-      <h2>Perguntas frequentes</h2>
+  <section id="faq">
+    <div class="wrap">
+      <div class="section-head center"><span class="kicker">Dúvidas</span><h2>Perguntas frequentes</h2></div>
+      <div class="faq">
+        <details open><summary>De onde vêm as empresas recomendadas?</summary><p>Da base de CNPJs ativos de todo Brasil, com ramo, porte e localização. Rovva cruza esses dados com seu perfil e território para priorizar oportunidades.</p></details>
+        <details><summary>Rovva serve para autônomo e escritório?</summary><p>Sim. Plano Solo atende operação individual. Planos Equipe e Escritório incluem gestão de vendedores, funil compartilhado, metas, permissões, comissões e visão consolidada.</p></details>
+        <details><summary>Consigo usar em visitas externas?</summary><p>Sim. Agenda, mapa, rotas e check-in foram pensados para rotina de campo. A fila offline preserva ações compatíveis quando conexão estiver instável.</p></details>
+        <details><summary>Quais etapas comerciais ficam dentro do sistema?</summary><p>Prospecção, clientes, contatos, funil, agenda, WhatsApp, e-mail, catálogo, tabelas de preço, pedidos, transportadoras, comissões, financeiro e relatórios.</p></details>
+        <details><summary>Preciso cadastrar minha base antes de começar?</summary><p>Não. Você define o que vende e onde atende para começar pela prospecção. Clientes, contatos e pedidos entram no processo conforme relacionamento avança.</p></details>
+      </div>
     </div>
-    <div class="faq">
-      <details open><summary>De onde vêm as empresas indicadas?</summary><p>Dos CNPJs de todo o Brasil — mais de 28 milhões de empresas ativas, com ramo, tamanho e localização. O Rovva escolhe as que combinam com o que você vende e coloca as mais perto de você na frente.</p></details>
-      <details><summary>Como o Rovva decide quem indicar primeiro?</summary><p>Por três coisas juntas: o ramo combinar com o que você vende, a empresa estar perto do seu território e ter o tamanho que você atende. Cada indicação mostra o motivo.</p></details>
-      <details><summary>Serve para representante autônomo ou só para escritório?</summary><p>Para os dois. O plano Solo atende o autônomo com 1 usuário; Equipe e Escritório atendem times com funil compartilhado, metas e comissões.</p></details>
-      <details><summary>Preciso migrar minha planilha?</summary><p>Não precisa. Você começa dizendo o que vende e onde atende e já recebe a lista. Clientes e pedidos você cadastra conforme avança.</p></details>
+  </section>
+
+  <section class="cta-section" id="cadastro">
+    <div class="wrap final">
+      <div class="final-content">
+        <h2>Seu próximo cliente pode estar a poucos quilômetros.</h2>
+        <p>Abra Rovva, veja quem merece sua atenção e transforme território em resultado.</p>
+        <a class="btn" href="https://app.rovva.tech/login">Começar 14 dias grátis
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+      </div>
     </div>
-  </div>
-</section>
+  </section>
+</main>
 
-<!-- CTA FINAL -->
-<section id="cadastro" style="padding-top:0">
-  <div class="final">
-    <h2>Comece a vender para quem já está pronto.</h2>
-    <p>Crie sua conta, defina seu território e veja as empresas quentes do seu dia. 14 dias grátis.</p>
-    <a href="https://app.rovva.tech/login" class="btn btn-primary" style="background:#fff;color:var(--ink)">Acessar o Rovva</a>
-  </div>
-</section>
-
-<!-- FOOTER -->
 <footer>
-  <div class="wrap foot-grid">
-    <div>
-      <svg viewBox="0 0 920 240" style="height:30px" xmlns="http://www.w3.org/2000/svg" aria-label="Rovva">
-        <defs><linearGradient id="fg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#597EF8"/><stop offset="1" stop-color="#2448BC"/></linearGradient></defs>
-        <g transform="translate(40 40)"><rect width="160" height="160" rx="42" fill="url(#fg)"/><path d="M52 116 C 104 116 80 66 124 62" stroke="#fff" stroke-width="16" fill="none" stroke-linecap="round"/><circle cx="52" cy="116" r="14" fill="#fff"/><circle cx="52" cy="116" r="6" fill="#2448BC"/><path d="M104 52 L126 62 L114 82" stroke="#fff" stroke-width="16" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g>
-        <text x="250" y="153" font-family="Inter,Arial,sans-serif" font-size="120" font-weight="800" letter-spacing="-5" fill="#0D1220">Rovva</text>
-      </svg>
-      <p style="margin-top:12px;max-width:30ch">Do território ao pedido pago.</p>
+  <div class="wrap">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <svg viewBox="0 0 920 240" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Rovva">
+          <defs><linearGradient id="footer-gradient" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#597ef8"/><stop offset="1" stop-color="#2448bc"/></linearGradient></defs>
+          <g transform="translate(40 40)"><rect width="160" height="160" rx="42" fill="url(#footer-gradient)"/><path d="M52 116C104 116 80 66 124 62" stroke="#fff" stroke-width="16" fill="none" stroke-linecap="round"/><circle cx="52" cy="116" r="14" fill="#fff"/><circle cx="52" cy="116" r="6" fill="#2448bc"/><path d="M104 52L126 62 114 82" stroke="#fff" stroke-width="16" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g><text x="250" y="153" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="120" font-weight="800" letter-spacing="-5" fill="#0d1220">Ro<tspan fill="#3e66ea">vv</tspan>a</text>
+        </svg>
+        <p>Prospecção e gestão comercial para representantes — do território ao pedido pago.</p>
+      </div>
+      <div class="footer-col"><strong>Produto</strong><a href="#recursos">Recursos</a><a href="#como">Como funciona</a><a href="#planos">Planos</a><a href="#faq">Dúvidas</a></div>
+      <div class="footer-col"><strong>Legal</strong><a href="/termos">Termos de uso</a><a href="/privacidade">Política de privacidade</a><a href="https://app.rovva.tech/login">Acessar Rovva</a></div>
     </div>
-    <div>
-      <strong style="color:var(--ink)">Produto</strong>
-      <a href="#como">Como funciona</a>
-      <a href="#planos">Planos</a>
-      <a href="#faq">FAQ</a>
-    </div>
-    <div>
-      <strong style="color:var(--ink)">Legal</strong>
-      <a href="/termos">Termos de uso</a>
-      <a href="/privacidade">Política de privacidade</a>
-      <a href="#">Contato</a>
-    </div>
+    <div class="copyright"><span>© 2026 Rovva. Todos os direitos reservados.</span><span>Feito para representantes comerciais no Brasil.</span></div>
   </div>
-  <div class="wrap" style="margin-top:24px">© 2026 Rovva. Feito para representantes comerciais no Brasil.</div>
 </footer>
 
 </body>
