@@ -127,11 +127,13 @@ export function Login(): React.JSX.Element {
                 maxLength={120}
               />
             )}
-            <Field label="E-mail" type="email" value={email} onChange={setEmail} placeholder="voce@empresa.com" autoFocus={mode === 'login'} maxLength={160} />
-            <Field label="Senha" type="password" value={senha} onChange={setSenha} placeholder="mínimo 6 caracteres" maxLength={200} />
-            {err && <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-600">{err}</p>}
+            <Field label="E-mail" type="email" value={email} onChange={setEmail} placeholder="voce@empresa.com" autoFocus={mode === 'login'} maxLength={160}
+              autoComplete="email" invalid={Boolean(err)} describedBy={err ? 'login-error' : undefined} />
+            <Field label="Senha" type="password" value={senha} onChange={setSenha} placeholder="mínimo 6 caracteres" maxLength={200}
+              autoComplete={mode === 'login' ? 'current-password' : 'new-password'} invalid={Boolean(err)} describedBy={err ? 'login-error' : undefined} />
+            {err && <p id="login-error" role="alert" aria-live="assertive" className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-600">{err}</p>}
             <Btn type="submit" disabled={busy} className="w-full">
-              {busy ? '…' : mode === 'login' ? 'Entrar' : 'Criar conta'}
+              {busy ? mode === 'login' ? 'Entrando…' : 'Criando conta…' : mode === 'login' ? 'Entrar' : 'Criar conta'}
             </Btn>
           </form>
         </div>
@@ -177,6 +179,7 @@ function TipoContaPicker({ value, onChange }: {
 
 function Field(props: {
   label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string; autoFocus?: boolean; maxLength?: number;
+  autoComplete?: string; invalid?: boolean; describedBy?: string;
 }): React.JSX.Element {
   const isPwd = props.type === 'password';
   const [show, setShow] = useState(false);
@@ -193,13 +196,16 @@ function Field(props: {
           required
           autoFocus={props.autoFocus}
           maxLength={props.maxLength}
-          className={cn('w-full rounded-xl border border-ink-200 bg-surface px-3 py-2.5 text-sm text-ink-900 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-200',
+          autoComplete={props.autoComplete}
+          aria-invalid={props.invalid || undefined}
+          aria-describedby={props.describedBy}
+          className={cn('w-full rounded-xl border border-ink-200 bg-surface px-3 py-2.5 text-base text-ink-900 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-200 sm:text-sm',
             isPwd && 'pr-10')}
         />
         {isPwd && (
-          <button type="button" onClick={() => setShow((s) => !s)} tabIndex={-1}
+          <button type="button" onClick={() => setShow((s) => !s)}
             aria-label={show ? 'Ocultar senha' : 'Mostrar senha'}
-            className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-lg text-ink-400 hover:bg-ink-100 hover:text-ink-600">
+            className="absolute right-0 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-lg text-ink-400 hover:bg-ink-100 hover:text-ink-600 sm:right-2 sm:h-7 sm:w-7">
             <Icon name={show ? 'eyeOff' : 'eye'} size={17} />
           </button>
         )}

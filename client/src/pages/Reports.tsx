@@ -82,12 +82,12 @@ function Vendas({ ownerId }: { ownerId: 'todos' | number }): React.JSX.Element {
           <p className="mb-3 text-sm text-ink-500">Total: <span className="font-bold text-ink-800">{brl(total)}</span></p>
           <div className="space-y-2">
             {rows.map((r) => (
-              <div key={String(r.chave)} className="flex items-center gap-3">
-                <span className="w-40 shrink-0 truncate text-sm text-ink-700">{r.label}</span>
-                <div className="h-2 flex-1 overflow-hidden rounded-full bg-ink-100">
+              <div key={String(r.chave)} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 sm:grid-cols-[10rem_minmax(3rem,1fr)_7rem]">
+                <span className="min-w-0 truncate text-sm text-ink-700">{r.label}</span>
+                <div className="col-span-2 row-start-2 h-2 overflow-hidden rounded-full bg-ink-100 sm:col-span-1 sm:row-auto">
                   <div className="h-full rounded-full bg-brand-400" style={{ width: `${max > 0 ? (Number(r.total) / max) * 100 : 0}%` }} />
                 </div>
-                <span className="tabnums w-28 shrink-0 text-right text-sm font-semibold text-ink-800">{brl0(Number(r.total))}</span>
+                <span className="tabnums col-start-2 row-start-1 text-right text-sm font-semibold text-ink-800 sm:col-auto sm:row-auto">{brl0(Number(r.total))}</span>
               </div>
             ))}
           </div>

@@ -324,24 +324,23 @@ describe('Recommend — mapa, rota e interações', () => {
     await waitFor(() => expect(localStorage.getItem('prospeccao:panel')).toBe('kpis'));
   });
 
-  it('botão Buscar consulta a base na hora e fecha os filtros', async () => {
+  it('filtros reativos consultam a base sem botão Buscar redundante', async () => {
     localStorage.setItem('prospeccao:panel', 'filtros');
     comTerritorio();
     mount();
     await screen.findByText('Loja Alvo', undefined, { timeout: 2000 });
     const buscas = (): number => m.get.mock.calls.filter((c) => String(c[0]).startsWith('/api/recommend')).length;
-    const antes = buscas();
-    await userEvent.click(screen.getByRole('button', { name: /Buscar/ }));
-    await waitFor(() => expect(buscas()).toBe(antes + 1));
-    expect(localStorage.getItem('prospeccao:panel')).toBe('none');
+    expect(buscas()).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: /Buscar/ })).toBeNull();
+    expect(localStorage.getItem('prospeccao:panel')).toBe('filtros');
   });
 
-  it('sem território o botão Buscar não consulta nem fecha os filtros', async () => {
+  it('sem território não consulta nem fecha os filtros', async () => {
     localStorage.setItem('prospeccao:panel', 'filtros');
     mount();
     await screen.findByText('Defina o território');
-    await userEvent.click(screen.getByRole('button', { name: /Buscar/ }));
     expect(m.get.mock.calls.some((c) => String(c[0]).startsWith('/api/recommend'))).toBe(false);
+    expect(screen.queryByRole('button', { name: /Buscar/ })).toBeNull();
     expect(localStorage.getItem('prospeccao:panel')).toBe('filtros');
   });
 

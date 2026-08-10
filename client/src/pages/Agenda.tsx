@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '../lib/api.ts';
 import type { Activity, KanbanCard, OptimizeResult } from '../lib/types.ts';
-import { Btn, Card, cn, EmptyState, ErrorState, Modal, PageHeader, SafeButton, Segmented, Spinner } from '../lib/ui.tsx';
+import { Btn, Card, cn, EmptyState, ErrorState, Modal, PageHeader, SafeButton, Segmented, Spinner, useIsMobile } from '../lib/ui.tsx';
 import { Icon, type IconName } from '../lib/icons.tsx';
 import { ActivityCreateModal, VisitModal, type RepresentedOption } from '../lib/activityModal.tsx';
 import { toast } from '../lib/toast.tsx';
@@ -46,6 +46,7 @@ type FunnelCompany = { company_id: number; label: string };
 
 export function Agenda(): React.JSX.Element {
   const { can } = useAuth();
+  const mobile = useIsMobile();
   const [items, setItems] = useState<Activity[]>([]);
   const [funnel, setFunnel] = useState<FunnelCompany[]>([]);
   const [represented, setRepresented] = useState<RepresentedOption[]>([]);
@@ -66,6 +67,7 @@ export function Agenda(): React.JSX.Element {
     setView(v);
     try { localStorage.setItem('rs_agenda_view', v); } catch { /* quota/priv mode */ }
   }, []);
+  const activeView = mobile ? 'lista' : view;
   const [tipoFilter, setTipoFilter] = useState<Set<string>>(new Set(TIPOS));
   const [status, setStatus] = useState<'todos' | 'pendente' | 'feito'>('todos');
   const [addAt, setAddAt] = useState<Date | null>(null);     // add-modal open + preset date
@@ -80,13 +82,13 @@ export function Agenda(): React.JSX.Element {
   // Mês (e lista) = mês do cursor ± 1 mês; semana = semana da âncora ± 1 semana.
   // Recarrega quando o usuário navega (cursor/âncora mudam).
   const range = useMemo(() => {
-    if (view === 'semana') {
+    if (activeView === 'semana') {
       const s = startOfWeek(weekAnchor);
       return { from: addDays(s, -7), to: addDays(s, 14) };
     }
     const first = startOfMonth(cursor);
     return { from: addMonths(first, -1), to: addMonths(first, 2) };
-  }, [view, cursor, weekAnchor]);
+  }, [activeView, cursor, weekAnchor]);
 
   const load = async (): Promise<void> => {
     setLoading(true);
@@ -145,9 +147,9 @@ export function Agenda(): React.JSX.Element {
       const date = new Date(a.start_at);
       return tipoFilter.has(a.tipo)
         && (status === 'todos' || a.status === status)
-        && (view !== 'lista' || (date >= monthStart && date < monthEnd));
+        && (activeView !== 'lista' || (date >= monthStart && date < monthEnd));
     });
-  }, [items, tipoFilter, status, view, cursor]);
+  }, [items, tipoFilter, status, activeView, cursor]);
 
   // events grouped by calendar day
   const byDay = useMemo(() => {
@@ -174,10 +176,10 @@ export function Agenda(): React.JSX.Element {
     return Array.from({ length: 7 }, (_, i) => addDays(s, i));
   }, [weekAnchor]);
 
-  const goPrev = (): void => view === 'semana' ? setWeekAnchor((d) => addDays(d, -7)) : setCursor((c) => addMonths(c, -1));
-  const goNext = (): void => view === 'semana' ? setWeekAnchor((d) => addDays(d, 7)) : setCursor((c) => addMonths(c, 1));
+  const goPrev = (): void => activeView === 'semana' ? setWeekAnchor((d) => addDays(d, -7)) : setCursor((c) => addMonths(c, -1));
+  const goNext = (): void => activeView === 'semana' ? setWeekAnchor((d) => addDays(d, 7)) : setCursor((c) => addMonths(c, 1));
   const goToday = (): void => { setCursor(startOfMonth(new Date())); setWeekAnchor(new Date()); };
-  const navLabel = view === 'semana'
+  const navLabel = activeView === 'semana'
     ? `${weekDays[0]!.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} – ${weekDays[6]!.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}`
     : cursor.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
@@ -226,13 +228,13 @@ export function Agenda(): React.JSX.Element {
       <Card className="flex flex-wrap items-center justify-between gap-3 p-3">
         <div className="flex items-center gap-1">
           <button onClick={goPrev} aria-label="Anterior"
-            className="grid h-9 w-9 place-items-center rounded-lg text-ink-500 hover:bg-ink-100">
+            className="grid h-11 w-11 place-items-center rounded-lg text-ink-500 hover:bg-ink-100 lg:h-9 lg:w-9">
             <Icon name="chevronRight" size={18} className="rotate-180" />
           </button>
           <button onClick={goToday}
-            className="rounded-lg px-3 py-1.5 text-sm font-semibold text-ink-600 hover:bg-ink-100">Hoje</button>
+            className="min-h-11 rounded-lg px-3 py-1.5 text-sm font-semibold text-ink-600 hover:bg-ink-100 lg:min-h-0">Hoje</button>
           <button onClick={goNext} aria-label="Próximo"
-            className="grid h-9 w-9 place-items-center rounded-lg text-ink-500 hover:bg-ink-100">
+            className="grid h-11 w-11 place-items-center rounded-lg text-ink-500 hover:bg-ink-100 lg:h-9 lg:w-9">
             <Icon name="chevronRight" size={18} />
           </button>
           <span className="ml-2 text-base font-bold capitalize tracking-tight text-ink-900">{navLabel}</span>
@@ -245,7 +247,7 @@ export function Agenda(): React.JSX.Element {
               const on = tipoFilter.has(t);
               return (
                 <button key={t} onClick={() => toggleTipo(t)}
-                  className={cn('inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition',
+                  className={cn('inline-flex min-h-11 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition lg:min-h-0',
                     on ? 'border-transparent ' + TIPO[t]!.chip : 'border-ink-200 text-ink-400 hover:bg-ink-50')}>
                   <span className="h-2 w-2 rounded-full" style={{ background: on ? TIPO[t]!.dot : '#cbd5e1' }} />
                   {TIPO[t]!.label}
@@ -254,16 +256,17 @@ export function Agenda(): React.JSX.Element {
             })}
           </div>
           <select value={status} onChange={(e) => setStatus(e.target.value as typeof status)}
-            className="rounded-lg border border-ink-200 bg-surface px-2.5 py-1.5 text-xs font-semibold text-ink-600 outline-none focus:border-brand-400">
+            aria-label="Filtrar atividades por status"
+            className="min-h-11 rounded-lg border border-ink-200 bg-surface px-2.5 py-1.5 text-xs font-semibold text-ink-600 outline-none focus:border-brand-400 lg:min-h-0">
             <option value="todos">Todos</option>
             <option value="pendente">Pendentes</option>
             <option value="feito">Concluídos</option>
           </select>
-          <Segmented value={view} onChange={changeView} options={[
+          {!mobile && <Segmented value={view} onChange={changeView} options={[
             { value: 'mes', label: 'Mês', icon: 'calendar' },
             { value: 'semana', label: 'Semana', icon: 'columns' },
             { value: 'lista', label: 'Lista', icon: 'list' },
-          ]} />
+          ]} />}
         </div>
       </Card>
 
@@ -272,9 +275,9 @@ export function Agenda(): React.JSX.Element {
         <Spinner />
       ) : loadError ? (
         <ErrorState hint={loadError} onRetry={() => load()} />
-      ) : view === 'mes' ? (
+      ) : activeView === 'mes' ? (
         <MonthGrid grid={grid} cursor={cursor} today={today} byDay={byDay} onDay={setDayOpen} />
-      ) : view === 'semana' ? (
+      ) : activeView === 'semana' ? (
         <WeekView days={weekDays} today={today} byDay={byDay}
           onDay={setDayOpen}
           onSlot={(d) => setAddAt(d)} />

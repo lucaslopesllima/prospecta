@@ -159,6 +159,7 @@ const SIDEBAR_GROUPS_KEY = 'rs_sidebar_groups_closed';
 // compacto só com ícones. O estado persiste em localStorage entre sessões.
 function Sidebar(): React.JSX.Element {
   const { user, logout } = useAuth();
+  const location = useLocation();
   const groups = useNavGroups();
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try { return localStorage.getItem(SIDEBAR_KEY) === '1'; } catch { return false; }
@@ -173,6 +174,16 @@ function Sidebar(): React.JSX.Element {
   useEffect(() => {
     try { localStorage.setItem(SIDEBAR_GROUPS_KEY, JSON.stringify([...closed])); } catch { /* storage indisponível */ }
   }, [closed]);
+  useEffect(() => {
+    const activeGroup = groups.find((group) => group.label && group.items.some((item) => item.to === location.pathname));
+    if (!activeGroup?.label) return;
+    setClosed((prev) => {
+      if (!prev.has(activeGroup.label!)) return prev;
+      const next = new Set(prev);
+      next.delete(activeGroup.label!);
+      return next;
+    });
+  }, [groups, location.pathname]);
 
   const toggleGroup = (label: string): void => setClosed((prev) => {
     const next = new Set(prev);
@@ -183,7 +194,7 @@ function Sidebar(): React.JSX.Element {
   const inicial = (user?.org_nome ?? user?.email ?? '?').charAt(0).toUpperCase();
 
   return (
-    <aside data-chrome className={cn('hidden shrink-0 flex-col bg-ink-900 py-4 transition-[width,padding] duration-300 ease-in-out sm:flex',
+    <aside data-chrome className={cn('hidden shrink-0 flex-col bg-ink-900 py-4 transition-[width,padding] duration-300 ease-in-out lg:flex',
       collapsed ? 'w-16 px-2' : 'w-60 px-3')}>
       <div className={cn('flex items-center pb-5', collapsed ? 'justify-center' : 'justify-between px-2')}>
         {!collapsed && <Brand />}
@@ -212,6 +223,7 @@ function Sidebar(): React.JSX.Element {
             )}
             {!isClosed && g.items.map((n) => (
               <NavLink key={n.to} to={n.to} end={n.to === '/'} title={collapsed ? n.label : undefined}
+                aria-label={collapsed ? n.label : undefined}
                 className={({ isActive }) => cn(
                   'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-base font-medium transition-colors',
                   collapsed && 'justify-center px-0',
@@ -236,7 +248,7 @@ function Sidebar(): React.JSX.Element {
       <div className="mt-auto shrink-0 border-t border-white/10 pt-3">
         {collapsed ? (
           <div className="flex flex-col items-center gap-2">
-            <NavLink to="/conta" title={user?.org_nome ?? 'Meu perfil'}
+            <NavLink to="/conta" title={user?.org_nome ?? 'Meu perfil'} aria-label="Meu perfil"
               className="grid h-9 w-9 place-items-center rounded-full bg-brand-500/20 text-sm font-bold text-brand-200 transition-colors hover:bg-brand-500/30">
               {inicial}
             </NavLink>
@@ -301,7 +313,7 @@ export function NotificationBell({ variant }: { variant: 'light' | 'dark' }): Re
   return (
     <div className="relative">
       <button ref={btnRef} onClick={() => setOpen((o) => !o)} aria-label="Notificações"
-        className={cn('relative grid h-8 w-8 place-items-center rounded-lg transition',
+        className={cn('relative grid place-items-center rounded-lg transition', variant === 'dark' ? 'h-11 w-11' : 'h-8 w-8',
           variant === 'dark' ? 'text-ink-300 hover:bg-white/10 hover:text-white' : 'text-ink-400 hover:bg-ink-100 hover:text-ink-700')}>
         <Icon name="bell" size={18} />
         {unread > 0 && (
@@ -355,7 +367,7 @@ function MobileBottomNav(): React.JSX.Element {
     .filter((group) => group.items.length > 0);
   useEffect(() => { setOpen(false); }, [loc.pathname]);
   return (
-    <div className="shrink-0 sm:hidden">
+    <div className="shrink-0 lg:hidden">
       {open && <div className="fixed inset-0 z-[1090] bg-black/40" onClick={() => setOpen(false)} />}
       {open && (
         <nav aria-label="Navegação"
@@ -466,7 +478,7 @@ function Shell({ children }: { children: ReactNode }): React.JSX.Element {
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* mobile top bar */}
-        <header data-chrome className="flex items-center justify-between gap-3 bg-ink-900 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] sm:hidden">
+        <header data-chrome className="flex items-center justify-between gap-3 bg-ink-900 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.5rem)] lg:hidden">
           <div className="flex min-w-0 items-center gap-2">
             <LogoMark size={26} className="shrink-0 rounded-lg" />
             <span className="truncate text-sm font-semibold text-white">{title}</span>
@@ -475,14 +487,14 @@ function Shell({ children }: { children: ReactNode }): React.JSX.Element {
             <ThemeToggle variant="dark" />
             <NotificationBell variant="dark" />
             <NavLink to="/conta" aria-label="Meu perfil"
-              className="grid h-8 w-8 place-items-center rounded-lg text-ink-300 hover:bg-white/10 hover:text-white">
+              className="grid h-11 w-11 place-items-center rounded-lg text-ink-300 hover:bg-white/10 hover:text-white">
               <Icon name="users" size={18} />
             </NavLink>
           </div>
         </header>
 
         {/* desktop top bar: só o sino, alinhado à direita */}
-        <header className="hidden items-center justify-end gap-1 border-b border-ink-200 bg-surface px-6 py-2 sm:flex">
+        <header className="hidden items-center justify-end gap-1 border-b border-ink-200 bg-surface px-6 py-2 lg:flex">
           <ThemeToggle variant="light" />
           <NotificationBell variant="light" />
         </header>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.ts';
 import type { Contact, RepresentedCompany } from '../lib/types.ts';
-import { Badge, Btn, Card, EmptyState, PageHeader, RowActions, Spinner } from '../lib/ui.tsx';
+import { Badge, Btn, Card, EmptyState, ErrorState, PageHeader, RowActions, Spinner } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { useAuth } from '../lib/auth.tsx';
 import { toast } from '../lib/toast.tsx';
@@ -14,16 +14,21 @@ export function Contatos(): React.JSX.Element {
   const [list, setList] = useState<Contact[]>([]);
   const [reps, setReps] = useState<RepresentedCompany[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [editing, setEditing] = useState<number | 'new' | null>(null);
 
   const load = async (): Promise<void> => {
-    const [c, r] = await Promise.all([
-      api.get<{ contacts: Contact[] }>('/api/contacts'),
-      api.get<{ empresas: RepresentedCompany[] }>('/api/represented'),
-    ]);
-    setList(c.contacts);
-    setReps(r.empresas);
-    setLoading(false);
+    setLoading(true); setLoadError('');
+    try {
+      const [c, r] = await Promise.all([
+        api.get<{ contacts: Contact[] }>('/api/contacts'),
+        api.get<{ empresas: RepresentedCompany[] }>('/api/represented'),
+      ]);
+      setList(c.contacts);
+      setReps(r.empresas);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Não foi possível carregar os contatos.');
+    } finally { setLoading(false); }
   };
   useEffect(() => { void load(); }, []);
 
@@ -58,7 +63,7 @@ export function Contatos(): React.JSX.Element {
       <PageHeader title="Contatos" subtitle="Pessoas que você pode vincular na prospecção. Contatos de uma empresa-cliente também podem ser criados direto no funil."
         actions={can('contacts.create') && editing !== 'new' ? <Btn size="sm" icon="plus" onClick={() => setEditing('new')}>Novo</Btn> : undefined} />
 
-      {loading ? <Spinner /> : (
+      {loading ? <Spinner /> : loadError ? <ErrorState hint={loadError} onRetry={() => load()} /> : (
         <Card className="p-4">
           {editing === 'new' && (
             <ContatoForm inputCls={inputCls} reps={reps} initial={EMPTY_CONTACT} onSave={create} onCancel={() => setEditing(null)} />

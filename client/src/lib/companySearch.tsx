@@ -3,7 +3,7 @@ import { api, BUSCA_DEBOUNCE_MS } from './api.ts';
 import type { CompanyHit } from './types.ts';
 import { Icon } from './icons.tsx';
 import { maskSearchCNPJ } from './format.ts';
-import { cn } from './ui.tsx';
+import { cn, inputCls } from './ui.tsx';
 
 // Busca reutilizável na base global de empresas (RFB) para autopreencher
 // cadastros (transportadoras, representadas, etc.). Digite CNPJ ou nome →
@@ -20,16 +20,21 @@ export function CompanySearch({ onPick, placeholder = 'Buscar empresa por CNPJ o
   const [hits, setHits] = useState<CompanyHit[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [activeIndex, setActiveIndex] = useState(-1);
   const boxRef = useRef<HTMLDivElement>(null);
   const listId = useId();
 
   useEffect(() => {
     // mínimo 3 chars: acompanha o schema do servidor (trigram precisa de 3; com 2 vira seq scan)
-    if (q.trim().length < 3) { setHits([]); setOpen(false); setActiveIndex(-1); setLoading(false); return; }
+    if (q.trim().length < 3) {
+      setHits([]); setActiveIndex(-1); setLoading(false); setError('');
+      if (q.trim().length === 0) setOpen(false);
+      return;
+    }
     const ctrl = new AbortController();
     const t = setTimeout(() => {
-      setLoading(true);
+      setLoading(true); setError(''); setHits([]); setOpen(true);
       void api.get<{ companies: CompanyHit[] }>(`/api/companies/search?q=${encodeURIComponent(q.trim())}`, { signal: ctrl.signal })
         .then((r) => {
           if (ctrl.signal.aborted) return;
@@ -37,7 +42,9 @@ export function CompanySearch({ onPick, placeholder = 'Buscar empresa por CNPJ o
           setActiveIndex(r.companies.findIndex((c) => !(disableInFunnel && c.in_funnel === true)));
           setOpen(true);
         })
-        .catch(() => undefined)
+        .catch(() => {
+          if (!ctrl.signal.aborted) { setHits([]); setError('Não foi possível buscar empresas. Tente novamente.'); setOpen(true); }
+        })
         .finally(() => { if (!ctrl.signal.aborted) setLoading(false); });
     }, BUSCA_DEBOUNCE_MS);
     return () => { clearTimeout(t); ctrl.abort(); };
@@ -87,17 +94,24 @@ export function CompanySearch({ onPick, placeholder = 'Buscar empresa por CNPJ o
     <div ref={boxRef} className="relative">
       <div className="relative">
         <Icon name="search" size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
-        <input value={q} onChange={(e) => setQ(maskSearchCNPJ(e.target.value))} onFocus={() => hits.length && setOpen(true)}
+        <input value={q} onChange={(e) => {
+          const next = maskSearchCNPJ(e.target.value);
+          const searchable = next.trim().length >= 3;
+          setQ(next); setOpen(next.trim().length > 0); setLoading(searchable); setError('');
+          if (searchable) { setHits([]); setActiveIndex(-1); }
+        }} onFocus={() => q.trim() && setOpen(true)}
           onKeyDown={onKeyDown} role="combobox" aria-autocomplete="list" aria-expanded={open}
           aria-controls={open ? listId : undefined} aria-activedescendant={open && activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined}
-          maxLength={120} placeholder={placeholder}
-          className="w-full rounded-xl border border-ink-200 bg-surface py-2.5 pl-9 pr-3 text-sm text-ink-800 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-200" />
-        {loading && <span className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin rounded-full border-2 border-ink-200 border-t-brand-500" />}
+          aria-label="Buscar empresa por nome ou CNPJ" maxLength={120} placeholder={placeholder}
+          className={cn(inputCls, 'pl-9 pr-9')} />
+        {loading && <span aria-hidden className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin rounded-full border-2 border-ink-200 border-t-brand-500" />}
       </div>
       {open && (
         <div id={listId} role="listbox" className="absolute z-[1600] mt-1 max-h-72 w-full overflow-auto rounded-xl border border-ink-200 bg-surface shadow-pop">
           {hits.length === 0 ? (
-            <p className="px-3 py-4 text-center text-sm text-ink-400">{loading ? 'Buscando…' : 'Nenhuma empresa encontrada.'}</p>
+            <p aria-live="polite" className={cn('px-3 py-4 text-center text-sm', error ? 'text-rose-600' : 'text-ink-400')}>
+              {loading ? 'Buscando…' : error || (q.trim().length < 3 ? 'Digite ao menos 3 caracteres.' : 'Nenhuma empresa encontrada.')}
+            </p>
           ) : hits.map((c, index) => {
             const blocked = disableInFunnel && c.in_funnel === true;
             return (

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, ApiError } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import type { GoalProgress, OrgUser, PermissionGroup, RepresentedCompany } from '../lib/types.ts';
-import { Badge, Btn, Card, cn, EmptyState, inputCls, Modal, PageHeader, SafeButton, Segmented, Spinner } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, EmptyState, inputCls, Modal, PageHeader, RowActions, SafeButton, Segmented, Spinner, useIsNarrow } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { brl, dec, isEmail, maskMoney, todayStr } from '../lib/format.ts';
 import { toast } from '../lib/toast.tsx';
@@ -39,6 +39,7 @@ export function Team(): React.JSX.Element {
 
 function Usuarios(): React.JSX.Element {
   const { user: me, can } = useAuth();
+  const narrow = useIsNarrow();
   const [users, setUsers] = useState<OrgUser[]>([]);
   const [groups, setGroups] = useState<PermissionGroup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -175,12 +176,55 @@ function Usuarios(): React.JSX.Element {
         </Card>
       )}
 
-      <Card className="overflow-x-auto">
-        {users.length === 0 ? (
+      {users.length === 0 ? (
+        <Card>
           <EmptyState icon="users" title="Nenhum usuário" hint="Crie o primeiro vendedor da sua equipe." />
-        ) : (
-          // min-w: sem ele a tabela obedece ao container estreito e espreme as
-          // colunas até quebrar letra a letra — o overflow-x do Card nunca rola.
+        </Card>
+      ) : narrow ? (
+        <div className="space-y-2">
+          {users.map((u) => {
+            const self = Number(u.id) === Number(me?.id);
+            return (
+              <Card key={u.id} className={cn('p-3', !u.ativo && 'opacity-60')}>
+                <div className="flex items-start gap-3">
+                  <div className="min-w-0 flex-1">
+                    <NameCell u={u} self={self} onSave={(nome) => patch(u.id, { nome })} />
+                    <p className="mt-0.5 truncate text-xs text-ink-500">{u.email}</p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      <Badge tone={u.ativo ? 'success' : 'neutral'}>{u.ativo ? 'Ativo' : 'Desativado'}</Badge>
+                      {u.must_change_password && <Badge tone="warn">Senha provisória</Badge>}
+                    </div>
+                  </div>
+                  <RowActions actions={[
+                    { icon: 'arrowRight', label: 'Transferir carteira', onClick: () => setTransfer(u), hidden: self || !can('relationships.transfer') },
+                    { icon: 'settings', label: 'Redefinir senha', onClick: () => setResetting(u), hidden: self || !can('users.reset_password') },
+                    { icon: u.ativo ? 'x' : 'check', label: u.ativo ? 'Desativar' : 'Reativar', onClick: () => patch(u.id, { ativo: !u.ativo }), tone: u.ativo ? 'danger' : 'default', hidden: self || !can('users.update') },
+                  ]} />
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <Field label="Papel">
+                    <select value={u.role} disabled={self || !can('users.update') || pendingId === Number(u.id)}
+                      onChange={(e) => void patch(u.id, { role: e.target.value as 'admin' | 'rep' })} className={inputCls}>
+                      <option value="rep">Vendedor</option><option value="admin">Administrador</option>
+                    </select>
+                  </Field>
+                  {groups.length > 0 && (
+                    <Field label="Grupo">
+                      <select value={u.group_id ?? ''} disabled={!can('users.update') || pendingId === Number(u.id)}
+                        onChange={(e) => void patch(u.id, { group_id: e.target.value === '' ? null : Number(e.target.value) })} className={inputCls}>
+                        <option value="">Sem grupo</option>
+                        {groups.map((g) => <option key={g.id} value={g.id}>{g.nome}</option>)}
+                      </select>
+                    </Field>
+                  )}
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      ) : (
+        <Card className="overflow-x-auto">
+          {/* Tabela permanece no desktop; tablet e celular usam cartões acima. */}
           <table className="w-full min-w-[720px] text-sm">
             <thead className="sticky top-0 z-10 [&>tr>th]:bg-surface">
               <tr className="border-b border-ink-200 text-left text-xs font-semibold uppercase tracking-wide text-ink-400">
@@ -253,8 +297,8 @@ function Usuarios(): React.JSX.Element {
               })}
             </tbody>
           </table>
-        )}
-      </Card>
+        </Card>
+      )}
 
       {transfer && (
         <TransferModal from={transfer} users={users.filter((u) => u.id !== transfer.id)}

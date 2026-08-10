@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
@@ -24,23 +24,32 @@ interface DashboardData {
 
 const hora = (iso: string): string => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
+function KpiAction({ allowed, to, children }: { allowed: boolean; to: string; children: ReactNode }): React.JSX.Element {
+  const cls = 'block rounded-2xl transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300';
+  if (!allowed) return <div aria-disabled="true" className={cls}>{children}</div>;
+  return <Link to={to} className={`${cls} hover:shadow-pop`}>{children}</Link>;
+}
+
 export function Dashboard(): React.JSX.Element {
-  const { user, isOffice } = useAuth();
+  const { user, isOffice, can } = useAuth();
   const sellers = useSellers();
   const [competencia, setCompetencia] = useState(todayStr().slice(0, 7));
   const [ownerId, setOwnerId] = useState<'todos' | number>('todos');
   const [data, setData] = useState<DashboardData | null>(null);
   const [loadError, setLoadError] = useState('');
   const [retryKey, setRetryKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     setLoadError('');
+    setRefreshing(true);
     const qs = new URLSearchParams({ competencia });
     if (ownerId !== 'todos') qs.set('user_id', String(ownerId));
     void api.get<DashboardData>(`/api/dashboard?${qs.toString()}`)
       .then((d) => { if (!cancelled) setData(d); })
-      .catch((e) => { if (!cancelled) setLoadError(e instanceof Error ? e.message : 'Falha ao carregar dashboard.'); });
+      .catch((e) => { if (!cancelled) setLoadError(e instanceof Error ? e.message : 'Falha ao carregar dashboard.'); })
+      .finally(() => { if (!cancelled) setRefreshing(false); });
     return () => { cancelled = true; };
   }, [competencia, ownerId, retryKey]);
 
@@ -58,6 +67,7 @@ export function Dashboard(): React.JSX.Element {
       <PageHeader title="Dashboard" subtitle="Visão geral da operação no mês."
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            {refreshing && data && <span role="status" aria-live="polite" className="text-xs font-medium text-ink-400">Atualizando…</span>}
             <SellerFilter value={ownerId} onChange={setOwnerId} sellers={sellers} />
             <input type="month" value={competencia} onChange={(e) => setCompetencia(e.target.value)} aria-label="Competência"
               className="rounded-lg border border-ink-200 bg-surface px-2.5 py-1.5 text-xs font-semibold text-ink-600 outline-none focus:border-brand-400" />
@@ -65,7 +75,7 @@ export function Dashboard(): React.JSX.Element {
         } />
 
       {loadError && !data ? <ErrorState hint={loadError} onRetry={() => setRetryKey((v) => v + 1)} /> : !data ? <Spinner /> : (
-        <>
+        <div aria-busy={refreshing} className={cn('space-y-5 transition-opacity', refreshing && 'opacity-60')}>
           {loadError && (
             <Alert tone="warn" className="items-center px-4 py-3">
               <span className="flex-1">Dados anteriores mantidos. Atualização falhou: {loadError}</span>
@@ -75,27 +85,27 @@ export function Dashboard(): React.JSX.Element {
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
             {/* KPI → ação: cada card leva à tela onde o usuário age sobre o número */}
             {/* VGV (Valor Geral de Vendas): soma faturada/entregue da competência, mesmos filtros (mês + vendedor). */}
-            <Link to={ordersHref} className="rounded-2xl transition hover:shadow-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300">
+            <KpiAction allowed={can('orders.list')} to={ordersHref}>
               <StatCard label="Ticket médio" value={brl0(data.vendas.qtd > 0 ? data.vendas.total / data.vendas.qtd : 0)} icon="wallet" tone="brand"
                 sub={`${data.vendas.qtd} venda(s) no mês`} />
-            </Link>
-            <Link to={ordersHref} className="rounded-2xl transition hover:shadow-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300">
+            </KpiAction>
+            <KpiAction allowed={can('orders.list')} to={ordersHref}>
               <StatCard label="Vendas do mês" value={brl0(data.vendas.total)} icon="trendingUp" tone="success"
                 sub={metaPct != null ? `${metaPct}% da meta (${brl0(data.vendas.meta)})` : `${data.vendas.qtd} pedido(s)`} />
-            </Link>
-            <Link to={commissionsHref} className="rounded-2xl transition hover:shadow-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300">
+            </KpiAction>
+            <KpiAction allowed={can('commissions.list')} to={commissionsHref}>
               <StatCard label="Comissões previstas" value={brl0(data.comissoes.previsto)} icon="percent" tone="info"
                 sub={`Recebido ${brl0(data.comissoes.recebido)}`} />
-            </Link>
-            <Link to={funnelHref} className="rounded-2xl transition hover:shadow-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300">
+            </KpiAction>
+            <KpiAction allowed={can('relationships.list')} to={funnelHref}>
               <StatCard label="Negócios no funil" value={String(funilTotal)} icon="columns" tone="brand"
                 sub={brl0(funilValor)} />
-            </Link>
-            <Link to={`${commissionsHref}&status=divergente`} className="rounded-2xl transition hover:shadow-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300">
+            </KpiAction>
+            <KpiAction allowed={can('commissions.list')} to={`${commissionsHref}&status=divergente`}>
               <StatCard label="Divergências" value={String(data.comissoes.divergentes)} icon="alertTriangle"
                 tone={data.comissoes.divergentes > 0 ? 'danger' : 'neutral'}
                 sub={data.comissoes.divergentes > 0 ? 'tocar para conferir →' : 'tudo certo'} />
-            </Link>
+            </KpiAction>
           </div>
 
           {metaPct != null && (
@@ -230,7 +240,7 @@ export function Dashboard(): React.JSX.Element {
               {user?.role === 'admin' && ownerId === 'todos' ? 'Visão consolidada da organização' : `Vendedor: ${ownerId === 'todos' ? (user?.nome ?? user?.email) : sellerLabel(sellers.find((s) => Number(s.id) === ownerId) ?? { id: 0, nome: null, email: String(ownerId), role: 'rep', ativo: true })}`}
             </p>
           )}
-        </>
+        </div>
       )}
     </div>
   );

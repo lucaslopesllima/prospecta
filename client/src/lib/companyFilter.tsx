@@ -201,6 +201,8 @@ function CnaeSearchInput({ value, onChange, label }: { value: string; onChange: 
   const [q, setQ] = useState('');
   const [grupos, setGrupos] = useState<CnaeGrupo[]>([]);
   const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
   const deb = useRef<number | undefined>(undefined);
   const boxRef = useRef<HTMLDivElement>(null);
   useCloseOnOutside(boxRef, setOpen);
@@ -210,12 +212,18 @@ function CnaeSearchInput({ value, onChange, label }: { value: string; onChange: 
   useEffect(() => {
     if (deb.current) clearTimeout(deb.current);
     const term = q.trim();
-    if (term.length < 2) { setGrupos([]); return; }
+    if (term.length < 2) { setGrupos([]); setBusy(false); setError(''); return; }
+    const ctrl = new AbortController();
     deb.current = window.setTimeout(async () => {
-      const r = await api.get<{ grupos: CnaeGrupo[] }>(`/api/cnae/search?q=${encodeURIComponent(term)}`).catch(() => null);
-      setGrupos(r?.grupos ?? []);
-      setOpen(true);
+      setBusy(true); setError(''); setGrupos([]); setOpen(true);
+      try {
+        const r = await api.get<{ grupos: CnaeGrupo[] }>(`/api/cnae/search?q=${encodeURIComponent(term)}`, { signal: ctrl.signal });
+        setGrupos(r.grupos ?? []);
+      } catch {
+        if (!ctrl.signal.aborted) setError('Não foi possível buscar CNAEs. Tente novamente.');
+      } finally { if (!ctrl.signal.aborted) setBusy(false); }
     }, BUSCA_DEBOUNCE_MS);
+    return () => { if (deb.current) clearTimeout(deb.current); ctrl.abort(); };
   }, [q]);
 
   const add = (code: number, descricao?: string): void => {
@@ -240,10 +248,22 @@ function CnaeSearchInput({ value, onChange, label }: { value: string; onChange: 
       <span className="mb-1 block text-xs font-medium text-ink-500">{label}</span>
       <div ref={boxRef} className="relative">
         <input
-          value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey}
-          onFocus={() => { if (grupos.length) setOpen(true); }}
-          maxLength={120} placeholder="Atividade (ex.: padaria) ou código" className={inputCls}
+          value={q} onChange={(e) => {
+            const next = e.target.value;
+            const searchable = next.trim().length >= 2;
+            setQ(next); setOpen(true); setBusy(searchable); setError('');
+            if (searchable) setGrupos([]);
+          }} onKeyDown={onKey}
+          onFocus={() => { if (q.trim()) setOpen(true); }}
+          role="combobox" aria-autocomplete="list" aria-expanded={open}
+          maxLength={120} placeholder="Atividade (ex.: padaria) ou código" className={cn(inputCls, 'pr-9')}
         />
+        {busy && <span aria-hidden className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin rounded-full border-2 border-ink-200 border-t-brand-500" />}
+        {open && busy && (
+          <div role="status" className="absolute z-20 mt-1 w-full rounded-xl border border-ink-200 bg-surface px-3 py-2.5 text-sm text-ink-400 shadow-pop">
+            Buscando CNAEs…
+          </div>
+        )}
         {open && grupos.length > 0 && (
           <div className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-xl border border-ink-200 bg-surface py-1 shadow-pop">
             {grupos.map((g) => (
@@ -261,9 +281,9 @@ function CnaeSearchInput({ value, onChange, label }: { value: string; onChange: 
             ))}
           </div>
         )}
-        {open && q.trim().length >= 2 && grupos.length === 0 && (
+        {open && q.trim().length >= 2 && grupos.length === 0 && !busy && (
           <div className="absolute z-20 mt-1 w-full rounded-xl border border-ink-200 bg-surface px-3 py-2.5 text-sm text-ink-400 shadow-pop">
-            Nenhum CNAE encontrado para “{q.trim()}”.
+            {error || `Nenhum CNAE encontrado para “${q.trim()}”.`}
           </div>
         )}
       </div>
@@ -271,7 +291,7 @@ function CnaeSearchInput({ value, onChange, label }: { value: string; onChange: 
         <div className="mt-1.5 flex flex-wrap gap-1.5">
           {codes.map((c) => (
             <button key={c} type="button" onClick={() => remove(c)}
-              className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 ring-1 ring-inset ring-brand-200 hover:bg-brand-100">
+              className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 ring-1 ring-inset ring-brand-200 hover:bg-brand-100 max-sm:min-h-11 max-sm:px-3">
               <span className="font-mono">{c}</span> <Cnae code={c} /> <Icon name="x" size={11} />
             </button>
           ))}
@@ -478,28 +498,36 @@ function RecommendConfig({ f }: { f: CompanyFilter }): React.JSX.Element {
   const [munResults, setMunResults] = useState<Municipio[]>([]);
   const [ufs, setUfs] = useState<{ uf: string; total: number }[]>([]);
   const [munOpen, setMunOpen] = useState(false);
+  const [munBusy, setMunBusy] = useState(false);
+  const [munError, setMunError] = useState('');
+  const [ufsError, setUfsError] = useState(false);
   const munDebounce = useRef<number | undefined>(undefined);
   const munBoxRef = useRef<HTMLDivElement>(null);
   useCloseOnOutside(munBoxRef, setMunOpen);
 
   useEffect(() => {
     void api.get<{ ufs: { uf: string; total: number }[] }>('/api/municipios/ufs')
-      .then((r) => setUfs(r?.ufs ?? [])).catch(() => undefined);
+      .then((r) => { setUfs(r?.ufs ?? []); setUfsError(false); }).catch(() => setUfsError(true));
   }, []);
 
   useEffect(() => {
     if (munDebounce.current) clearTimeout(munDebounce.current);
-    if (munQ.trim().length < 1) { setMunResults([]); return; }
+    if (munQ.trim().length < 1) { setMunResults([]); setMunBusy(false); setMunError(''); return; }
     // aborta a busca anterior: sem isso, uma resposta em voo resolve DEPOIS do
     // addMun (que limpa munQ/munResults) e reabre o dropdown com resultado velho.
     const ctrl = new AbortController();
     munDebounce.current = window.setTimeout(async () => {
+      setMunBusy(true); setMunError(''); setMunResults([]); setMunOpen(true);
       try {
         const r = await api.get<{ municipios: Municipio[] }>(`/api/municipios/search?q=${encodeURIComponent(munQ.trim())}`, { signal: ctrl.signal });
         setMunResults(r?.municipios ?? []);
-      } catch { /* abortada ou falhou: ignora */ }
+      } catch {
+        if (!ctrl.signal.aborted) setMunError('Não foi possível buscar cidades. Tente novamente.');
+      } finally {
+        if (!ctrl.signal.aborted) setMunBusy(false);
+      }
     }, BUSCA_DEBOUNCE_MS);
-    return () => ctrl.abort();
+    return () => { if (munDebounce.current) clearTimeout(munDebounce.current); ctrl.abort(); };
   }, [munQ]);
 
   const sel = f.territorio;
@@ -545,7 +573,7 @@ function RecommendConfig({ f }: { f: CompanyFilter }): React.JSX.Element {
             const partial = !full && (countByUf[u.uf] ?? 0) > 0;
             return (
               <SafeButton key={u.uf} onClick={() => toggleUf(u.uf, full)} title={`${u.total} municípios`}
-                className={cn('rounded-lg px-2 py-1 text-xs font-bold transition-colors',
+                className={cn('rounded-lg px-2 py-1 text-xs font-bold transition-colors max-sm:min-h-11 max-sm:min-w-11',
                   full ? 'bg-brand-600 text-white hover:bg-brand-700'
                     : partial ? 'bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-200'
                     : 'bg-ink-100 text-ink-500 hover:bg-ink-200')}>
@@ -554,14 +582,36 @@ function RecommendConfig({ f }: { f: CompanyFilter }): React.JSX.Element {
             );
           })}
         </div>
+        {ufsError && (
+          <p role="alert" className="mt-1.5 text-xs text-rose-600">
+            Não foi possível carregar os estados.{' '}
+            <button type="button" className="font-semibold underline" onClick={() => {
+              setUfsError(false);
+              void api.get<{ ufs: { uf: string; total: number }[] }>('/api/municipios/ufs')
+                .then((r) => setUfs(r.ufs ?? [])).catch(() => setUfsError(true));
+            }}>Tentar novamente</button>
+          </p>
+        )}
 
         <p className="mb-1.5 mt-4 text-[11px] font-semibold uppercase tracking-wider text-ink-400">Por cidade</p>
         <div ref={munBoxRef} className="relative">
           <Icon name="search" size={17} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
-          <input value={munQ} onChange={(e) => { setMunQ(e.target.value); setMunOpen(true); }}
+          <input value={munQ} onChange={(e) => {
+            const next = e.target.value;
+            const searchable = next.trim().length >= 1;
+            setMunQ(next); setMunOpen(true); setMunBusy(searchable); setMunError('');
+            if (searchable) setMunResults([]);
+          }}
             onFocus={() => { if (munQ.trim()) setMunOpen(true); }}
             onKeyDown={(e) => { if (e.key === 'Escape') setMunOpen(false); }}
-            maxLength={120} placeholder="Buscar cidade (ex.: Blumenau)…" className={cn(inputCls, 'pl-9')} />
+            role="combobox" aria-autocomplete="list" aria-expanded={munOpen}
+            maxLength={120} placeholder="Buscar cidade (ex.: Blumenau)…" className={cn(inputCls, 'pl-9 pr-9')} />
+          {munBusy && <span aria-hidden className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin rounded-full border-2 border-ink-200 border-t-brand-500" />}
+          {munOpen && munBusy && (
+            <div role="status" className="absolute z-20 mt-1 w-full rounded-xl border border-ink-200 bg-surface px-3 py-2.5 text-sm text-ink-400 shadow-pop">
+              Buscando cidades…
+            </div>
+          )}
           {munOpen && munResults.length > 0 && (
             <div className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-xl border border-ink-200 bg-surface py-1 shadow-pop">
               {munResults.map((m) => {
@@ -576,9 +626,9 @@ function RecommendConfig({ f }: { f: CompanyFilter }): React.JSX.Element {
               })}
             </div>
           )}
-          {munOpen && munQ.trim().length >= 1 && munResults.length === 0 && (
+          {munOpen && munQ.trim().length >= 1 && munResults.length === 0 && !munBusy && (
             <div className="absolute z-20 mt-1 w-full rounded-xl border border-ink-200 bg-surface px-3 py-2.5 text-sm text-ink-400 shadow-pop">
-              Nenhuma cidade encontrada para “{munQ.trim()}”.
+              {munError || `Nenhuma cidade encontrada para “${munQ.trim()}”.`}
             </div>
           )}
         </div>
@@ -587,13 +637,13 @@ function RecommendConfig({ f }: { f: CompanyFilter }): React.JSX.Element {
           <div className="mt-3 flex flex-wrap gap-1.5">
             {fullUfs.map((uf) => (
               <button key={uf} onClick={() => removeUf(uf)}
-                className="inline-flex items-center gap-1 rounded-full bg-brand-700 px-2.5 py-1 text-xs font-semibold text-white hover:bg-brand-800">
+                className="inline-flex items-center gap-1 rounded-full bg-brand-700 px-2.5 py-1 text-xs font-semibold text-white hover:bg-brand-800 max-sm:min-h-11 max-sm:px-3">
                 <Icon name="layers" size={12} /> {uf} inteiro · {countByUf[uf]} <Icon name="x" size={12} />
               </button>
             ))}
             {looseCities.map((m) => (
               <button key={m.id} onClick={() => removeMun(m.id)}
-                className="inline-flex items-center gap-1 rounded-full bg-brand-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-brand-700">
+                className="inline-flex items-center gap-1 rounded-full bg-brand-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-brand-700 max-sm:min-h-11 max-sm:px-3">
                 {m.nome} <span className="text-brand-200">· {m.uf}</span> <Icon name="x" size={12} />
               </button>
             ))}

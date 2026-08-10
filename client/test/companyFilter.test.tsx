@@ -112,8 +112,8 @@ describe('CompanyFilterBar — funil', () => {
   it('máscara de nome/CNPJ e porte atualizam o filtro', async () => {
     render(<Bar />);
     await userEvent.type(screen.getByPlaceholderText('Razão, fantasia ou CNPJ'), '11222333');
-    await userEvent.selectOptions(screen.getByRole('combobox'), 'micro');
-    expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('micro');
+    await userEvent.selectOptions(screen.getByLabelText('Porte'), 'micro');
+    expect((screen.getByLabelText('Porte') as HTMLSelectElement).value).toBe('micro');
   });
 
   it('limpar zera os campos da barra', async () => {
@@ -322,7 +322,7 @@ describe('RecommendConfig', () => {
   it('tudo que o usuário digita sobrevive a remontar a tela (localStorage)', async () => {
     render(<Bar recommend />);
     await userEvent.type(screen.getByPlaceholderText('Razão, fantasia ou CNPJ'), '11222333');
-    await userEvent.selectOptions(screen.getByRole('combobox'), 'micro');
+    await userEvent.selectOptions(screen.getByLabelText('Porte'), 'micro');
     await userEvent.type(screen.getByLabelText('Capital social mínimo'), '250000');
     await userEvent.type(screen.getByLabelText('Tempo de vida mínimo'), '7');
     fireEvent.change(screen.getAllByRole('slider')[4]!, { target: { value: '0.55' } }); // peso idade
@@ -348,7 +348,7 @@ describe('RecommendConfig', () => {
     cleanup();
     render(<Bar recommend />);
     expect((screen.getByPlaceholderText('Razão, fantasia ou CNPJ') as HTMLInputElement).value).toBe('11.222.333');
-    expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('micro');
+    expect((screen.getByLabelText('Porte') as HTMLSelectElement).value).toBe('micro');
     expect((screen.getByLabelText('Capital social mínimo') as HTMLInputElement).value).toBe('250.000');
     expect((screen.getByLabelText('Tempo de vida mínimo') as HTMLInputElement).value).toBe('7');
     expect((screen.getAllByRole('slider')[4] as HTMLInputElement).value).toBe('0.55');

@@ -7,7 +7,7 @@ import type { LatLngBoundsExpression } from 'leaflet';
 import { api, ApiError, BUSCA_DEBOUNCE_MS } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import type { Recommendation, GeocodeResult, CompanyDetail, Municipio } from '../lib/types.ts';
-import { Alert, Badge, Btn, Card, cn, Collapse, EmptyState, FilterPanel, PageHeader, Popover, SafeButton, ScoreBar, Segmented, Spinner, StatRow, useCollapseOnOutside, usePanels, type Tone } from '../lib/ui.tsx';
+import { Alert, Badge, Btn, Card, cn, Collapse, EmptyState, FilterPanel, PageHeader, Popover, SafeButton, ScoreBar, Segmented, Spinner, StatRow, useCollapseOnOutside, useIsMobile, usePanels, type Tone } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { CompanyFilterBar, useCompanyFilter, faixasParams, faixasInvalidas } from '../lib/companyFilter.tsx';
 import { CompanyModal } from '../lib/companyModal.tsx';
@@ -36,7 +36,7 @@ function FitBounds({ pts, focus }: { pts: [number, number][]; focus: MapFocus | 
 }
 
 type MapFocus = { id: string; lat: number; lon: number };
-type RouteInfo = { destId: string; origem: [number, number]; coords: [number, number][]; distKm: number; durMin: number };
+type RouteInfo = { destId: string; origem: [number, number]; origemLabel: string; coords: [number, number][]; distKm: number; durMin: number };
 type DistanceOrigin = { lat: number; lon: number; source: 'partida' | 'conta' | 'territorio' };
 
 // Centraliza/zoom na empresa focada (botão "Ver no mapa").
@@ -115,6 +115,7 @@ function RecMarkers({ pontos, focus, renderMarker }: {
 
 export function Recommend(): React.JSX.Element {
   const { can } = useAuth();
+  const mobile = useIsMobile();
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
@@ -145,6 +146,23 @@ export function Recommend(): React.JSX.Element {
   const [routingId, setRoutingId] = useState<string | null>(null);
   const [geoCache, setGeoCache] = useState<Record<string, { lat: number; lon: number; precisao: string }>>({});
   const LIMIT = 20;
+
+  useEffect(() => {
+    if (view !== 'lista' || !focus) return;
+    const frame = requestAnimationFrame(() => {
+      const card = document.getElementById(`empresa-${focus.id}`);
+      card?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      card?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focus, view]);
+
+  // Trocar a origem invalida imediatamente rota e origem calculadas na busca
+  // anterior. Assim uma ação rápida nunca reaproveita coordenadas antigas.
+  useEffect(() => {
+    setDistanceOrigin(null);
+    setRoute(null);
+  }, [filter.partida?.lat, filter.partida?.lon]);
 
   // URL compartilhável: hidrata filtros uma vez e depois espelha mudanças sem
   // criar entradas extras no histórico. Município usa endpoint de labels para
@@ -251,12 +269,17 @@ export function Recommend(): React.JSX.Element {
     try {
       // Origem devolvida pela busca = mesmo ponto usado na distância em linha
       // reta. Fallback abaixo mantém compatibilidade com respostas antigas.
-      let o: { lat: number; lon: number } | null =
-        distanceOrigin ?? (filter.partida ? { lat: filter.partida.lat, lon: filter.partida.lon } : null);
+      let o: { lat: number; lon: number } | null = filter.partida
+        ? { lat: filter.partida.lat, lon: filter.partida.lon }
+        : distanceOrigin;
+      let origemLabel = filter.partida
+        ? 'endereço informado'
+        : distanceOrigin?.source === 'conta' ? 'endereço da conta'
+          : distanceOrigin?.source === 'territorio' ? 'centro do território' : 'origem da busca';
       if (!o) {
         try {
           const r = await api.get<{ origem: { lat: number; lon: number } | null }>('/api/account/origem');
-          if (r.origem) o = { lat: r.origem.lat, lon: r.origem.lon };
+          if (r.origem) { o = { lat: r.origem.lat, lon: r.origem.lon }; origemLabel = 'endereço da conta'; }
         } catch { /* ignora, tenta fallback */ }
       }
       if (!o) {
@@ -264,6 +287,7 @@ export function Recommend(): React.JSX.Element {
         const pos = await new Promise<GeolocationPosition>((res, rej) =>
           navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 10000 }));
         o = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+        origemLabel = 'localização atual';
       }
       const d = await geocodeRec(rec); // destino exato (geocode do endereço)
       const url = `https://router.project-osrm.org/route/v1/driving/${o.lon},${o.lat};${d.lon},${d.lat}?overview=full&geometries=geojson`;
@@ -274,6 +298,7 @@ export function Recommend(): React.JSX.Element {
       setRoute({
         destId: rec.id,
         origem: [o.lat, o.lon],
+        origemLabel,
         coords: rt.geometry.coordinates.map(([lon, lat]) => [lat, lon] as [number, number]),
         distKm: rt.distance / 1000,
         durMin: rt.duration / 60,
@@ -306,6 +331,12 @@ export function Recommend(): React.JSX.Element {
     loadCtl.current = ac;
     setLoading(true);
     setErr('');
+    if (off === 0) {
+      setRecs([]);
+      setTotal(null);
+      setOffset(0);
+      setDone(false);
+    }
     try {
       const qs = new URLSearchParams({ limit: String(LIMIT), offset: String(off) });
       qs.set('munis', territorioIds.join(','));
@@ -343,8 +374,10 @@ export function Recommend(): React.JSX.Element {
   // recarrega do servidor (página 0) ao mudar qualquer filtro — busca na BASE TODA,
   // com debounce p/ não disparar a cada tecla. Roda também no mount.
   useEffect(() => {
+    loadCtl.current?.abort();
+    setRoute(null); setFocus(null); setErr(''); setRecs([]); setTotal(null); setOffset(0);
     if (semTerritorio) {  // sem território -> tela vazia, sem consultar
-      setRecs([]); setDone(true); setOffset(0); setErr(''); setTotal(null);
+      setDone(true);
       setLoading(false); // sem isso o spinner inicial nunca dá lugar ao empty state
       return;
     }
@@ -352,10 +385,10 @@ export function Recommend(): React.JSX.Element {
     // e pareceria "nenhuma empresa" em vez de filtro mal preenchido). O aviso vai
     // no campo e na tarja acima da lista; aqui só segura a busca até o ajuste.
     if (faixaRuim) {
-      loadCtl.current?.abort();
-      setLoading(false);
+      setDone(true); setLoading(false);
       return;
     }
+    setDone(false); setLoading(true);
     const t = setTimeout(() => { void load(0); }, BUSCA_DEBOUNCE_MS);
     return () => clearTimeout(t);
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
@@ -364,14 +397,6 @@ export function Recommend(): React.JSX.Element {
     filter.pesos.capital, filter.pesos.idade,
     filter.faixas.capMin, filter.faixas.capMax, filter.faixas.idadeMin, filter.faixas.idadeMax,
     filter.partida?.lat, filter.partida?.lon]);
-
-  // Botão "Buscar" dispara a consulta na hora e devolve espaço aos resultados.
-  // Sem território (ou com faixa invertida) não há o que buscar.
-  const buscar = (): void => {
-    if (semTerritorio || faixaRuim) return;
-    setFiltersOpen(false);
-    void load(0);
-  };
 
   const copiarBusca = async (): Promise<void> => {
     try {
@@ -464,24 +489,10 @@ export function Recommend(): React.JSX.Element {
     return { n, avg, exact, near };
   }, [visibleRecs]);
 
-  if (err && recs.length === 0) {
-    return (
-      <div className="p-4 sm:p-6">
-        <Alert tone="warn" className="p-4">
-          <p className="font-semibold">{err}</p>
-          <button onClick={() => setFiltersOpen(true)}
-            className="mt-2 inline-flex items-center gap-1 font-semibold text-brand-700 hover:underline dark:text-brand-300">
-            Ajustar filtros da busca <Icon name="chevronRight" size={15} />
-          </button>
-        </Alert>
-      </div>
-    );
-  }
-
   // Filtro e indicadores rolam JUNTO com a lista (ficam dentro do mesmo scroller,
   // logo abaixo do header) — antes viviam num bloco fixo acima e, abertos,
   // comiam a altura útil da lista de forma permanente. Só o header fica fixo.
-  const painelLista = (
+  const painelFiltros = (
     <div className="space-y-4">
       {faixaRuim && (
         <Alert tone="warn" className="flex-wrap items-center py-2">
@@ -497,11 +508,25 @@ export function Recommend(): React.JSX.Element {
           lista em vez de empurrá-la, e o rodapé conta os resultados ao vivo. */}
       <FilterPanel open={filtersOpen} onClose={() => setFiltersOpen(false)} onLimpar={filter.limpar}
         titulo="Filtros da busca"
-        acao={{ label: `Ver ${recs.length} empresa(s)`, onClick: buscar, disabled: semTerritorio || faixaRuim }}>
+        acao={{ label: loading ? 'Atualizando resultados…' : 'Ver resultados', onClick: () => undefined, disabled: semTerritorio || faixaRuim || loading }}>
         <div ref={filtrosRef}>
-          <CompanyFilterBar f={filter} recommend buscando={loading} onBuscar={buscar} />
+          <CompanyFilterBar f={filter} recommend buscando={loading} />
         </div>
       </FilterPanel>
+
+      {err && ((view === 'mapa' && recs.length > 0) || (view === 'lista' && recs.length === 0)) && (
+        <Alert tone="warn" className="flex-wrap items-center py-2">
+          <span className="min-w-0 flex-1">{err}</span>
+          <Btn size="sm" variant="ghost" onClick={() => load(recs.length > 0 ? offset : 0)}>Tentar novamente</Btn>
+          <Btn size="sm" variant="ghost" onClick={() => setFiltersOpen(true)}>Ajustar filtros</Btn>
+        </Alert>
+      )}
+    </div>
+  );
+
+  const painelLista = (
+    <div className="space-y-4">
+      {painelFiltros}
 
       <Collapse open={kpisOpen} duration={200}>
         {/* `sub` diz "nos N carregados" porque o kpi deriva de visibleRecs — a
@@ -527,16 +552,14 @@ export function Recommend(): React.JSX.Element {
             : `${recs.length} de ${totalLabel} · ranqueados por fit`}
           actions={
             <div className="flex flex-wrap items-center gap-2">
-              {view === 'lista' && (
-                <Btn variant={filter.filtroAtivo ? 'primary' : 'soft'} icon="search"
-                  data-filtros-toggle
-                  aria-expanded={filtersOpen} title={filtersOpen ? 'Recolher filtros' : 'Expandir filtros'}
-                  onClick={() => setFiltersOpen((v) => !v)}>
-                  Filtros
-                  <Icon name="chevronRight" size={15}
-                    className={cn('transition-transform duration-300 ease-out', filtersOpen ? 'rotate-90' : 'rotate-0')} />
-                </Btn>
-              )}
+              <Btn variant={filter.filtroAtivo ? 'primary' : 'soft'} icon="search"
+                data-filtros-toggle
+                aria-expanded={filtersOpen} title={filtersOpen ? 'Recolher filtros' : 'Expandir filtros'}
+                onClick={() => setFiltersOpen((v) => !v)}>
+                Filtros
+                <Icon name="chevronRight" size={15}
+                  className={cn('transition-transform duration-300 ease-out', filtersOpen ? 'rotate-90' : 'rotate-0')} />
+              </Btn>
               {view === 'lista' && (
                 <Btn variant="soft" icon="trendingUp"
                   aria-expanded={kpisOpen} title={kpisOpen ? 'Recolher indicadores' : 'Expandir indicadores'}
@@ -549,7 +572,7 @@ export function Recommend(): React.JSX.Element {
               <Btn variant="ghost" icon="link" title="Copiar link desta busca" onClick={copiarBusca}>
                 Compartilhar
               </Btn>
-              <Segmented value={view} onChange={(v) => { setFocus(null); setView(v); }} options={[
+              <Segmented value={view} onChange={setView} options={[
                 { value: 'lista', label: 'Lista', icon: 'list' },
                 { value: 'mapa', label: 'Mapa', icon: 'map' },
               ]} />
@@ -561,7 +584,8 @@ export function Recommend(): React.JSX.Element {
 
       {view === 'mapa' ? (
         <div className="flex min-h-0 flex-1 flex-col gap-2 px-4 pb-4 pt-4 sm:px-6 sm:pb-6">
-          {!done && !semTerritorio && (
+          {painelFiltros}
+          {!err && !done && !semTerritorio && !faixaRuim && recs.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 text-xs text-brand-800">
               <Icon name="info" size={15} className="shrink-0" />
               <span className="flex-1">
@@ -577,10 +601,38 @@ export function Recommend(): React.JSX.Element {
               <Icon name="map" size={16} className="text-blue-600" />
               <span className="font-semibold text-blue-900">{route.distKm.toFixed(1)} km de carro</span>
               <span className="text-blue-700">· ~{Math.round(route.durMin)} min</span>
+              <span className="hidden text-blue-700 sm:inline">· origem: {route.origemLabel}</span>
               <button onClick={() => setRoute(null)} className="ml-auto text-xs font-semibold text-blue-700 underline">Limpar rota</button>
             </div>
           )}
-          <Card className="min-h-0 flex-1 overflow-hidden p-0">
+          <Card className="relative min-h-0 flex-1 overflow-hidden p-0">
+            {semTerritorio || faixaRuim || (!loading && recs.length === 0) ? (
+              <div className="grid h-full min-h-72 place-items-center bg-ink-50">
+                {semTerritorio ? (
+                  <EmptyState icon="mapPin" title="Defina o território" hint="Selecione municípios ou um estado inteiro para carregar o mapa."
+                    action={<Btn icon="mapPin" onClick={() => setFiltersOpen(true)}>Definir território</Btn>} />
+                ) : faixaRuim ? (
+                  <EmptyState icon="alertTriangle" title="Revise as faixas" hint="O valor inicial não pode superar o limite."
+                    action={<Btn onClick={() => setFiltersOpen(true)}>Abrir filtros</Btn>} />
+                ) : err ? (
+                  <EmptyState icon="alertTriangle" title="Não foi possível carregar" hint={err}
+                    action={<Btn variant="soft" onClick={() => load(0)}>Tentar novamente</Btn>} />
+                ) : (
+                  <EmptyState icon="building" title="Nenhuma empresa encontrada" hint="Ajuste os critérios da busca."
+                    action={<Btn onClick={() => setFiltersOpen(true)}>Ajustar filtros</Btn>} />
+                )}
+              </div>
+            ) : loading && recs.length === 0 ? <Spinner label="Atualizando mapa…" /> : <>
+            <div className="pointer-events-none absolute left-3 top-3 z-[500] max-w-[calc(100%-1.5rem)] rounded-xl border border-hairline bg-glass px-3 py-2 text-[11px] text-ink-600 shadow-pop backdrop-blur-xl">
+              <p className="mb-1 font-semibold text-ink-800">{recs.length} ponto(s) carregado(s)</p>
+              <div className="flex flex-wrap gap-x-2.5 gap-y-1">
+                {Object.entries(MATCH_LABEL).map(([key, label]) => (
+                  <span key={key} className="inline-flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full" style={{ background: MATCH_COLOR[key] }} />{label}
+                  </span>
+                ))}
+              </div>
+            </div>
             <MapContainer center={center} zoom={11} className="h-full w-full" scrollWheelZoom>
               <ThemedTileLayer />
               <FitBounds pts={bounds} focus={focus} />
@@ -588,8 +640,9 @@ export function Recommend(): React.JSX.Element {
               <RecMarkers pontos={pontos} focus={focus} renderMarker={({ r, lat, lon }) => {
                 const isFocus = focus?.id === r.id;
                 return (
-                <CircleMarker key={r.id} center={[lat, lon]} radius={isFocus ? 11 : 7}
+                <CircleMarker key={r.id} center={[lat, lon]} radius={isFocus ? (mobile ? 14 : 11) : (mobile ? 10 : 7)}
                   ref={isFocus ? (m) => { m?.openPopup(); } : undefined}
+                  eventHandlers={{ click: () => setFocus({ id: r.id, lat, lon }) }}
                   pathOptions={{ color: isFocus ? '#dc2626' : MATCH_COLOR[r.reason.cnae_match],
                     weight: isFocus ? 3 : 1, fillOpacity: isFocus ? 0.9 : 0.7 }}>
                   <Popup minWidth={220} maxWidth={260}>
@@ -599,14 +652,15 @@ export function Recommend(): React.JSX.Element {
                     <div className="max-w-full space-y-1">
                       <p className="break-words font-semibold">{r.razao_social}</p>
                       <p className="text-xs">Score {(r.score * 100).toFixed(0)} · {r.reason.distancia_km} km em linha reta</p>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-0.5">
-                        <button onClick={() => setViewing(Number(r.id))} className="whitespace-nowrap text-xs font-semibold text-brand-700 underline dark:text-brand-300">Ver dados da empresa</button>
+                      <div className="grid grid-cols-1 gap-1 pt-1">
+                        <button onClick={() => setView('lista')} className="inline-flex min-h-10 items-center rounded-lg px-2 text-xs font-semibold text-brand-700 hover:bg-brand-50 dark:text-brand-300">Ver na lista</button>
+                        <button onClick={() => setViewing(Number(r.id))} className="inline-flex min-h-10 items-center rounded-lg px-2 text-xs font-semibold text-brand-700 hover:bg-brand-50 dark:text-brand-300">Ver dados da empresa</button>
                         {added.has(r.id)
                           ? <span className="whitespace-nowrap text-xs text-emerald-600 dark:text-emerald-300">✓ no funil</span>
-                          : can('relationships.create') && <SafeButton onClick={() => addToFunnel(r)} className="whitespace-nowrap text-xs font-semibold text-brand-700 underline dark:text-brand-300">+ Adicionar ao funil</SafeButton>}
-                        {can('contacts.create') && <SafeButton onClick={() => addToContacts(r)} className="whitespace-nowrap text-xs font-semibold text-brand-700 underline dark:text-brand-300">+ Adicionar aos contatos</SafeButton>}
+                          : can('relationships.create') && <SafeButton onClick={() => addToFunnel(r)} className="inline-flex min-h-10 items-center rounded-lg px-2 text-xs font-semibold text-brand-700 hover:bg-brand-50 dark:text-brand-300">+ Adicionar ao funil</SafeButton>}
+                        {can('contacts.create') && <SafeButton onClick={() => addToContacts(r)} className="inline-flex min-h-10 items-center rounded-lg px-2 text-xs font-semibold text-brand-700 hover:bg-brand-50 dark:text-brand-300">+ Adicionar aos contatos</SafeButton>}
                         <SafeButton onClick={() => traceRoute(r)} disabled={routingId === r.id}
-                          className="whitespace-nowrap text-xs font-semibold text-blue-700 underline disabled:opacity-50 dark:text-blue-300">
+                          className="inline-flex min-h-10 items-center rounded-lg px-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50 dark:text-blue-300">
                           {routingId === r.id ? 'Traçando…' : 'Traçar rota'}
                         </SafeButton>
                       </div>
@@ -625,16 +679,19 @@ export function Recommend(): React.JSX.Element {
                 </>
               )}
             </MapContainer>
+            </>}
           </Card>
         </div>
       ) : (
-        <div className="min-h-0 flex-1 space-y-3 overflow-auto px-4 pb-4 pt-4 sm:px-6 sm:pb-6">
+        <div aria-busy={loading} className="min-h-0 flex-1 space-y-3 overflow-auto px-4 pb-4 pt-4 sm:px-6 sm:pb-6">
           {painelLista}
           {visibleRecs.map((r) => (
-            <RecCard key={r.id} rec={r} added={added.has(r.id)} onAdd={() => addToFunnel(r)}
-              onAddContact={() => addToContacts(r)}
-              onView={() => setViewing(Number(r.id))} onViewMap={() => verNoMapa(r)}
-              onRoute={() => traceRoute(r)} routing={routingId === r.id} />
+            <div key={r.id} id={`empresa-${r.id}`} tabIndex={-1} className="scroll-mt-4 rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-brand-300">
+              <RecCard rec={r} selected={focus?.id === r.id} added={added.has(r.id)} onAdd={() => addToFunnel(r)}
+                onAddContact={() => addToContacts(r)}
+                onView={() => setViewing(Number(r.id))} onViewMap={() => verNoMapa(r)}
+                onRoute={() => traceRoute(r)} routing={routingId === r.id} />
+            </div>
           ))}
           {/* visibleRecs é alias de recs — condição sempre falsa (sem filtro client-side). Inalcançável. */}
           {/* v8 ignore next 3 */}
@@ -642,13 +699,19 @@ export function Recommend(): React.JSX.Element {
             <p className="py-6 text-center text-sm text-ink-400">Nenhuma recomendação bate com os filtros.</p>
           )}
           {loading && <Spinner />}
-          {!loading && !done && !semTerritorio && (
+          {err && recs.length > 0 && (
+            <Alert tone="warn" className="flex-wrap items-center py-2">
+              <span className="min-w-0 flex-1">Não foi possível carregar mais empresas.</span>
+              <Btn size="sm" variant="ghost" onClick={() => load(offset)}>Tentar novamente</Btn>
+            </Alert>
+          )}
+          {!loading && !err && !done && !semTerritorio && (
             <Btn variant="ghost" onClick={() => load(offset)}
               className="w-full border border-ink-200 bg-surface text-ink-600 hover:bg-ink-50">
               Carregar mais
             </Btn>
           )}
-          {recs.length === 0 && !loading && (semTerritorio
+          {recs.length === 0 && !loading && !err && (semTerritorio
             ? <EmptyState icon="mapPin" title="Defina o território"
                 hint="Selecione municípios ou um estado inteiro para buscar empresas."
                 action={<Btn icon="mapPin" onClick={() => setFiltersOpen(true)}>Definir território</Btn>} />
@@ -663,7 +726,7 @@ export function Recommend(): React.JSX.Element {
   );
 }
 
-function RecCard({ rec, added, onAdd, onAddContact, onView, onViewMap, onRoute, routing }: { rec: Recommendation; added: boolean; onAdd: () => void; onAddContact: () => void; onView: () => void; onViewMap: () => void; onRoute: () => void; routing: boolean }): React.JSX.Element {
+function RecCard({ rec, selected, added, onAdd, onAddContact, onView, onViewMap, onRoute, routing }: { rec: Recommendation; selected: boolean; added: boolean; onAdd: () => void; onAddContact: () => void; onView: () => void; onViewMap: () => void; onRoute: () => void; routing: boolean }): React.JSX.Element {
   const { can } = useAuth();
   const [actionsOpen, setActionsOpen] = useState(false);
   const actionsRef = useRef<HTMLButtonElement>(null);
@@ -672,7 +735,7 @@ function RecCard({ rec, added, onAdd, onAddContact, onView, onViewMap, onRoute, 
   const hasLocation = rec.lat != null && rec.lon != null;
   const hasSecondary = can('contacts.create') || hasLocation;
   return (
-    <Card className="p-4 transition-shadow hover:shadow-pop">
+    <Card className={cn('p-4 transition-shadow hover:shadow-pop', selected && 'ring-2 ring-brand-400')}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-ink-100 text-ink-500">

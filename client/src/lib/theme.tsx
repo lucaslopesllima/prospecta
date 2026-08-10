@@ -81,16 +81,19 @@ export function ThemeToggle({ variant = 'light' }: { variant?: 'light' | 'dark' 
       aria-label={dark ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
       title={dark ? 'Tema escuro' : 'Tema claro'}
       className={cn(
-        'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors',
+        'relative inline-flex h-11 w-12 shrink-0 items-center rounded-xl',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2',
         variant === 'dark' ? 'focus-visible:ring-offset-ink-900' : 'focus-visible:ring-offset-surface',
-        dark ? 'bg-brand-600' : variant === 'dark' ? 'bg-white/20' : 'bg-ink-200',
       )}
     >
+      <span aria-hidden className={cn(
+        'absolute left-0.5 top-1/2 h-6 w-11 -translate-y-1/2 rounded-full transition-colors',
+        dark ? 'bg-brand-600' : variant === 'dark' ? 'bg-white/20' : 'bg-ink-200',
+      )} />
       <span
         className={cn(
-          'grid h-5 w-5 place-items-center rounded-full bg-surface text-ink-600 shadow transition-transform',
-          dark ? 'translate-x-[22px]' : 'translate-x-0.5',
+          'absolute left-1 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded-full bg-surface text-ink-600 shadow transition-transform',
+          dark && 'translate-x-5',
         )}
       >
         <Icon name={dark ? 'moon' : 'sun'} size={12} />

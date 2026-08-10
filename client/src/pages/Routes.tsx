@@ -5,7 +5,7 @@ import { MapContainer, CircleMarker, Polyline, Popup, Tooltip, useMap } from 're
 import type { LatLngBoundsExpression } from 'leaflet';
 import { api, ApiError } from '../lib/api.ts';
 import type { FunnelCompany, Vehicle, OptimizeResult, RouteStop, SavedRoute } from '../lib/types.ts';
-import { Badge, Btn, Card, cn, EmptyState, Modal, PageHeader, SafeButton, Segmented, Spinner, StatRow } from '../lib/ui.tsx';
+import { Badge, Btn, Card, cn, EmptyState, Modal, PageHeader, RowActions, SafeButton, Segmented, Spinner, StatRow } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { brl, maskPlaca, maskMoney, clampNum } from '../lib/format.ts';
 import { toast } from '../lib/toast.tsx';
@@ -478,37 +478,13 @@ function Planner({ vehicles }: { vehicles: Vehicle[] }): React.JSX.Element {
                       </span>
                     </span>
                   </SafeButton>
-                  {can('routes.agenda') && (
-                    <button onClick={() => void agendar(r)} aria-label="Criar compromissos" title="Criar compromissos na Agenda"
-                      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ink-400 hover:bg-ink-100 hover:text-brand-600">
-                      <Icon name="calendar" size={15} />
-                    </button>
-                  )}
-                  {can('routes.reuse') && (
-                    <button onClick={() => void reuse(r)} aria-label="Reusar rota" title="Reusar (re-otimizar)"
-                      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ink-400 hover:bg-ink-100 hover:text-brand-600">
-                      <Icon name="compass" size={15} />
-                    </button>
-                  )}
-                  {can('routes.expense') && (
-                    <button onClick={() => void lancarCusto(r)} aria-label="Lançar despesa de viagem" title="Lançar custo no Financeiro"
-                      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ink-400 hover:bg-ink-100 hover:text-brand-600">
-                      <Icon name="wallet" size={15} />
-                    </button>
-                  )}
-                  {can('routes.update') && (
-                    <SafeButton onClick={() => toggleTemplate(r)} aria-label="Marcar como template" title={r.template ? 'Desmarcar template' : 'Marcar como template'}
-                      className={cn('grid h-8 w-8 shrink-0 place-items-center rounded-lg hover:bg-ink-100',
-                        r.template ? 'text-brand-600' : 'text-ink-400 hover:text-brand-600')}>
-                      <Icon name="layers" size={15} />
-                    </SafeButton>
-                  )}
-                  {can('routes.delete') && (
-                    <SafeButton onClick={() => delSaved(r.id)} aria-label="Excluir"
-                      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ink-400 hover:bg-rose-50 hover:text-rose-600">
-                      <Icon name="trash" size={16} />
-                    </SafeButton>
-                  )}
+                  <RowActions actions={[
+                    { icon: 'calendar', label: 'Criar compromissos', onClick: () => agendar(r), hidden: !can('routes.agenda') },
+                    { icon: 'compass', label: 'Reusar rota', onClick: () => reuse(r), hidden: !can('routes.reuse') },
+                    { icon: 'wallet', label: 'Lançar despesa de viagem', onClick: () => lancarCusto(r), hidden: !can('routes.expense') },
+                    { icon: 'layers', label: r.template ? 'Desmarcar template' : 'Marcar como template', onClick: () => toggleTemplate(r), hidden: !can('routes.update') },
+                    { icon: 'trash', label: 'Excluir', onClick: () => delSaved(r.id), tone: 'danger', hidden: !can('routes.delete') },
+                  ]} />
                 </li>
               ))}
             </ul>

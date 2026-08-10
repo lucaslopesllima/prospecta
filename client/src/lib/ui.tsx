@@ -73,9 +73,9 @@ export function Btn(
         'inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-colors',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-50',
         // piso de toque: `sm` renderiza a 28px, abaixo do mínimo de 44px. No
-        // desktop (ponteiro fino) 28px continua confortável, então o piso só
-        // vale no mobile.
-        size === 'sm' ? 'px-3 py-1.5 text-xs max-sm:min-h-11' : 'px-4 py-2.5 text-sm',
+        // desktop (ponteiro fino) 28px continua confortável, então o piso vale
+        // em celular/tablet e volta ao compacto em `lg`.
+        size === 'sm' ? 'px-3 py-1.5 text-xs max-lg:min-h-11' : 'px-4 py-2.5 text-sm',
         BTN[variant], className)}>
       {busy
         ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-current/30 border-t-current" aria-hidden />
@@ -438,7 +438,7 @@ export function Segmented<T extends string>(
     <div className="inline-flex max-w-full overflow-x-auto rounded-xl border border-hairline bg-ink-100 p-1 text-sm font-medium no-scrollbar">
       {options.map((o) => (
         <button key={o.value} onClick={() => onChange(o.value)} aria-pressed={value === o.value}
-          className={cn('inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 transition-colors max-sm:min-h-10',
+          className={cn('inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 transition-colors max-lg:min-h-11',
             value === o.value
               ? 'bg-surface font-semibold text-brand-700 shadow-card'
               : 'text-ink-500 hover:bg-surface/50 hover:text-ink-800')}>
@@ -469,8 +469,8 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
 /* ── States ───────────────────────────────────────────── */
 export function Spinner({ label }: { label?: string }): React.JSX.Element {
   return (
-    <div className="flex items-center justify-center gap-2 py-10 text-sm text-ink-400">
-      <span className="h-4 w-4 animate-spin rounded-full border-2 border-ink-200 border-t-brand-500" />
+    <div role="status" aria-live="polite" className="flex items-center justify-center gap-2 py-10 text-sm text-ink-400">
+      <span aria-hidden className="h-4 w-4 animate-spin rounded-full border-2 border-ink-200 border-t-brand-500" />
       {label ?? 'Carregando…'}
     </div>
   );
