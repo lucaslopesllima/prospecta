@@ -344,13 +344,13 @@ describe('Recommend — mapa, rota e interações', () => {
     expect(localStorage.getItem('prospeccao:panel')).toBe('filtros');
   });
 
-  it('clicar na lista recolhe os filtros abertos', async () => {
+  it('clicar na lista mantém os filtros abertos', async () => {
     localStorage.setItem('prospeccao:panel', 'filtros');
     comTerritorio();
     mount();
     await screen.findByText('Loja Alvo', undefined, { timeout: 2000 });
-    await userEvent.click(screen.getByText('Loja Alvo')); // fora do painel de filtros
-    await waitFor(() => expect(localStorage.getItem('prospeccao:panel')).toBe('none'));
+    await userEvent.click(screen.getByText('Loja Alvo'));
+    expect(localStorage.getItem('prospeccao:panel')).toBe('filtros');
   });
 
   it('cards mostram faixas de score, fallback de nome e escondem mapa sem coordenada', async () => {

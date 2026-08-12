@@ -7,7 +7,7 @@ import type { LatLngBoundsExpression } from 'leaflet';
 import { api, ApiError, BUSCA_DEBOUNCE_MS } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import type { Recommendation, GeocodeResult, CompanyDetail, Municipio } from '../lib/types.ts';
-import { Alert, Badge, Btn, Card, cn, Collapse, EmptyState, FilterPanel, PageHeader, Popover, SafeButton, ScoreBar, Segmented, Spinner, StatRow, useCollapseOnOutside, useIsMobile, usePanels, type Tone } from '../lib/ui.tsx';
+import { Alert, Badge, Btn, Card, cn, Collapse, EmptyState, FilterPanel, PageHeader, Popover, SafeButton, ScoreBar, Segmented, Spinner, StatRow, useIsMobile, usePanels, type Tone } from '../lib/ui.tsx';
 import { Icon } from '../lib/icons.tsx';
 import { CompanyFilterBar, useCompanyFilter, faixasParams, faixasInvalidas } from '../lib/companyFilter.tsx';
 import { CompanyModal } from '../lib/companyModal.tsx';
@@ -243,10 +243,6 @@ export function Recommend(): React.JSX.Element {
       })
       .catch(() => undefined);
   }, [filter.territorio.length, searchParams]);
-
-  // Clicar na lista/mapa (ou em qualquer lugar fora do painel) recolhe os filtros.
-  const filtrosRef = useRef<HTMLDivElement>(null);
-  useCollapseOnOutside(filtersOpen, () => setFiltersOpen(false), filtrosRef, '[data-filtros-toggle]');
 
   // Geocode sob demanda do endereço (lat/lon exato), cacheado no banco e em memória.
   // Fallback: a própria coord da recomendação (centroide do município).
@@ -509,7 +505,7 @@ export function Recommend(): React.JSX.Element {
       <FilterPanel open={filtersOpen} onClose={() => setFiltersOpen(false)} onLimpar={filter.limpar}
         titulo="Filtros da busca"
         acao={{ label: loading ? 'Atualizando resultados…' : 'Ver resultados', onClick: () => undefined, disabled: semTerritorio || faixaRuim || loading }}>
-        <div ref={filtrosRef}>
+        <div>
           <CompanyFilterBar f={filter} recommend buscando={loading} />
         </div>
       </FilterPanel>
