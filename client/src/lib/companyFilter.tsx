@@ -498,6 +498,7 @@ function RecommendConfig({ f }: { f: CompanyFilter }): React.JSX.Element {
   const [munResults, setMunResults] = useState<Municipio[]>([]);
   const [ufs, setUfs] = useState<{ uf: string; total: number }[]>([]);
   const [munOpen, setMunOpen] = useState(false);
+  const [territorioOpen, setTerritorioOpen] = useState(true);
   const [munBusy, setMunBusy] = useState(false);
   const [munError, setMunError] = useState('');
   const [ufsError, setUfsError] = useState(false);
@@ -558,14 +559,16 @@ function RecommendConfig({ f }: { f: CompanyFilter }): React.JSX.Element {
   return (
     <div className="grid gap-3 lg:grid-cols-2">
       {/* Território */}
-      <div className="rounded-2xl border border-hairline bg-surface p-3 shadow-card">
+      <details open={territorioOpen} onToggle={(e) => setTerritorioOpen(e.currentTarget.open)}
+        className="group self-start rounded-2xl border border-hairline bg-surface p-3 shadow-card">
         {/* Único critério obrigatório da tela: sem município a busca nem sai
             (ver `semTerritorio` no Recommend). Marca o `*` da app, e o asterisco
             fica fora do texto lido em voz alta — o aria-label já diz. */}
-        <h4 className="text-sm font-semibold text-ink-900">
-          Território <span aria-hidden className="text-rose-500">*</span>
-          <span className="sr-only">(obrigatório)</span>
-        </h4>
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-xl text-sm font-semibold text-ink-900">
+          <span>Território <span aria-hidden className="text-rose-500">*</span><span className="sr-only"> (obrigatório)</span></span>
+          <Icon name="chevronRight" size={16} className="text-ink-400 transition-transform group-open:rotate-90" />
+        </summary>
+        <div>
         <p className="mb-1.5 mt-3 text-[11px] font-semibold uppercase tracking-wider text-ink-400">Por estado</p>
         <div className="flex flex-wrap gap-1">
           {ufs.map((u) => {
@@ -655,7 +658,8 @@ function RecommendConfig({ f }: { f: CompanyFilter }): React.JSX.Element {
         <div className="mt-4">
           <PartidaInput value={f.partida} onChange={f.setPartida} />
         </div>
-      </div>
+        </div>
+      </details>
 
       {/* Critérios avançados ficam recolhidos: território e filtros básicos
           resolvem a maioria das buscas; sliders continuam disponíveis a quem

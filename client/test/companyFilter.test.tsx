@@ -221,6 +221,17 @@ describe('PartidaInput', () => {
 });
 
 describe('RecommendConfig', () => {
+  it('território e score recolhem de forma independente', async () => {
+    render(<Bar recommend />);
+    const [territorio, score] = Array.from(document.querySelectorAll('details'));
+
+    expect(territorio!).toHaveAttribute('open');
+    expect(score!).not.toHaveAttribute('open');
+    await userEvent.click(territorio!.querySelector('summary')!);
+    expect(territorio!).not.toHaveAttribute('open');
+    expect(score!).not.toHaveAttribute('open');
+  });
+
   it('território por UF, por cidade, pesos e limpar', async () => {
     render(<Bar recommend />);
     // território sempre visível no modo recommend → UFs carregam
