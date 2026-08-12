@@ -219,16 +219,20 @@ export function companyRoutes(app: FastifyInstance): void {
   // do domínio bate com o da empresa; não existe meio-termo nesta fonte.
   app.get('/api/companies/:id/dominio', {
     preHandler: [requireAuth, requirePermission('prospeccao.view')],
-    schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'integer' } } } },
+    schema: {
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'integer' } } },
+      querystring: { type: 'object', properties: { forcar: { type: 'boolean' } } },
+    },
   }, async (req, reply) => {
     const { id } = req.params as { id: number };
+    const { forcar = false } = req.query as { forcar?: boolean };
     const c = await one<{
       id: number; cnpj: string; razao_social: string; nome_fantasia: string | null; email: string | null;
     }>(
       'SELECT id, cnpj, razao_social, nome_fantasia, email FROM companies WHERE id = $1', [id],
     );
     if (!c) return reply.code(404).send({ error: 'empresa não encontrada' });
-    return { dominio: await descobrirDominio(c) };
+    return { dominio: await (forcar ? descobrirDominio(c, { ignorarCache: true }) : descobrirDominio(c)) };
   });
 
   // Raspa os contatos publicados no site da empresa. Depende do site já

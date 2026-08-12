@@ -166,8 +166,10 @@ async function titularDoDominio(dominio: string): Promise<string | null> {
 //   null        -> domínio livre (ou registrado por pessoa física)
 //   'censurado' -> registrado, mas a cota escondeu o titular
 //   undefined   -> rede/5xx: nada foi concluído e nada é cacheado
-async function titularNoRegistro(dominio: string): Promise<string | null | undefined | 'censurado'> {
-  const cache = await one<{ registrado: boolean; titular_cnpj: string | null }>(
+async function titularNoRegistro(
+  dominio: string, ignorarCache = false,
+): Promise<string | null | undefined | 'censurado'> {
+  const cache = ignorarCache ? null : await one<{ registrado: boolean; titular_cnpj: string | null }>(
     `SELECT registrado, titular_cnpj FROM rdap_domain
       WHERE dominio = $1
         AND verificado_em > now() - ((CASE WHEN registrado AND titular_cnpj IS NULL
@@ -193,7 +195,9 @@ async function titularNoRegistro(dominio: string): Promise<string | null | undef
   return r.estado === 'sem_titular' ? 'censurado' : titular;
 }
 
-export async function descobrirDominio(e: EmpresaParaEnriquecer): Promise<DominioEmpresa> {
+export async function descobrirDominio(
+  e: EmpresaParaEnriquecer, opcoes: { ignorarCache?: boolean } = {},
+): Promise<DominioEmpresa> {
   const raiz = e.cnpj.slice(0, 8);
   const emailDom = dominioDeEmail(e.email);
 
@@ -217,7 +221,7 @@ export async function descobrirDominio(e: EmpresaParaEnriquecer): Promise<Domini
   const acharMarca = async (candidatos: string[]): Promise<DominioEmpresa | null> => {
     for (const c of candidatos) {
       const dominio = `${c}.com.br`;
-      const titular = await titularNoRegistro(dominio);
+      const titular = await titularNoRegistro(dominio, opcoes.ignorarCache);
       if (typeof titular !== 'string' || titular === 'censurado') continue;
       if (titular.slice(0, 8) === raiz) continue; // é da própria empresa: outro caminho trata
       const site = await siteDoDominio(dominio);
@@ -231,7 +235,7 @@ export async function descobrirDominio(e: EmpresaParaEnriquecer): Promise<Domini
   // 1. Já varrido antes, dentro do TTL. dominio NULL = negativo cacheado.
   //    fonte e confiança vêm do banco: sem elas o domínio de marca voltaria do
   //    cache disfarçado de domínio próprio.
-  const salvo = await one<{
+  const salvo = opcoes.ignorarCache ? null : await one<{
     dominio: string | null; site_url: string | null; site_status: StatusSite | null;
     fonte: string; confianca: number;
   }>(
@@ -322,7 +326,7 @@ export async function descobrirDominio(e: EmpresaParaEnriquecer): Promise<Domini
   let marcaDeTerceiro: string | null = null;
   for (const dominio of alvos) {
     consultas++;
-    const titular = await titularNoRegistro(dominio);
+    const titular = await titularNoRegistro(dominio, opcoes.ignorarCache);
     if (titular === undefined) { indeterminado = true; continue; } // rede/5xx: não cacheia
     if (titular === 'censurado') { indeterminado = true; continue; }
 

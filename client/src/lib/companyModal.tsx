@@ -231,7 +231,8 @@ export function CompanyModal({ companyId, onClose }: { companyId: number; onClos
 
   const buscarSite = (): void => {
     setSitePend(true);
-    void api.get<{ dominio: SiteBusca }>(`/api/companies/${companyId}/dominio`)
+    const forcar = site !== null ? '?forcar=true' : '';
+    void api.get<{ dominio: SiteBusca }>(`/api/companies/${companyId}/dominio${forcar}`)
       .then((r) => setSite(r.dominio))
       .catch((e) => toast.error(e instanceof ApiError ? e.message : 'Falha ao buscar o site'))
       .finally(() => setSitePend(false));
