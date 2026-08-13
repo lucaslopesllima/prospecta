@@ -488,9 +488,7 @@ export function Recommend(): React.JSX.Element {
     const n = visibleRecs.length;
     const avg = n ? visibleRecs.reduce((s, r) => s + r.score, 0) / n : 0;
     const exact = visibleRecs.filter((r) => r.reason.cnae_match === 'classe').length;
-    const dists = visibleRecs.filter((r) => r.reason.distancia_km != null).map((r) => r.reason.distancia_km);
-    const near = dists.length ? Math.min(...dists) : 0;
-    return { n, avg, exact, near };
+    return { n, avg, exact };
   }, [visibleRecs]);
 
   // Filtro e indicadores rolam JUNTO com a lista (ficam dentro do mesmo scroller,
@@ -540,7 +538,6 @@ export function Recommend(): React.JSX.Element {
           { label: filter.filtroAtivo ? 'Resultados (filtrados)' : 'Recomendações', value: kpi.n, icon: 'building', tone: 'brand' },
           { label: 'Score médio', value: (kpi.avg * 100).toFixed(0), sub: `de 100 · nos ${kpi.n} carregados`, icon: 'trendingUp', tone: 'success' },
           { label: 'CNAE exato', value: kpi.exact, sub: 'match de classe', icon: 'target', tone: 'info' },
-          { label: 'Mais próxima', value: `${kpi.near.toFixed(0)} km`, sub: 'em linha reta', icon: 'mapPin', tone: 'warn' },
         ]} />
       </Collapse>
     </div>
@@ -656,7 +653,7 @@ export function Recommend(): React.JSX.Element {
                         continua sem quebrar no meio (whitespace-nowrap). */}
                     <div className="max-w-full space-y-1">
                       <p className="break-words font-semibold">{r.razao_social}</p>
-                      <p className="text-xs">Score {(r.score * 100).toFixed(0)} · {r.reason.distancia_km} km em linha reta</p>
+                      <p className="text-xs">Score {(r.score * 100).toFixed(0)}</p>
                       <div className="grid grid-cols-1 gap-1 pt-1">
                         <button onClick={() => setView('lista')} className="inline-flex min-h-10 items-center rounded-lg px-2 text-xs font-semibold text-brand-700 hover:bg-brand-50 dark:text-brand-300">Ver na lista</button>
                         <button onClick={() => setViewing(Number(r.id))} className="inline-flex min-h-10 items-center rounded-lg px-2 text-xs font-semibold text-brand-700 hover:bg-brand-50 dark:text-brand-300">Ver dados da empresa</button>
@@ -765,7 +762,6 @@ function RecCard({ rec, selected, added, onAdd, onAddContact, onView, onViewMap,
       <div className="mt-3 flex flex-wrap gap-1.5">
         <Badge tone={MATCH_TONE[rec.reason.cnae_match]}>{MATCH_LABEL[rec.reason.cnae_match]}</Badge>
         <Badge tone="neutral"><Cnae code={rec.cnae_principal} /></Badge>
-        <Badge tone="neutral"><Icon name="mapPin" size={12} />{rec.reason.distancia_km} km em linha reta</Badge>
         <Badge tone="neutral">porte {rec.reason.porte}</Badge>
         {rec.reason.idade_anos != null && (
           <Badge tone="neutral">{Math.floor(rec.reason.idade_anos)} anos</Badge>

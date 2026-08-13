@@ -93,7 +93,7 @@ describe('Recommend', () => {
     mount();
     expect(await screen.findByText('Loja Alvo', undefined, { timeout: 2000 })).toBeInTheDocument();
     expect(screen.getAllByText('82').length).toBeGreaterThan(0); // score no card e no KPI
-    expect(screen.getByText(/4.2 km em linha reta/)).toBeInTheDocument();
+    expect(screen.queryByText(/em linha reta/)).not.toBeInTheDocument();
     const url = m.get.mock.calls.map((c) => String(c[0])).find((u) => u.startsWith('/api/recommend'))!;
     expect(url).toContain('munis=100');
   });
