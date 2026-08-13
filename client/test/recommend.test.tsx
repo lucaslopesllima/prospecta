@@ -200,6 +200,18 @@ describe('Recommend — mapa, rota e interações', () => {
     expect(await screen.findByText('Dados da empresa')).toBeInTheDocument();
   });
 
+  it('fecha e esconde filtros ao trocar para mapa', async () => {
+    comTerritorio();
+    mount();
+    await screen.findByText('Loja Alvo', undefined, { timeout: 2000 });
+    await userEvent.click(screen.getByRole('button', { name: 'Filtros' }));
+    expect(screen.getByPlaceholderText('Razão, fantasia ou CNPJ')).toBeVisible();
+    await userEvent.click(screen.getByRole('button', { name: 'Mapa' }));
+    expect(await screen.findByTestId('map')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Filtros' })).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Razão, fantasia ou CNPJ')).not.toBeInTheDocument();
+  });
+
   it('"Ver no mapa" foca o pino e geocodifica', async () => {
     comTerritorio();
     mount();

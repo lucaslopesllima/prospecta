@@ -138,6 +138,10 @@ export function Recommend(): React.JSX.Element {
     const open = typeof next === 'function' ? next(kpisOpen) : next;
     if (open) panels.abrir('kpis'); else if (kpisOpen) panels.fechar();
   };
+  const abrirFiltros = (): void => {
+    setView('lista');
+    panels.abrir('filtros');
+  };
   const [viewing, setViewing] = useState<number | null>(null);
   const [addingContact, setAddingContact] = useState<ContactForm | null>(null);
   const [focus, setFocus] = useState<MapFocus | null>(null);
@@ -156,6 +160,10 @@ export function Recommend(): React.JSX.Element {
     });
     return () => cancelAnimationFrame(frame);
   }, [focus, view]);
+
+  useEffect(() => {
+    if (view === 'mapa') panels.fechar();
+  }, [view, panels.fechar]);
 
   // Trocar a origem invalida imediatamente rota e origem calculadas na busca
   // anterior. Assim uma ação rápida nunca reaproveita coordenadas antigas.
@@ -494,7 +502,7 @@ export function Recommend(): React.JSX.Element {
         <Alert tone="warn" className="flex-wrap items-center py-2">
           <span>Busca pausada: o valor inicial de uma faixa está maior que o limite.</span>
           {!filtersOpen && (
-            <button onClick={() => setFiltersOpen(true)} className="font-semibold text-brand-700 hover:underline">
+            <button onClick={abrirFiltros} className="font-semibold text-brand-700 hover:underline">
               Abrir filtros
             </button>
           )}
@@ -514,7 +522,7 @@ export function Recommend(): React.JSX.Element {
         <Alert tone="warn" className="flex-wrap items-center py-2">
           <span className="min-w-0 flex-1">{err}</span>
           <Btn size="sm" variant="ghost" onClick={() => load(recs.length > 0 ? offset : 0)}>Tentar novamente</Btn>
-          <Btn size="sm" variant="ghost" onClick={() => setFiltersOpen(true)}>Ajustar filtros</Btn>
+          <Btn size="sm" variant="ghost" onClick={abrirFiltros}>Ajustar filtros</Btn>
         </Alert>
       )}
     </div>
@@ -548,14 +556,16 @@ export function Recommend(): React.JSX.Element {
             : `${recs.length} de ${totalLabel} · ranqueados por fit`}
           actions={
             <div className="flex flex-wrap items-center gap-2">
-              <Btn variant={filter.filtroAtivo ? 'primary' : 'soft'} icon="search"
-                data-filtros-toggle
-                aria-expanded={filtersOpen} title={filtersOpen ? 'Recolher filtros' : 'Expandir filtros'}
-                onClick={() => setFiltersOpen((v) => !v)}>
-                Filtros
-                <Icon name="chevronRight" size={15}
-                  className={cn('transition-transform duration-300 ease-out', filtersOpen ? 'rotate-90' : 'rotate-0')} />
-              </Btn>
+              {view === 'lista' && (
+                <Btn variant={filter.filtroAtivo ? 'primary' : 'soft'} icon="search"
+                  data-filtros-toggle
+                  aria-expanded={filtersOpen} title={filtersOpen ? 'Recolher filtros' : 'Expandir filtros'}
+                  onClick={() => setFiltersOpen((v) => !v)}>
+                  Filtros
+                  <Icon name="chevronRight" size={15}
+                    className={cn('transition-transform duration-300 ease-out', filtersOpen ? 'rotate-90' : 'rotate-0')} />
+                </Btn>
+              )}
               {view === 'lista' && (
                 <Btn variant="soft" icon="trendingUp"
                   aria-expanded={kpisOpen} title={kpisOpen ? 'Recolher indicadores' : 'Expandir indicadores'}
@@ -580,7 +590,6 @@ export function Recommend(): React.JSX.Element {
 
       {view === 'mapa' ? (
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto px-4 pb-4 pt-4 sm:px-6 sm:pb-6">
-          {painelFiltros}
           {!err && !done && !semTerritorio && !faixaRuim && recs.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 text-xs text-brand-800">
               <Icon name="info" size={15} className="shrink-0" />
@@ -606,16 +615,16 @@ export function Recommend(): React.JSX.Element {
               <div className="grid h-full min-h-72 place-items-center bg-ink-50">
                 {semTerritorio ? (
                   <EmptyState icon="mapPin" title="Defina o território" hint="Selecione municípios ou um estado inteiro para carregar o mapa."
-                    action={<Btn icon="mapPin" onClick={() => setFiltersOpen(true)}>Definir território</Btn>} />
+                    action={<Btn icon="mapPin" onClick={abrirFiltros}>Definir território</Btn>} />
                 ) : faixaRuim ? (
                   <EmptyState icon="alertTriangle" title="Revise as faixas" hint="O valor inicial não pode superar o limite."
-                    action={<Btn onClick={() => setFiltersOpen(true)}>Abrir filtros</Btn>} />
+                    action={<Btn onClick={abrirFiltros}>Abrir filtros</Btn>} />
                 ) : err ? (
                   <EmptyState icon="alertTriangle" title="Não foi possível carregar" hint={err}
                     action={<Btn variant="soft" onClick={() => load(0)}>Tentar novamente</Btn>} />
                 ) : (
                   <EmptyState icon="building" title="Nenhuma empresa encontrada" hint="Ajuste os critérios da busca."
-                    action={<Btn onClick={() => setFiltersOpen(true)}>Ajustar filtros</Btn>} />
+                    action={<Btn onClick={abrirFiltros}>Ajustar filtros</Btn>} />
                 )}
               </div>
             ) : loading && recs.length === 0 ? <Spinner label="Atualizando mapa…" /> : <>
@@ -710,7 +719,7 @@ export function Recommend(): React.JSX.Element {
           {recs.length === 0 && !loading && !err && (semTerritorio
             ? <EmptyState icon="mapPin" title="Defina o território"
                 hint="Selecione municípios ou um estado inteiro para buscar empresas."
-                action={<Btn icon="mapPin" onClick={() => setFiltersOpen(true)}>Definir território</Btn>} />
+                action={<Btn icon="mapPin" onClick={abrirFiltros}>Definir território</Btn>} />
             : <EmptyState icon="building" title="Nenhuma empresa encontrada"
                 hint="Nenhuma empresa bate com os filtros aplicados. Ajuste os critérios." />)}
         </div>
