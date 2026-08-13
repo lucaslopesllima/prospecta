@@ -78,7 +78,7 @@ test.describe('isolamento multi-tenant', () => {
     // — com limit baixo o score poderia deixar essa empresa fora do topo N,
     // o que não teria nada a ver com isolamento (é só ranking).
     const res = await request.get(
-      `/api/recommend?munis=3550308&limit=100`,
+      `/api/recommend?munis=3550308&limit=20`,
       { headers: { authorization: `Bearer ${sessionA.token}` } },
     );
     expect(res.ok()).toBeTruthy();

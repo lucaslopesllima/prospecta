@@ -18,10 +18,7 @@
 //     estimativa e cairia em plano serial). A distância exata (geocode) só é
 //     calculada para as 20 linhas exibidas, no SELECT externo.
 //
-// Ranking usa a proximidade em nível de município (dentro de uma cidade, a
-// variação intraurbana é ínfima perto da normalização de 150km); a distância
-// mostrada no card é geodésica em linha reta (com geocode do endereço), só p/
-// as 20 linhas da página.
+// Filtros indexáveis formam pool pequeno; score ordena somente esse pool.
 
 const DEFAULT_NORM_M = 150_000; // proximity normalization in municipio mode (~150km)
 const CAPITAL_REF = 1_000_000;  // capital_social normalization reference
@@ -75,9 +72,12 @@ export interface RecommendArgs {
 // Teto do total de empresas do perfil. Contar exato o território todo (SP capital
 // = 2,4M candidatos) custa ~0,5s por request; parar em CAP+1 custa ~5ms e responde
 // a única pergunta que interessa na tela ("tem muita empresa aqui?").
-export const RECOMMEND_COUNT_CAP = 10_000;
+export const RECOMMEND_COUNT_CAP = 100;
 
-// Predicados de candidato — mesma poda usada pelo ranking e pela contagem. Os
+// Limite de candidatos antes do cálculo e ordenação dinâmica do score.
+export const RECOMMEND_CANDIDATE_CAP = 5_000;
+
+// Predicados de candidato. Os
 // índices dos parâmetros vêm de fora porque as duas queries têm layouts distintos.
 function candidatePredicates(idx: {
   munis: number; org: number; cnaes: number; prune: number; uf: number; regiao: number;
@@ -128,7 +128,7 @@ function filterPredicates(f: RecommendFilters, params: unknown[]): string {
 }
 
 // Total de empresas do perfil, capado em RECOMMEND_COUNT_CAP+1 (o +1 distingue
-// "exatamente 10.000" de "10.000+"). Sem score, sem sort e sem o join de seção:
+// "exatamente 100" de "100+"). Sem score, sem sort e sem o join de seção:
 // só o Index Scan do território, que o LIMIT interrompe assim que enche a cota.
 export function buildRecommendCountQuery(args: RecommendArgs): { text: string; params: unknown[] } {
   const params: unknown[] = [
@@ -183,8 +183,7 @@ export function buildRecommendQuery(args: RecommendArgs): { text: string; params
   // exatamente 1,0 e dividir é inócuo; mas quem mexe nos sliders encolhe o teto
   // junto (cinco pesos em 0,10 -> teto 0,50) e a tela passava a mostrar "27 de
   // 100" para a melhor empresa da lista, como se as empresas tivessem piorado.
-  // Dividir pela soma devolve a escala 0..1 sem mexer no ranking — divisor
-  // constante e positivo não altera a ordem. Todos os pesos em zero: score é 0
+  // Dividir pela soma devolve a escala 0..1. Todos os pesos em zero: score é 0
   // de qualquer jeito, divide por 1 só p/ não dar divisão por zero.
   // round: a soma dos default em float dá 1.0000000000000002 e sujaria o SQL.
   const wSoma = Math.round((wCnae + wProx + wPorte + wCapital + wIdade) * 1e6) / 1e6;
@@ -227,9 +226,15 @@ export function buildRecommendQuery(args: RecommendArgs): { text: string; params
   const extraPredicates = filterPredicates(args.filters ?? {}, params);
 
   const text = `
-WITH cand AS (
-  -- score num nível externo p/ o ORDER BY referenciar prox/fit/porte_comp por nome
-  -- (aliases não são visíveis dentro de expressões do mesmo SELECT).
+WITH candidates AS MATERIALIZED (
+  -- Predicados indexáveis primeiro; score só roda no pool limitado.
+  SELECT c.id, c.municipio_id, c.cnae_principal, c.cnae_divisao,
+         c.porte, c.capital_social, c.data_inicio_atividade
+  FROM companies c
+  WHERE ${where}${extraPredicates}
+  LIMIT ${RECOMMEND_CANDIDATE_CAP}
+),
+cand AS (
   SELECT raw.*, ((raw.prox + $3 * raw.fit + raw.porte_comp + raw.capital_comp + raw.idade_comp) / ${norm}) AS score
   FROM (
     SELECT
@@ -239,11 +244,10 @@ WITH cand AS (
       ($4 * ${porteS}) AS porte_comp,
       ($15::float8 * ${capitalS}) AS capital_comp,
       ($16::float8 * ${idadeS}) AS idade_comp
-    FROM companies c
+    FROM candidates c
     ${cdsJoin}
-    WHERE ${where}${extraPredicates}
   ) raw
-  ORDER BY score DESC
+  ORDER BY score DESC, id ASC
   LIMIT $11 OFFSET $12
 )
 SELECT
@@ -282,7 +286,7 @@ LEFT JOIN LATERAL (
     c2.geom, mun.geom
   ) AS g
 ) pt ON true
-ORDER BY score DESC
+ORDER BY cand.score DESC, cand.id ASC
 `;
 
   return { text, params };

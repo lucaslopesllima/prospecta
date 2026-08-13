@@ -66,25 +66,14 @@ export interface EmpresaParaEnriquecer {
 // nele antes de qualquer outro TLD. ind.br/agr.br só para o candidato mais
 // provável (o 1º), e só se ainda sobrar orçamento de consultas.
 // O domínio do e-mail da Receita vem PRIMEIRO quando é .br: é o único candidato
-// que não é palpite. Fora do .br o registro.br não sabe responder (devolveria
-// 404, que viraria "domínio livre" gravado errado no cache), então esse caso é
-// tratado à parte, sem passar pela varredura.
-// `marca` é o domínio derivado do NOME FANTASIA, quando existe. Só ele passa na
-// frente do domínio do e-mail: a filial COLCCI da AMC TEXTIL declara
-// @amctextil.com.br à Receita, mas o site dela é colcci.com.br, e é "COLCCI"
-// que o representante lê no cartão. Os dois são confirmados por CNPJ, então a
-// ordem não troca certo por errado — só decide qual dos domínios da empresa
-// aparece, ao custo de no máximo uma consulta a mais.
-//
-// Palpite derivado da RAZÃO SOCIAL continua atrás do e-mail: ali o e-mail é o
-// único candidato que não é chute, e furar a fila com chute gastaria consulta
-// da cota do registro.br em toda empresa sem fantasia.
-function dominiosAlvo(candidatos: string[], emailDom: string | null, marca: string | null): string[] {
+// que não é palpite. Fantasia e razão social vêm depois, pois são derivados do
+// nome. Fora do .br o registro.br não sabe responder (devolveria 404, que
+// viraria "domínio livre" gravado errado no cache); ele é testado como site
+// antes da varredura, sem passar pelo registro.br.
+function dominiosAlvo(candidatos: string[], emailDom: string | null): string[] {
   const alvos = candidatos.map((c) => `${c}.com.br`);
   if (candidatos[0]) alvos.push(`${candidatos[0]}.ind.br`, `${candidatos[0]}.agr.br`);
-  const lista = emailDom?.endsWith('.br')
-    ? [...(marca ? [`${marca}.com.br`] : []), emailDom, ...alvos]
-    : alvos;
+  const lista = emailDom?.endsWith('.br') ? [emailDom, ...alvos] : alvos;
   return [...new Set(lista)].slice(0, MAX_CONSULTAS);
 }
 
@@ -265,7 +254,7 @@ export async function descobrirDominio(
   const marcas = (e.nome_fantasia ? candidatosDominio(e.nome_fantasia, null) : [])
     .filter((c) => c.length >= 4).slice(0, 2);
   const dominiosMarca = new Set(marcas.map((m) => `${m}.com.br`));
-  const alvos = dominiosAlvo(candidatosDominio(e.razao_social, e.nome_fantasia), emailDom, marcas[0] ?? null);
+  const alvos = dominiosAlvo(candidatosDominio(e.razao_social, e.nome_fantasia), emailDom);
   const irmaos = (await query<{ dominio: string }>(
     `SELECT dominio FROM rdap_domain
       WHERE titular_cnpj IS NOT NULL AND left(titular_cnpj, 8) = $1
@@ -284,6 +273,11 @@ export async function descobrirDominio(
     await gravar(e.id, herdado, 100, 0, site);
     return achou(herdado, site, false);
   }
+
+  // E-mail corporativo fora do .br é sondado em paralelo à busca no registro.br.
+  // Sem confirmação possível nessa fonte, só entra se responder como site; se
+  // responder, mantém prioridade sobre os palpites de marca ou nome.
+  const emailForaBr = porEmail();
 
   // 3. Portão: CNPJ sem domínio nenhum -> não há o que varrer. null (RDAP
   //    instável) cai na varredura, para não gravar falso negativo.
@@ -308,7 +302,7 @@ export async function descobrirDominio(
   const total = (estab?.n ?? 1) > 1 ? null : await contarDominios(e.cnpj);
   if (total === 0) {
     // Zero domínios .br não exclui um domínio .com no e-mail do cadastro.
-    const email = await porEmail();
+    const email = await emailForaBr;
     if (email) return email;
     // Nem exclui a MARCA: a loja franqueada de fantasia COLCCI não tem domínio
     // nenhum, e é justamente aí que o site da marca é a única pista. Custa até
@@ -331,6 +325,8 @@ export async function descobrirDominio(
     if (titular === 'censurado') { indeterminado = true; continue; }
 
     if (titular && titular.slice(0, 8) === raiz) {
+      const email = await emailForaBr;
+      if (email) return email;
       const site = await siteDoDominio(dominio);
       await gravar(e.id, dominio, 100, consultas, site);
       return achou(dominio, site, false);
@@ -345,12 +341,14 @@ export async function descobrirDominio(
   // antes, como já esteve) para o estabelecimento com marca própria ter a
   // chance de achar a dele primeiro.
   if (irmaos[0]) {
+    const email = await emailForaBr;
+    if (email) return email;
     const site = await siteDoDominio(irmaos[0]);
     await gravar(e.id, irmaos[0], 100, consultas, site);
     return achou(irmaos[0], site, false);
   }
 
-  const email = await porEmail();
+  const email = await emailForaBr;
   if (email) return email;
 
   // Site da marca. Entra atrás de tudo que fala da empresa em si (domínio

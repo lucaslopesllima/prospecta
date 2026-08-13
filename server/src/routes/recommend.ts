@@ -121,7 +121,9 @@ export function recommendRoutes(app: FastifyInstance): void {
       querystring: {
         type: 'object',
         properties: {
-          limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+          // Prospecção é sempre paginada: uma request nunca devolve mais que
+          // 20 empresas. Próxima página usa somente offset.
+          limit: { type: 'integer', minimum: 1, maximum: 20, default: 20 },
           offset: { type: 'integer', minimum: 0, default: 0 },
           q: { type: 'string' },
           cnae: { type: 'string' },   // CNAEs-alvo (fit em tiers) — csv
@@ -186,11 +188,8 @@ export function recommendRoutes(app: FastifyInstance): void {
       muniProx: prox.muniProx, origin: prox.origin,
     };
     const { text, params } = buildRecommendQuery(args);
-    // Total de empresas do perfil, capado (ver RECOMMEND_COUNT_CAP): vai na mesma
-    // conexão/transação da recomendação — é uma varredura que o LIMIT corta cedo.
+    // Ranking ocorre só após pool limitado de candidatos; contagem também é capada.
     const count = buildRecommendCountQuery(args);
-
-    // Run in a tx on a single connection so SET LOCAL work_mem applies to the recommendation sort.
     const { rows, total } = await withClient(async (client) => {
       await client.query('BEGIN');
       try {
@@ -215,7 +214,6 @@ export function recommendRoutes(app: FastifyInstance): void {
       },
       page: {
         limit, offset, count: rows.length,
-        // total > CAP: a contagem parou no teto, o número exibido é "CAP+".
         total: Math.min(total, RECOMMEND_COUNT_CAP),
         total_capped: total > RECOMMEND_COUNT_CAP,
       },

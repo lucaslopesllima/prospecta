@@ -313,7 +313,7 @@ export function Recommend(): React.JSX.Element {
   // faixa mín > máx: a busca fica parada até o usuário ajustar (ver load()).
   const faixaRuim = faixasInvalidas(filter.faixas);
   // total de empresas que batem com o perfil. O servidor para de contar no teto
-  // (10.000), então acima disso o número vira "10.000+" em vez de um valor exato.
+  // (100), então acima disso o número vira "100+" em vez de um valor exato.
   const totalLabel = total === null
     ? `${recs.length} empresa(s)`
     : `${total.n.toLocaleString('pt-BR')}${total.capped ? '+' : ''} empresa(s)`;
@@ -579,7 +579,7 @@ export function Recommend(): React.JSX.Element {
       </div>
 
       {view === 'mapa' ? (
-        <div className="flex min-h-0 flex-1 flex-col gap-2 px-4 pb-4 pt-4 sm:px-6 sm:pb-6">
+        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto px-4 pb-4 pt-4 sm:px-6 sm:pb-6">
           {painelFiltros}
           {!err && !done && !semTerritorio && !faixaRuim && recs.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 text-xs text-brand-800">
@@ -601,7 +601,7 @@ export function Recommend(): React.JSX.Element {
               <button onClick={() => setRoute(null)} className="ml-auto text-xs font-semibold text-blue-700 underline">Limpar rota</button>
             </div>
           )}
-          <Card className="relative min-h-0 flex-1 overflow-hidden p-0">
+          <Card className="relative min-h-72 shrink-0 flex-1 overflow-hidden p-0">
             {semTerritorio || faixaRuim || (!loading && recs.length === 0) ? (
               <div className="grid h-full min-h-72 place-items-center bg-ink-50">
                 {semTerritorio ? (

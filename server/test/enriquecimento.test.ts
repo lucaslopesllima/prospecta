@@ -107,17 +107,15 @@ describe('descobrirDominio', () => {
   });
 
   // O domínio do e-mail declarado na Receita é o único candidato que não é
-  // palpite, então vai à frente dos derivados do nome — atrás só da marca.
+  // palpite, então vai à frente de todos os derivados do nome.
   describe('domínio do e-mail da Receita', () => {
-    it('e-mail .br vem logo depois da marca e na frente do resto', async () => {
+    it('e-mail .br é primeira tentativa, antes da marca e do resto', async () => {
       const e = await empresa('NOME QUE NAO VIRA DOMINIO LTDA', nome('NQNVD'), `vendas@${dom('mailbr')}`);
-      consultarDominio
-        .mockResolvedValueOnce({ estado: 'livre' })                              // a marca não é domínio
-        .mockResolvedValueOnce({ estado: 'confirmado', titularCnpj: e.cnpj });
+      consultarDominio.mockResolvedValueOnce({ estado: 'confirmado', titularCnpj: e.cnpj });
 
       expect((await descobrirDominio(e)).dominio).toBe(dom('mailbr'));
-      expect(consultarDominio.mock.calls[0]![0]).toBe(dom('nqnvd'));
-      expect(consultarDominio.mock.calls[1]![0]).toBe(dom('mailbr'));
+      expect(consultarDominio).toHaveBeenCalledTimes(1);
+      expect(consultarDominio.mock.calls[0]![0]).toBe(dom('mailbr'));
     });
 
     it('sem nome fantasia, o e-mail é o primeiro candidato', async () => {
@@ -127,13 +125,10 @@ describe('descobrirDominio', () => {
       expect(consultarDominio.mock.calls[0]![0]).toBe(dom('mailsf'));
     });
 
-    // AMC TEXTIL: a filial de fantasia COLCCI declara @amctextil.com.br à
-    // Receita, mas os dois domínios são dela e o site da filial é colcci.com.br.
-    // Com ambos confirmados, ganha a marca — é o que aparece no cartão.
-    it('marca ganha do e-mail corporativo quando os dois são confirmados', async () => {
+    it('e-mail corporativo ganha da marca quando os dois são confirmados', async () => {
       const e = await empresa('AMC TEXTIL LTDA', nome('COLCCI'), `joao@${dom('amctextil')}`);
       consultarDominio.mockResolvedValue({ estado: 'confirmado', titularCnpj: e.cnpj });
-      expect((await descobrirDominio(e)).dominio).toBe(dom('colcci'));
+      expect((await descobrirDominio(e)).dominio).toBe(dom('amctextil'));
       expect(consultarDominio).toHaveBeenCalledTimes(1); // para no primeiro
     });
 
@@ -149,7 +144,6 @@ describe('descobrirDominio', () => {
     it('domínio do contador não passa na confirmação por CNPJ', async () => {
       const e = await empresa('HELIOS LTDA', nome('HELIOS'), `fiscal@${dom('contabil')}`);
       consultarDominio
-        .mockResolvedValueOnce({ estado: 'livre' })                                     // a marca não é domínio
         .mockResolvedValueOnce({ estado: 'confirmado', titularCnpj: '99888777000166' }) // contador
         .mockResolvedValue({ estado: 'livre' });
       const r = await descobrirDominio(e);
@@ -166,6 +160,7 @@ describe('descobrirDominio', () => {
         dominio: 'ares-global.com', site_url: 'https://ares-global.com/',
         status: 'achou', fonte: 'email_rfb', confianca: 70,
       });
+      expect(consultarDominio).toHaveBeenCalledWith(dom('ares'));
       // nunca consultado no registro.br: gravaria "domínio livre" errado no cache
       expect(consultarDominio.mock.calls.map((c) => c[0])).not.toContain('ares-global.com');
     });

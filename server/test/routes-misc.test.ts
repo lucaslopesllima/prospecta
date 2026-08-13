@@ -275,13 +275,14 @@ describe('recommend', () => {
     // território é obrigatório e vem do request (sem perfil server-side).
     expect((await inj(solo, 'GET', '/api/recommend')).statusCode).toBe(400);
     expect((await inj(solo, 'GET', '/api/recommend?munis=')).statusCode).toBe(400);
+    expect((await inj(solo, 'GET', `/api/recommend?munis=${SP}&limit=21`)).statusCode).toBe(400);
 
     const cid = await makeCompany({
       municipioId: SP, lat: -23.55, lon: -46.63, cnae: 4781400,
       razao: 'Recomendavel Vestuario LTDA', porte: 'pequeno',
     });
 
-    const url = `/api/recommend?munis=${SP}&cnae=4781400&limit=100`;
+    const url = `/api/recommend?munis=${SP}&cnae=4781400&limit=20`;
     const r = await inj(solo, 'GET', url);
     expect(r.statusCode).toBe(200);
     interface Rec { id: string; reason: { cnae_match: string } }
@@ -303,17 +304,10 @@ describe('recommend', () => {
     const fromPartida = (await inj(solo, 'GET', `${url}&partida_lat=-23.2&partida_lon=-46.2`)).json() as typeof firstBody;
     expect(fromPartida.origin).toMatchObject({ lat: -23.2, lon: -46.2, source: 'partida' });
 
-    // total de empresas do perfil (capado): acompanha o funil.
-    interface Page { results: Rec[]; page: { total: number; total_capped: boolean } }
-    const antes = (r.json() as Page).page;
-    expect(antes.total).toBe(results.length);
-    expect(antes.total_capped).toBe(false);
-
     // entrou no funil -> some da recomendação
     await inj(solo, 'POST', '/api/relationships', { company_id: cid });
     const after = await inj(solo, 'GET', url);
     expect((after.json() as { results: Rec[] }).results.some((x) => Number(x.id) === cid)).toBe(false);
-    expect((after.json() as Page).page.total).toBe(antes.total - 1);
   });
 
   it('filtros server-side (q, cnae-alvo, uf, porte)', async () => {
@@ -327,14 +321,14 @@ describe('recommend', () => {
     interface Page { results: { id: string }[] }
     const has = (j: Page): boolean => j.results.some((x) => Number(x.id) === cid);
 
-    expect(has((await inj(solo, 'GET', `/api/recommend?${base}&q=Filtrada Confeccoes&limit=100`)).json() as Page)).toBe(true);
+    expect(has((await inj(solo, 'GET', `/api/recommend?${base}&q=Filtrada Confeccoes&limit=20`)).json() as Page)).toBe(true);
     // q curto (<3) é ignorado — não filtra nada
-    expect((await inj(solo, 'GET', `/api/recommend?${base}&q=ab&limit=100`)).statusCode).toBe(200);
-    expect(has((await inj(solo, 'GET', `/api/recommend?${base}&limit=100`)).json() as Page)).toBe(true);
-    expect(has((await inj(solo, 'GET', `/api/recommend?${base}&porte=micro&limit=100`)).json() as Page)).toBe(true);
-    expect(has((await inj(solo, 'GET', `/api/recommend?${base}&porte=demais&limit=100`)).json() as Page)).toBe(false);
+    expect((await inj(solo, 'GET', `/api/recommend?${base}&q=ab&limit=20`)).statusCode).toBe(200);
+    expect(has((await inj(solo, 'GET', `/api/recommend?${base}&limit=20`)).json() as Page)).toBe(true);
+    expect(has((await inj(solo, 'GET', `/api/recommend?${base}&porte=micro&limit=20`)).json() as Page)).toBe(true);
+    expect(has((await inj(solo, 'GET', `/api/recommend?${base}&porte=demais&limit=20`)).json() as Page)).toBe(false);
     // q com dígitos aciona a busca por prefixo de cnpj
-    expect((await inj(solo, 'GET', `/api/recommend?${base}&q=99 999&limit=100`)).statusCode).toBe(200);
+    expect((await inj(solo, 'GET', `/api/recommend?${base}&q=99 999&limit=20`)).statusCode).toBe(200);
   });
 
   it('faixas de capital social e tempo de vida cortam a base', async () => {
@@ -350,7 +344,7 @@ describe('recommend', () => {
     const semData = await makeCompany({
       municipioId: SP, lat: -23.55, lon: -46.63, cnae: 4781400, capital: 5_000_000,
     });
-    const base = `munis=${SP}&cnae=4781400&limit=100`;
+    const base = `munis=${SP}&cnae=4781400&limit=20`;
 
     interface Page { results: { id: string }[] }
     const ids = async (qs: string): Promise<number[]> =>

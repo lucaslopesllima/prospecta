@@ -52,7 +52,7 @@ afterAll(async () => {
 
 describe('companies.source = demo fica fora da descoberta', () => {
   it('recommend não sugere empresa de demo, mas sugere a equivalente real', async () => {
-    const r = await inj(a, `/api/recommend?munis=${CAMPINAS}&cnae=${CNAE_PADARIA}&limit=100`);
+    const r = await inj(a, `/api/recommend?munis=${CAMPINAS}&cnae=${CNAE_PADARIA}&limit=20`);
     expect(r.statusCode).toBe(200);
     const ids = (r.json() as { results: { id: number }[] }).results.map((x) => Number(x.id));
     expect(ids).not.toContain(idDemo);

@@ -5,7 +5,7 @@ import { SignJWT } from 'jose';
 import type { FastifyRequest } from 'fastify';
 import { fuelEstimate } from '../src/fuel.ts';
 import {
-  buildRecommendQuery, buildRecommendCountQuery, RECOMMEND_COUNT_CAP,
+  buildRecommendQuery, buildRecommendCountQuery, RECOMMEND_COUNT_CAP, RECOMMEND_CANDIDATE_CAP,
   type RecommendArgs,
 } from '../src/sql/recommend.ts';
 import {
@@ -59,6 +59,9 @@ describe('buildRecommendQuery', () => {
     expect(text).toContain('capital_comp');
     expect(text).toContain('idade_comp');
     expect(text).toContain('c.data_inicio_atividade');
+    expect(text).toContain('WITH candidates AS MATERIALIZED');
+    expect(text).toContain(`LIMIT ${RECOMMEND_CANDIDATE_CAP}`);
+    expect(text).toContain('ORDER BY score DESC, id ASC');
   });
 
   it('regiões habilitadas entram como arrays escalares ($9/$10)', () => {
