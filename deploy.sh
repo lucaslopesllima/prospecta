@@ -226,8 +226,14 @@ echo "==> reiniciando nginx para apontar ao app novo"
 # do app exige resposta 200 do proxy real, não só TLS/nginx de pé.
 app_health_url="https://app.${DOMAIN}/api/health"
 echo "==> checando HTTPS público em ${app_health_url}"
-http_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "$app_health_url" || true)"
-if [ "$http_code" = "200" ]; then
+ok=0
+http_code="000"
+for _ in $(seq 1 15); do
+  http_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "$app_health_url" || true)"
+  [ "$http_code" = "200" ] && { ok=1; break; }
+  sleep 2
+done
+if [ "$ok" = "1" ]; then
   echo "    HTTPS/proxy ok ✓"
 else
   echo "ERRO: proxy público devolveu HTTP ${http_code:-sem resposta}. Logs nginx:" >&2
