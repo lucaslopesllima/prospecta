@@ -24,7 +24,7 @@ from urllib.parse import urlencode
 import httpx
 
 from app.config import settings
-from app.providers.social import AppCredentials, PublishError, TokenExpired
+from app.providers.social import AppCredentials, PublishError, PublishMedia, TokenExpired
 
 API = "https://open.tiktokapis.com/v2"
 OAUTH_AUTHORIZE = "https://www.tiktok.com/v2/auth/authorize/"
@@ -238,7 +238,15 @@ class TikTokProvider:
         self, external_id: str, access_token: str, texto: str,
         media_path: str | None = None, media_mime: str | None = None,
         media_url: str | None = None,
+        media_items: list[PublishMedia] | None = None,
+        placement: str = "feed",
     ) -> str:
+        if placement != "feed":
+            raise PublishError("Story não suportado no TikTok")
+        if media_items:
+            media_path = media_items[0].path
+            media_mime = media_items[0].mime
+            media_url = media_items[0].url
         if not media_url or not (media_mime or "").startswith("video/"):
             raise PublishError(
                 "TikTok só aceita post com vídeo, baixado de uma URL pública —"

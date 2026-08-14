@@ -112,17 +112,27 @@ CREATE TABLE IF NOT EXISTS posts (
 );
 CREATE INDEX IF NOT EXISTS idx_posts_due ON posts (status, scheduled_at);
 
+CREATE TABLE IF NOT EXISTS post_media (
+    post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+    media_id INTEGER NOT NULL REFERENCES media(id),
+    position INTEGER NOT NULL,
+    PRIMARY KEY (post_id, position),
+    UNIQUE (post_id, media_id)
+);
+
 CREATE TABLE IF NOT EXISTS post_targets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     tenant_id INTEGER NOT NULL REFERENCES tenants(id),
     post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
     social_account_id INTEGER NOT NULL REFERENCES social_accounts(id),
+    placement TEXT NOT NULL DEFAULT 'feed',
     status TEXT NOT NULL DEFAULT 'pending',
     external_post_id TEXT,
     error TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    UNIQUE (post_id, social_account_id)
+    UNIQUE (post_id, social_account_id, placement)
 );
 
 CREATE TABLE IF NOT EXISTS publish_history (
@@ -130,6 +140,7 @@ CREATE TABLE IF NOT EXISTS publish_history (
     tenant_id INTEGER NOT NULL REFERENCES tenants(id),
     post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
     social_account_id INTEGER NOT NULL,
+    placement TEXT NOT NULL DEFAULT 'feed',
     tentativa INTEGER NOT NULL,
     status TEXT NOT NULL,
     erro TEXT,
@@ -158,6 +169,34 @@ CREATE TABLE IF NOT EXISTS templates (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+-- Personal access tokens do MCP. O segredo nunca e armazenado: somente SHA-256.
+-- tenant_id vem do token validado, nunca de argumento enviado pelo cliente MCP.
+CREATE TABLE IF NOT EXISTS mcp_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+    name TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    token_prefix TEXT NOT NULL,
+    scopes TEXT NOT NULL,
+    expires_at TEXT,
+    last_used_at TEXT,
+    revoked_at TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_mcp_tokens_tenant ON mcp_tokens (tenant_id, id);
+
+CREATE TABLE IF NOT EXISTS mcp_audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+    token_id INTEGER REFERENCES mcp_tokens(id),
+    tool_name TEXT NOT NULL,
+    success INTEGER NOT NULL,
+    error TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_mcp_audit_tenant_created
+    ON mcp_audit_log (tenant_id, created_at);
 """
 
 
@@ -166,6 +205,7 @@ CREATE TABLE IF NOT EXISTS templates (
 MIGRATIONS: tuple[tuple[str, str, str], ...] = (
     # (tabela, coluna, definição)
     ("social_accounts", "refresh_token", "TEXT"),
+    ("publish_history", "placement", "TEXT NOT NULL DEFAULT 'feed'"),
 )
 
 
@@ -176,6 +216,29 @@ def _migrate(conn: sqlite3.Connection) -> None:
             continue
         if column not in cols:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+    target_cols = {r["name"] for r in conn.execute("PRAGMA table_info(post_targets)")}
+    if target_cols and "placement" not in target_cols:
+        conn.execute("ALTER TABLE post_targets RENAME TO post_targets_legacy")
+        conn.execute(
+            "CREATE TABLE post_targets ("
+            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " tenant_id INTEGER NOT NULL REFERENCES tenants(id),"
+            " post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,"
+            " social_account_id INTEGER NOT NULL REFERENCES social_accounts(id),"
+            " placement TEXT NOT NULL DEFAULT 'feed',"
+            " status TEXT NOT NULL DEFAULT 'pending', external_post_id TEXT, error TEXT,"
+            " created_at TEXT NOT NULL, updated_at TEXT NOT NULL,"
+            " UNIQUE (post_id, social_account_id, placement))"
+        )
+        conn.execute(
+            "INSERT INTO post_targets"
+            " (id, tenant_id, post_id, social_account_id, placement, status,"
+            " external_post_id, error, created_at, updated_at)"
+            " SELECT id, tenant_id, post_id, social_account_id, 'feed', status,"
+            " external_post_id, error, created_at, updated_at FROM post_targets_legacy"
+        )
+        conn.execute("DROP TABLE post_targets_legacy")
 
 
 def init_db(conn: sqlite3.Connection) -> None:
@@ -382,13 +445,33 @@ def list_media(conn, tenant_id: int):
 
 # ------------------------------------------------------------------------ posts
 
-def create_post(conn, tenant_id: int, texto: str, media_id: int | None = None) -> int:
+def _set_post_media(
+    conn, tenant_id: int, post_id: int, media_ids: list[int]
+) -> None:
+    conn.execute(
+        "DELETE FROM post_media WHERE tenant_id = ? AND post_id = ?",
+        (tenant_id, post_id),
+    )
+    for position, media_id in enumerate(media_ids):
+        conn.execute(
+            "INSERT INTO post_media (post_id, tenant_id, media_id, position)"
+            " VALUES (?, ?, ?, ?)",
+            (post_id, tenant_id, media_id, position),
+        )
+
+
+def create_post(
+    conn, tenant_id: int, texto: str, media_id: int | None = None,
+    media_ids: list[int] | None = None,
+) -> int:
+    ordered_media = media_ids if media_ids is not None else ([media_id] if media_id else [])
     now = now_utc()
     cur = conn.execute(
         "INSERT INTO posts (tenant_id, texto, media_id, status, created_at, updated_at)"
         " VALUES (?, ?, ?, 'draft', ?, ?)",
-        (tenant_id, texto, media_id, now, now),
+        (tenant_id, texto, ordered_media[0] if ordered_media else None, now, now),
     )
+    _set_post_media(conn, tenant_id, cur.lastrowid, ordered_media)
     conn.commit()
     return cur.lastrowid
 
@@ -411,19 +494,39 @@ def list_posts(conn, tenant_id: int, status: str | None = None):
 
 
 def update_post_content(
-    conn, tenant_id: int, post_id: int, texto: str, media_id: int | None
+    conn, tenant_id: int, post_id: int, texto: str, media_id: int | None,
+    media_ids: list[int] | None = None,
 ) -> bool:
+    ordered_media = media_ids if media_ids is not None else ([media_id] if media_id else [])
     cur = conn.execute(
         "UPDATE posts SET texto = ?, media_id = ?, updated_at = ?"
         " WHERE tenant_id = ? AND id = ? AND status IN ('draft', 'scheduled', 'failed', 'missed', 'canceled')",
-        (texto, media_id, now_utc(), tenant_id, post_id),
+        (texto, ordered_media[0] if ordered_media else None, now_utc(), tenant_id, post_id),
     )
+    if cur.rowcount == 1:
+        _set_post_media(conn, tenant_id, post_id, ordered_media)
     conn.commit()
     return cur.rowcount == 1
 
 
+def list_post_media(conn, tenant_id: int, post_id: int):
+    rows = conn.execute(
+        "SELECT m.* FROM post_media pm JOIN media m ON m.id = pm.media_id"
+        " WHERE pm.tenant_id = ? AND pm.post_id = ? ORDER BY pm.position",
+        (tenant_id, post_id),
+    ).fetchall()
+    if rows:
+        return rows
+    post = get_post(conn, tenant_id, post_id)
+    if post is not None and post["media_id"]:
+        legacy = get_media(conn, tenant_id, post["media_id"])
+        return [legacy] if legacy is not None else []
+    return []
+
+
 def schedule_post(
-    conn, tenant_id: int, post_id: int, scheduled_at_utc: str, account_ids: list[int]
+    conn, tenant_id: int, post_id: int, scheduled_at_utc: str, account_ids: list[int],
+    placements: list[str] | None = None,
 ) -> bool:
     """Agenda (ou reagenda) um post e substitui os alvos."""
     cur = conn.execute(
@@ -442,11 +545,13 @@ def schedule_post(
     )
     now = now_utc()
     for account_id in account_ids:
-        conn.execute(
-            "INSERT INTO post_targets (tenant_id, post_id, social_account_id, status, created_at, updated_at)"
-            " VALUES (?, ?, ?, 'pending', ?, ?)",
-            (tenant_id, post_id, account_id, now, now),
-        )
+        for placement in placements or ["feed"]:
+            conn.execute(
+                "INSERT INTO post_targets"
+                " (tenant_id, post_id, social_account_id, placement, status, created_at, updated_at)"
+                " VALUES (?, ?, ?, ?, 'pending', ?, ?)",
+                (tenant_id, post_id, account_id, placement, now, now),
+            )
     conn.commit()
     return True
 
@@ -482,12 +587,13 @@ def list_targets(conn, tenant_id: int, post_id: int):
 
 def add_history(
     conn, tenant_id: int, post_id: int, social_account_id: int,
-    tentativa: int, status: str, erro: str | None,
+    tentativa: int, status: str, erro: str | None, placement: str = "feed",
 ) -> None:
     conn.execute(
-        "INSERT INTO publish_history (tenant_id, post_id, social_account_id, tentativa, status, erro, timestamp)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (tenant_id, post_id, social_account_id, tentativa, status, erro, now_utc()),
+        "INSERT INTO publish_history"
+        " (tenant_id, post_id, social_account_id, placement, tentativa, status, erro, timestamp)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (tenant_id, post_id, social_account_id, placement, tentativa, status, erro, now_utc()),
     )
     conn.commit()
 
@@ -580,6 +686,69 @@ def delete_template(conn, tenant_id: int, template_id: int) -> bool:
     return cur.rowcount == 1
 
 
+# -------------------------------------------------------------------------- MCP
+
+def create_mcp_token(
+    conn, tenant_id: int, name: str, token_hash: str, token_prefix: str,
+    scopes: str, expires_at: str | None,
+) -> int:
+    cur = conn.execute(
+        "INSERT INTO mcp_tokens"
+        " (tenant_id, name, token_hash, token_prefix, scopes, expires_at, created_at)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (tenant_id, name, token_hash, token_prefix, scopes, expires_at, now_utc()),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def get_active_mcp_token(conn, token_hash: str, now: str | None = None):
+    return conn.execute(
+        "SELECT * FROM mcp_tokens WHERE token_hash = ? AND revoked_at IS NULL"
+        " AND (expires_at IS NULL OR expires_at > ?)",
+        (token_hash, now or now_utc()),
+    ).fetchone()
+
+
+def touch_mcp_token(conn, token_id: int) -> None:
+    conn.execute(
+        "UPDATE mcp_tokens SET last_used_at = ? WHERE id = ?",
+        (now_utc(), token_id),
+    )
+    conn.commit()
+
+
+def list_mcp_tokens(conn, tenant_id: int):
+    return conn.execute(
+        "SELECT id, name, token_prefix, scopes, expires_at, last_used_at,"
+        " revoked_at, created_at FROM mcp_tokens WHERE tenant_id = ? ORDER BY id DESC",
+        (tenant_id,),
+    ).fetchall()
+
+
+def revoke_mcp_token(conn, tenant_id: int, token_id: int) -> bool:
+    cur = conn.execute(
+        "UPDATE mcp_tokens SET revoked_at = ?"
+        " WHERE tenant_id = ? AND id = ? AND revoked_at IS NULL",
+        (now_utc(), tenant_id, token_id),
+    )
+    conn.commit()
+    return cur.rowcount == 1
+
+
+def add_mcp_audit(
+    conn, tenant_id: int, token_id: int, tool_name: str,
+    success: bool, error: str | None = None,
+) -> None:
+    conn.execute(
+        "INSERT INTO mcp_audit_log"
+        " (tenant_id, token_id, tool_name, success, error, created_at)"
+        " VALUES (?, ?, ?, ?, ?, ?)",
+        (tenant_id, token_id, tool_name, 1 if success else 0, error, now_utc()),
+    )
+    conn.commit()
+
+
 # =================================================================== SCHEDULER
 # Funções internas do agendador — varrem todos os tenants. Uso exclusivo de
 # app/scheduler.py e do catch-up de inicialização. Nunca expor em rotas.
@@ -618,6 +787,20 @@ def sched_get_account(conn, account_id: int):
 
 def sched_get_media(conn, media_id: int):
     return conn.execute("SELECT * FROM media WHERE id = ?", (media_id,)).fetchone()
+
+
+def sched_get_post_media(conn, post_id: int):
+    rows = conn.execute(
+        "SELECT m.* FROM post_media pm JOIN media m ON m.id = pm.media_id"
+        " WHERE pm.post_id = ? ORDER BY pm.position", (post_id,)
+    ).fetchall()
+    if rows:
+        return rows
+    post = conn.execute("SELECT media_id FROM posts WHERE id = ?", (post_id,)).fetchone()
+    if post is not None and post["media_id"]:
+        media = sched_get_media(conn, post["media_id"])
+        return [media] if media is not None else []
+    return []
 
 
 def sched_finish_target(

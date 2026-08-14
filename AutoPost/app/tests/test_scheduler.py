@@ -60,6 +60,17 @@ def schedule(conn, tenant_id, account_id, when: str, texto="oi") -> int:
     return post_id
 
 
+def test_feed_e_story_criam_alvos_independentes(conn, setup):
+    tenant_id, account_id = setup
+    post_id = db.create_post(conn, tenant_id, "oi")
+    assert db.schedule_post(
+        conn, tenant_id, post_id, past(minutes=5), [account_id], ["feed", "story"]
+    )
+    assert [t["placement"] for t in db.list_targets(conn, tenant_id, post_id)] == [
+        "feed", "story"
+    ]
+
+
 # ---- Critério 2: publica exatamente 1 vez ----------------------------------
 
 @pytest.mark.anyio

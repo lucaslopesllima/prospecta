@@ -221,22 +221,20 @@ export function companyRoutes(app: FastifyInstance): void {
     preHandler: [requireAuth, requirePermission('prospeccao.view')],
     schema: {
       params: { type: 'object', required: ['id'], properties: { id: { type: 'integer' } } },
-      querystring: { type: 'object', properties: { forcar: { type: 'boolean' } } },
     },
   }, async (req, reply) => {
     const { id } = req.params as { id: number };
-    const { forcar = false } = req.query as { forcar?: boolean };
     const c = await one<{
       id: number; cnpj: string; razao_social: string; nome_fantasia: string | null; email: string | null;
     }>(
       'SELECT id, cnpj, razao_social, nome_fantasia, email FROM companies WHERE id = $1', [id],
     );
     if (!c) return reply.code(404).send({ error: 'empresa não encontrada' });
-    return { dominio: await (forcar ? descobrirDominio(c, { ignorarCache: true }) : descobrirDominio(c)) };
+    return { dominio: await descobrirDominio(c) };
   });
 
-  // Raspa os contatos publicados no site da empresa. Depende do site já
-  // descoberto (rota acima) — é o único dado que a descoberta persiste.
+  // Raspa os contatos publicados no site recém-descoberto pelo modal. A URL
+  // segue na própria requisição porque descoberta nenhuma é persistida.
   //
   // O resultado NÃO é gravado: vai para a tela e o representante escolhe o que
   // vira contato, pelo POST /api/contacts de sempre. Contato de site é dado de
@@ -245,15 +243,18 @@ export function companyRoutes(app: FastifyInstance): void {
   // contato administrativo do RDAP (ver migração 076).
   app.get('/api/companies/:id/contatos-site', {
     preHandler: [requireAuth, requirePermission('prospeccao.view')],
-    schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'integer' } } } },
+    schema: {
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'integer' } } },
+      querystring: {
+        type: 'object', required: ['site_url'],
+        properties: { site_url: { type: 'string', minLength: 1, maxLength: 2048 } },
+      },
+    },
   }, async (req, reply) => {
     const { id } = req.params as { id: number };
-    const c = await one<{ site_url: string | null }>(
-      'SELECT site_url FROM company_dominio WHERE company_id = $1', [id],
-    );
-    // 409 e não 404: a empresa existe, o que falta é a busca do site. O client
-    // só mostra o botão depois de achar o site, então isto é rede de segurança.
-    if (!c?.site_url) return reply.code(409).send({ error: 'busque o site da empresa primeiro' });
-    return buscarContatosNoSite(c.site_url);
+    const { site_url } = req.query as { site_url: string };
+    const c = await one<{ id: number }>('SELECT id FROM companies WHERE id = $1', [id]);
+    if (!c) return reply.code(404).send({ error: 'empresa não encontrada' });
+    return buscarContatosNoSite(site_url);
   });
 }

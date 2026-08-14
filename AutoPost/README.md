@@ -32,8 +32,86 @@ Interface em `http://localhost:8000`, API em `/docs`.
 | `create-user` | Cria usuário **e** o tenant dele (1 usuário = 1 tenant) |
 | `reset-password` | Troca a senha de um usuário |
 | `list-users` | Lista os usuários |
+| `create-mcp-token` | Cria token MCP pessoal, com escopos e validade |
+| `list-mcp-tokens` | Lista tokens MCP sem revelar segredos |
+| `revoke-mcp-token` | Revoga token MCP imediatamente |
 
 Não há registro público, convite nem recuperação de senha por e-mail — tudo passa por aqui.
+
+## MCP remoto (Codex/ChatGPT desktop/IDE)
+
+Endpoint Streamable HTTP: `https://autopost.seudominio.com.br/mcp`.
+
+Guia para conectar outros agentes: [`MCP_AGENTS.md`](../MCP_AGENTS.md).
+
+O MCP usa tokens pessoais por tenant. O banco guarda somente SHA-256 do segredo;
+o token completo aparece uma vez na criação. Tokens expiram, podem ser revogados e
+cada chamada de ferramenta entra em `mcp_audit_log`. O tenant vem do token validado,
+nunca de argumento enviado pelo modelo.
+
+Escopos disponíveis:
+
+| Escopo | Ferramentas |
+|---|---|
+| `read` | listar contas, templates e posts |
+| `generate` | gerar texto com a IA configurada (tem custo externo) |
+| `write` | salvar rascunho; nunca publica |
+| `schedule` | agendar publicação futura; conceda só quando necessário |
+
+Crie token padrão, sem poder de publicação:
+
+```bash
+docker compose -f docker-compose.prod.yml exec autopost \
+  python manage.py create-mcp-token --email voce@exemplo.com --nome codex
+```
+
+Guarde o valor retornado somente no ambiente local do Codex:
+
+```bash
+export AUTOPOST_MCP_TOKEN='autopost_mcp_...'
+```
+
+Configure `~/.codex/config.toml` (ou `.codex/config.toml` em projeto confiável):
+
+```toml
+[mcp_servers.autopost]
+url = "https://autopost.seudominio.com.br/mcp"
+bearer_token_env_var = "AUTOPOST_MCP_TOKEN"
+enabled_tools = [
+  "autopost_listar_contas",
+  "autopost_listar_templates",
+  "autopost_listar_posts",
+  "autopost_gerar_post",
+  "autopost_criar_rascunho",
+]
+default_tools_approval_mode = "writes"
+```
+
+Para permitir agendamento, emita outro token com escopo explícito:
+
+```bash
+docker compose -f docker-compose.prod.yml exec autopost \
+  python manage.py create-mcp-token --email voce@exemplo.com --nome codex-agenda \
+  --scopes read,generate,write,schedule --dias 30
+```
+
+Nesse perfil, adicione também `autopost_agendar_post` a `enabled_tools`. O modo
+`writes` mantém aprovação antes da ação.
+
+Revogue ao perder máquina/token:
+
+```bash
+docker compose -f docker-compose.prod.yml exec autopost \
+  python manage.py revoke-mcp-token --email voce@exemplo.com --id ID
+```
+
+Controles adicionais: TLS no nginx, proteção Host/Origin contra DNS rebinding,
+corpo MCP limitado a 1 MB, prompt limitado por `MCP_MAX_PROMPT_CHARS` e rate limit
+por token (`MCP_RATE_LIMIT_PER_MINUTE`). Tokens nunca entram em logs ou respostas.
+
+Carrosséis aceitam até 10 mídias ordenadas. `autopost_enviar_midia` recebe base64;
+`autopost_criar_rascunho` recebe `media_ids`; `autopost_agendar_post` aceita
+`placements` com `feed` e/ou `story`. Story usa primeira mídia como capa.
 
 ## Como o agendamento funciona
 
@@ -131,8 +209,8 @@ Restrições das plataformas, não do código:
 .venv/bin/python -m pytest app/tests -q
 ```
 
-41 testes, incluindo isolamento entre dois usuários, publicação única sob restart,
-catch-up/missed e token expirado.
+72 testes, incluindo isolamento entre usuários e tokens MCP, publicação única sob
+restart, catch-up/missed, revogação, escopos MCP e token social expirado.
 
 ## Backup
 

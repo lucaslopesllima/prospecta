@@ -1,6 +1,6 @@
 // GET /api/companies/:id/contatos-site — raspagem dos contatos publicados no
 // site. A extração é testada em contatos-site.test.ts; aqui só o contrato da
-// rota: auth, dependência do site já descoberto e o não-persistir.
+// rota: auth, URL recebida do modal e não-persistência.
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 
@@ -16,18 +16,14 @@ beforeAll(async () => { app = await makeApp(); s = await register(app, 'co-cts')
 beforeEach(() => buscarContatosNoSite.mockReset());
 afterAll(() => closeAll(app));
 
-const comSite = async (site_url: string | null): Promise<number> => {
-  const id = await makeCompany({ razao: 'ACME LTDA' });
-  await query(
-    `INSERT INTO company_dominio (company_id, dominio, fonte, confianca, site_url, site_status)
-       VALUES ($1, 'acme.com.br', 'registrobr', 100, $2, $3)`,
-    [id, site_url, site_url ? 'vivo' : 'sem_dns'],
-  );
-  return id;
-};
+const comSite = (): Promise<number> => makeCompany({ razao: 'ACME LTDA' });
 
-const buscar = (id: number, token = s.token) =>
-  app.inject({ method: 'GET', url: `/api/companies/${id}/contatos-site`, headers: bearer(token) });
+const buscar = (id: number, token = s.token, siteUrl = 'https://www.acme.com.br/') =>
+  app.inject({
+    method: 'GET',
+    url: `/api/companies/${id}/contatos-site?site_url=${encodeURIComponent(siteUrl)}`,
+    headers: bearer(token),
+  });
 
 const contato = {
   nome: 'Silvio Zanon', cargo: 'Gerente', rotulo: 'Departamento Técnico',
@@ -37,7 +33,7 @@ const contato = {
 
 describe('GET /api/companies/:id/contatos-site', () => {
   it('devolve os contatos achados e as páginas lidas', async () => {
-    const id = await comSite('https://www.acme.com.br/');
+    const id = await comSite();
     buscarContatosNoSite.mockResolvedValueOnce({
       contatos: [contato], paginas: ['https://www.acme.com.br/', 'https://www.acme.com.br/contato'],
     });
@@ -45,14 +41,14 @@ describe('GET /api/companies/:id/contatos-site', () => {
     expect(r.statusCode).toBe(200);
     expect(r.json().contatos).toEqual([contato]);
     expect(r.json().paginas).toHaveLength(2);
-    // raspa a URL que a descoberta do site gravou, não o domínio cru
+    // Raspa URL enviada pelo modal, sem consultar cache.
     expect(buscarContatosNoSite).toHaveBeenCalledWith('https://www.acme.com.br/');
   });
 
   // O ponto do desenho: só o site fica no banco. O que a raspagem achou vive na
   // tela, e vira registro apenas pelo POST /api/contacts do que foi escolhido.
   it('não persiste nada do que raspou', async () => {
-    const id = await comSite('https://www.acme.com.br/');
+    const id = await comSite();
     buscarContatosNoSite.mockResolvedValueOnce({ contatos: [contato], paginas: ['https://www.acme.com.br/'] });
     await buscar(id);
     const linhas = await query<{ n: string }>(
@@ -62,30 +58,33 @@ describe('GET /api/companies/:id/contatos-site', () => {
   });
 
   it('site nenhum encontrado -> lista vazia, não erro', async () => {
-    const id = await comSite('https://www.acme.com.br/');
+    const id = await comSite();
     buscarContatosNoSite.mockResolvedValueOnce({ contatos: [], paginas: ['https://www.acme.com.br/'] });
     const r = await buscar(id);
     expect(r.statusCode).toBe(200);
     expect(r.json().contatos).toEqual([]);
   });
 
-  it('empresa sem site buscado -> 409, sem chamar a raspagem', async () => {
+  it('URL ausente -> 400, sem chamar a raspagem', async () => {
     const id = await makeCompany();
-    const r = await buscar(id);
-    expect(r.statusCode).toBe(409);
-    expect(r.json().error).toBe('busque o site da empresa primeiro');
+    const r = await app.inject({
+      method: 'GET', url: `/api/companies/${id}/contatos-site`, headers: bearer(s.token),
+    });
+    expect(r.statusCode).toBe(400);
     expect(buscarContatosNoSite).not.toHaveBeenCalled();
   });
 
-  it('domínio achado mas sem site no ar -> 409', async () => {
-    const id = await comSite(null);
-    expect((await buscar(id)).statusCode).toBe(409);
+  it('empresa inexistente -> 404', async () => {
+    expect((await buscar(999_999_999)).statusCode).toBe(404);
     expect(buscarContatosNoSite).not.toHaveBeenCalled();
   });
 
   it('sem token -> 401', async () => {
-    const id = await comSite('https://www.acme.com.br/');
-    const r = await app.inject({ method: 'GET', url: `/api/companies/${id}/contatos-site` });
+    const id = await comSite();
+    const r = await app.inject({
+      method: 'GET',
+      url: `/api/companies/${id}/contatos-site?site_url=${encodeURIComponent('https://www.acme.com.br/')}`,
+    });
     expect(r.statusCode).toBe(401);
     expect(buscarContatosNoSite).not.toHaveBeenCalled();
   });

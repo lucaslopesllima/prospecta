@@ -1,11 +1,5 @@
-// descobrirDominio com o cliente RDAP mockado e banco de verdade: cobre a
-// cascata de cache (company_dominio -> rdap_domain -> portão -> varredura) e,
-// principalmente, a regra de não cachear negativo quando o registro.br censura.
-//
-// rdap_domain e company_dominio são globais e sobrevivem entre rodadas da suíte
-// (mesma pegadinha do routes-company-whatsapp.test.ts). Por isso TODO nome de
-// empresa leva TAG: o domínio derivado do nome muda a cada execução e a rodada
-// nunca lê o cache da anterior.
+// descobrirDominio com cliente RDAP mockado e banco real. Cobre portão,
+// varredura e ausência total de cache entre buscas.
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 
 const { consultarDominio, contarDominios, resolverSite } = vi.hoisted(() => ({
@@ -55,27 +49,22 @@ async function empresa(razao: string, fantasia: string | null = null, email: str
   return { id: Number(r!.id), cnpj, razao_social: razao, nome_fantasia: fantasia, email };
 }
 
-const salvo = (id: number) =>
-  one<{ dominio: string | null; confianca: number }>(
-    'SELECT dominio, confianca FROM company_dominio WHERE company_id = $1', [id]);
-
 describe('descobrirDominio', () => {
-  it('confirma pelo CNPJ do titular e grava com confiança 100', async () => {
+  it('confirma pelo CNPJ do titular com confiança 100', async () => {
     const e = await empresa('ACME COMERCIO LTDA', nome('ACME'));
     consultarDominio.mockResolvedValueOnce({ estado: 'confirmado', titularCnpj: e.cnpj });
 
     expect(await descobrirDominio(e)).toEqual({
       dominio: dom('acme'), site_url: `https://${dom('acme')}/`, site_status: 'vivo',
-      status: 'achou', fonte: 'registrobr', confianca: 100, titular: null, cached: false,
+      status: 'achou', fonte: 'registrobr', confianca: 100, titular: null,
     });
     expect(consultarDominio).toHaveBeenCalledWith(dom('acme'));
-    expect(await salvo(e.id)).toEqual({ dominio: dom('acme'), confianca: 100 });
   });
 
   // ZALTANA na amostra real: domínio confirmado por CNPJ, mas sem DNS nenhum —
   // registrado só para e-mail. O domínio continua útil (contato@dominio), então
   // é devolvido; o que não existe é a URL.
-  it('domínio confirmado sem site: guarda o domínio, site_url nulo', async () => {
+  it('domínio confirmado sem site: devolve o domínio, mas não cria cache', async () => {
     const e = await empresa('ZALTANA PESCADOS LTDA', nome('ZALTANA'));
     consultarDominio.mockResolvedValueOnce({ estado: 'confirmado', titularCnpj: e.cnpj });
     resolverSite.mockResolvedValue({ url: null, status: 'sem_dns' });
@@ -83,8 +72,6 @@ describe('descobrirDominio', () => {
     expect(await descobrirDominio(e)).toMatchObject({
       dominio: dom('zaltana'), site_url: null, site_status: 'sem_dns', status: 'achou',
     });
-    expect(await one('SELECT site_url, site_status FROM company_dominio WHERE company_id = $1', [e.id]))
-      .toEqual({ site_url: null, site_status: 'sem_dns' });
   });
 
   // WAF barrando a sondagem não pode virar "sem site": a URL segue clicável.
@@ -97,7 +84,7 @@ describe('descobrirDominio', () => {
     });
   });
 
-  it('site com www é gravado com a URL final, não com o domínio cru', async () => {
+  it('site com www devolve URL final, não domínio cru', async () => {
     const e = await empresa('MALINSKI MADEIRAS LTDA', nome('MALINSKI'));
     consultarDominio.mockResolvedValueOnce({ estado: 'confirmado', titularCnpj: e.cnpj });
     resolverSite.mockResolvedValue({ url: `https://www.${dom('malinski')}/`, status: 'vivo' });
@@ -161,7 +148,7 @@ describe('descobrirDominio', () => {
         status: 'achou', fonte: 'email_rfb', confianca: 70,
       });
       expect(consultarDominio).toHaveBeenCalledWith(dom('ares'));
-      // nunca consultado no registro.br: gravaria "domínio livre" errado no cache
+      // nunca consultado no registro.br: registro.br não cobre esse TLD
       expect(consultarDominio.mock.calls.map((c) => c[0])).not.toContain('ares-global.com');
     });
 
@@ -205,14 +192,12 @@ describe('descobrirDominio', () => {
     consultarDominio.mockResolvedValue({ estado: 'confirmado', titularCnpj: '11111111000199' });
     const r = await descobrirDominio(e);
     expect(r).toMatchObject({ dominio: null, status: 'nao_encontrado' });
-    expect(await salvo(e.id)).toEqual({ dominio: null, confianca: 0 });
   });
 
-  it('todos os candidatos livres -> não encontrado, cacheado', async () => {
+  it('todos os candidatos livres -> não encontrado, sem cache da empresa', async () => {
     const e = await empresa('DELTA LTDA', nome('DELTA'));
     consultarDominio.mockResolvedValue({ estado: 'livre' });
     expect((await descobrirDominio(e)).status).toBe('nao_encontrado');
-    expect(await salvo(e.id)).toEqual({ dominio: null, confianca: 0 });
   });
 
   // O ponto central: censura do registro.br não pode virar "empresa sem site".
@@ -220,14 +205,12 @@ describe('descobrirDominio', () => {
     const e = await empresa('EPSILON LTDA', nome('EPSILON'));
     consultarDominio.mockResolvedValue({ estado: 'sem_titular' });
     expect((await descobrirDominio(e)).status).toBe('indeterminado');
-    expect(await salvo(e.id)).toBeNull(); // nada cacheado -> tenta de novo depois
   });
 
   it('falha de rede -> indeterminado e NÃO grava negativo', async () => {
     const e = await empresa('ZETA LTDA', nome('ZETA'));
     consultarDominio.mockResolvedValue(null);
     expect((await descobrirDominio(e)).status).toBe('indeterminado');
-    expect(await salvo(e.id)).toBeNull();
   });
 
   it('acerto depois de um livre continua a varredura', async () => {
@@ -240,55 +223,53 @@ describe('descobrirDominio', () => {
     expect(consultarDominio).toHaveBeenCalledTimes(2);
   });
 
-  it('segunda chamada vem do cache de company_dominio, sem tocar o RDAP', async () => {
+  it('segunda chamada consulta RDAP e site novamente', async () => {
     const e = await empresa('KAPPA LTDA', nome('KAPPA'));
-    consultarDominio.mockResolvedValueOnce({ estado: 'confirmado', titularCnpj: e.cnpj });
+    consultarDominio.mockResolvedValue({ estado: 'confirmado', titularCnpj: e.cnpj });
     await descobrirDominio(e);
     consultarDominio.mockClear();
+    resolverSite.mockClear();
 
     expect(await descobrirDominio(e)).toEqual({
       dominio: dom('kappa'), site_url: `https://${dom('kappa')}/`, site_status: 'vivo',
-      status: 'achou', fonte: 'registrobr', confianca: 100, titular: null, cached: true,
+      status: 'achou', fonte: 'registrobr', confianca: 100, titular: null,
     });
-    expect(consultarDominio).not.toHaveBeenCalled();
+    expect(consultarDominio).toHaveBeenCalledWith(dom('kappa'));
+    expect(resolverSite).toHaveBeenCalledWith(dom('kappa'));
   });
 
-  it('negativo cacheado também não reconsulta', async () => {
+  it('resultado negativo também consulta novamente', async () => {
     const e = await empresa('LAMBDA LTDA', nome('LAMBDA'));
     consultarDominio.mockResolvedValue({ estado: 'livre' });
     await descobrirDominio(e);
     consultarDominio.mockClear();
 
-    expect(await descobrirDominio(e)).toMatchObject({ status: 'nao_encontrado', cached: true });
-    expect(consultarDominio).not.toHaveBeenCalled();
+    expect(await descobrirDominio(e)).toMatchObject({ status: 'nao_encontrado' });
+    expect(consultarDominio).toHaveBeenCalled();
   });
 
-  // Matriz e filial compartilham o site: a segunda empresa da raiz não varre.
-  it('reaproveita domínio já confirmado para outro CNPJ da mesma raiz', async () => {
+  it('filial consulta novamente mesmo após matriz achar domínio', async () => {
     const e1 = await empresa('SIGMA LTDA', nome('SIGMA'));
     consultarDominio.mockResolvedValueOnce({ estado: 'confirmado', titularCnpj: e1.cnpj });
     await descobrirDominio(e1);
 
     const filial = { ...e1, id: (await empresa('SIGMA LTDA FILIAL')).id, cnpj: `${e1.cnpj.slice(0, 8)}000288` };
     consultarDominio.mockClear();
+    consultarDominio.mockResolvedValue({ estado: 'confirmado', titularCnpj: filial.cnpj });
     contarDominios.mockClear();
     resolverSite.mockClear();
     expect(await descobrirDominio(filial)).toEqual({
       dominio: dom('sigma'), site_url: `https://${dom('sigma')}/`, site_status: 'vivo',
-      status: 'achou', fonte: 'registrobr', confianca: 100, titular: null, cached: false,
+      status: 'achou', fonte: 'registrobr', confianca: 100, titular: null,
     });
-    // o site da matriz é reaproveitado: não sonda o servidor da empresa de novo
-    expect(resolverSite).not.toHaveBeenCalled();
-    expect(consultarDominio).not.toHaveBeenCalled();
-    expect(contarDominios).not.toHaveBeenCalled(); // nem o portão é gasto
+    expect(resolverSite).toHaveBeenCalled();
+    expect(consultarDominio).toHaveBeenCalled();
   });
 
   // Grupo com várias marcas: a AMC TEXTIL é titular de menegotti.com.br,
   // amctextil.com.br E colcci.com.br. Herdar o primeiro irmão fazia a filial
   // cuja fantasia é COLCCI devolver menegotti.com.br.
   describe('grupo com mais de uma marca', () => {
-    // Nomes únicos por montagem: rdap_domain é cache GLOBAL por domínio, então
-    // reusar a mesma marca em dois grupos faz o 2º ler o titular do 1º.
     let g = 0;
     const comIrmao = async (fantasiaFilial: string | null) => {
       const seq = ++g;
@@ -314,18 +295,19 @@ describe('descobrirDominio', () => {
       expect(consultarDominio.mock.calls[0]![0]).toBe(dom('colccix'));
     });
 
-    it('marca própria sem domínio: cai no domínio do irmão em vez de "sem site"', async () => {
-      const { filial, irmao } = await comIrmao(nome('SEMDOM'));
+    it('marca própria sem domínio não herda resultado anterior', async () => {
+      const { filial } = await comIrmao(nome('SEMDOM'));
       consultarDominio.mockResolvedValue({ estado: 'livre' });
       expect(await descobrirDominio(filial)).toMatchObject({
-        dominio: irmao, status: 'achou', confianca: 100,
+        dominio: null, status: 'nao_encontrado',
       });
     });
 
-    it('filial sem fantasia e sem e-mail herda direto, sem gastar consulta', async () => {
-      const { filial, irmao } = await comIrmao(null);
-      expect((await descobrirDominio(filial)).dominio).toBe(irmao);
-      expect(consultarDominio).not.toHaveBeenCalled();
+    it('filial sem fantasia não herda resultado anterior', async () => {
+      const { filial } = await comIrmao(null);
+      consultarDominio.mockResolvedValue({ estado: 'livre' });
+      expect((await descobrirDominio(filial)).dominio).toBeNull();
+      expect(consultarDominio).toHaveBeenCalled();
     });
   });
 
@@ -334,45 +316,37 @@ describe('descobrirDominio', () => {
   // vende, e é onde o representante encontra a marca.
   describe('site da marca (domínio de outro CNPJ)', () => {
     const dona = async (marca: string) => {
-      const amc = await empresa(`${nome('FABRICA')} TEXTIL LTDA`, marca);
-      await query(
-        `INSERT INTO rdap_domain (dominio, registrado, titular_cnpj, verificado_em)
-           VALUES ($1, true, $2, now()) ON CONFLICT (dominio) DO UPDATE
-           SET titular_cnpj = EXCLUDED.titular_cnpj, verificado_em = now()`,
-        [`${marca.toLowerCase()}.com.br`, amc.cnpj],
-      );
-      return amc;
+      return empresa(`${nome('FABRICA')} TEXTIL LTDA`, marca);
     };
 
     it('fantasia bate com domínio de terceiro -> site da marca, rotulado', async () => {
       const amc = await dona(nome('COLCCIZ'));
       const loja = await empresa('LORENCI VESTUARIOS LTDA', nome('COLCCIZ'), 'rlorenci@gmail.com');
-      consultarDominio.mockResolvedValue({ estado: 'livre' }); // nada da loja existe
+      consultarDominio.mockResolvedValue({ estado: 'confirmado', titularCnpj: amc.cnpj });
 
       expect(await descobrirDominio(loja)).toMatchObject({
         dominio: dom('colcciz'), status: 'achou', fonte: 'marca', confianca: 40,
         titular: amc.razao_social, // a ficha diz de quem é: a pessoa jurídica
       });
-      expect(await salvo(loja.id)).toEqual({ dominio: dom('colcciz'), confianca: 40 });
     });
 
-    it('do cache, volta como marca — não disfarçado de domínio próprio', async () => {
-      await dona(nome('COLCCIW'));
+    it('site da marca também é consultado novamente', async () => {
+      const amc = await dona(nome('COLCCIW'));
       const loja = await empresa('OUTRA LOJA LTDA', nome('COLCCIW'), 'loja@gmail.com');
-      consultarDominio.mockResolvedValue({ estado: 'livre' });
+      consultarDominio.mockResolvedValue({ estado: 'confirmado', titularCnpj: amc.cnpj });
       await descobrirDominio(loja);
       consultarDominio.mockClear();
 
       expect(await descobrirDominio(loja)).toMatchObject({
-        fonte: 'marca', confianca: 40, cached: true, titular: expect.any(String),
+        fonte: 'marca', confianca: 40, titular: expect.any(String),
       });
-      expect(consultarDominio).not.toHaveBeenCalled();
+      expect(consultarDominio).toHaveBeenCalled();
     });
 
     it('marca sem site no ar não vira nada', async () => {
-      await dona(nome('COLCCIY'));
+      const amc = await dona(nome('COLCCIY'));
       const loja = await empresa('TERCEIRA LOJA LTDA', nome('COLCCIY'), 'loja@gmail.com');
-      consultarDominio.mockResolvedValue({ estado: 'livre' });
+      consultarDominio.mockResolvedValue({ estado: 'confirmado', titularCnpj: amc.cnpj });
       resolverSite.mockResolvedValue({ url: null, status: 'sem_dns' });
       expect((await descobrirDominio(loja)).status).toBe('nao_encontrado');
     });
@@ -396,7 +370,6 @@ describe('descobrirDominio', () => {
     // que é a única pista quando a empresa não tem domínio nenhum
     expect(consultarDominio).toHaveBeenCalledTimes(1);
     expect(consultarDominio).toHaveBeenCalledWith(dom('tau'));
-    expect(await salvo(e.id)).toEqual({ dominio: null, confianca: 0 });
   });
 
   it('portão fechado e sem fantasia: nenhuma consulta', async () => {
@@ -456,52 +429,6 @@ describe('descobrirDominio', () => {
     consultarDominio.mockResolvedValue({ estado: 'livre' });
     await descobrirDominio(e);
     expect(consultarDominio.mock.calls.map((c) => c[0]))
-      .toEqual([dom('psi'), dom('psi', 'ind.br'), dom('psi', 'agr.br')]);
-  });
-
-  describe('cache por domínio (rdap_domain)', () => {
-    it('domínio já confirmado no cache não é reconsultado', async () => {
-      const e = await empresa('RHO LTDA', nome('RHO'));
-      await query(
-        'INSERT INTO rdap_domain (dominio, registrado, titular_cnpj) VALUES ($1, true, $2)',
-        [dom('rho'), e.cnpj],
-      );
-      // cai no atalho do "irmão" (mesma raiz) antes mesmo da varredura
-      expect((await descobrirDominio(e)).dominio).toBe(dom('rho'));
-      expect(consultarDominio).not.toHaveBeenCalled();
-    });
-
-    it('domínio livre no cache é pulado sem consulta', async () => {
-      const e = await empresa('CHI LTDA', nome('CHI'));
-      await query(
-        'INSERT INTO rdap_domain (dominio, registrado, titular_cnpj) VALUES ($1, false, NULL)',
-        [dom('chi')],
-      );
-      consultarDominio.mockResolvedValue({ estado: 'livre' });
-      await descobrirDominio(e);
-      expect(consultarDominio.mock.calls.map((c) => c[0])).not.toContain(dom('chi'));
-    });
-
-    // TTL curto: registrado sem CNPJ segue indeterminado enquanto vale o cache.
-    it('cache de sem_titular mantém o resultado indeterminado', async () => {
-      const e = await empresa('IOTA LTDA', nome('IOTA'));
-      await query(
-        'INSERT INTO rdap_domain (dominio, registrado, titular_cnpj) VALUES ($1, true, NULL)',
-        [dom('iota')],
-      );
-      consultarDominio.mockResolvedValue({ estado: 'livre' }); // demais candidatos
-      const r = await descobrirDominio(e);
-      expect(r.status).toBe('indeterminado');
-      expect(consultarDominio.mock.calls.map((c) => c[0])).not.toContain(dom('iota'));
-      expect(await salvo(e.id)).toBeNull();
-    });
-
-    it('grava no cache o que consultou', async () => {
-      const e = await empresa('NUFF LTDA', nome('NUFF'));
-      consultarDominio.mockResolvedValueOnce({ estado: 'confirmado', titularCnpj: e.cnpj });
-      await descobrirDominio(e);
-      expect(await one('SELECT registrado, titular_cnpj FROM rdap_domain WHERE dominio = $1', [dom('nuff')]))
-        .toEqual({ registrado: true, titular_cnpj: e.cnpj });
-    });
+      .toEqual([dom('psi'), 'psi.com.br', dom('psi', 'ind.br'), dom('psi', 'agr.br')]);
   });
 });

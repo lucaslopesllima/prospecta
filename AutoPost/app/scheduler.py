@@ -61,10 +61,21 @@ async def _publish_post(conn, post) -> None:
     attempt = post["attempts"] + 1
     log.info("tenant=%s post=%s publicando (tentativa %d)", tenant_id, post_id, attempt)
 
-    media = db.sched_get_media(conn, post["media_id"]) if post["media_id"] else None
-    media_url = None
-    if media and settings.public_base_url:
-        media_url = f"{settings.public_base_url}/media/public/{auth.sign_media_token(media['id'])}"
+    media_rows = db.sched_get_post_media(conn, post_id)
+    media_items = [
+        social.PublishMedia(
+            path=media["path"],
+            mime=media["mime"],
+            url=(
+                f"{settings.public_base_url}/media/public/"
+                f"{auth.sign_media_token(media['id'])}"
+                if settings.public_base_url else None
+            ),
+        )
+        for media in media_rows
+    ]
+    media = media_rows[0] if media_rows else None
+    media_url = media_items[0].url if media_items else None
 
     errors: list[str] = []
     for target in db.sched_pending_targets(conn, post_id):
@@ -82,10 +93,12 @@ async def _publish_post(conn, post) -> None:
                 media_path=media["path"] if media else None,
                 media_mime=media["mime"] if media else None,
                 media_url=media_url,
+                media_items=media_items,
+                placement=target["placement"],
             )
             db.sched_finish_target(conn, target["id"], "published", external_id, None)
             db.add_history(conn, tenant_id, post_id, target["social_account_id"],
-                           attempt, "published", None)
+                           attempt, "published", None, target["placement"])
         except social.TokenExpired as e:
             if account is not None:
                 db.set_account_status(conn, tenant_id, account["id"], "expired")
@@ -93,13 +106,13 @@ async def _publish_post(conn, post) -> None:
             errors.append(err)
             db.sched_finish_target(conn, target["id"], "failed", None, err)
             db.add_history(conn, tenant_id, post_id, target["social_account_id"],
-                           attempt, "failed", err)
+                           attempt, "failed", err, target["placement"])
         except Exception as e:
             err = str(e)[:500]
             errors.append(err)
             db.sched_finish_target(conn, target["id"], "failed", None, err)
             db.add_history(conn, tenant_id, post_id, target["social_account_id"],
-                           attempt, "failed", err)
+                           attempt, "failed", err, target["placement"])
             log.warning("tenant=%s post=%s alvo=%s falhou: %s",
                         tenant_id, post_id, target["id"], err)
 

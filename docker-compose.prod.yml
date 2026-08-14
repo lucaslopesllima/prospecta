@@ -71,6 +71,15 @@ services:
       retries: 20
     restart: unless-stopped
 
+  lightpanda:
+    image: lightpanda/browser:nightly@sha256:b4f155389e172bbc82c3dcbc2282e64db3e2160b27871ef1c53dbc28f7e96887
+    command: ["lightpanda", "serve", "--host", "0.0.0.0", "--port", "9222", "--cdp-max-connections", "4", "--user-agent-suffix", "Rovva/1.0"]
+    environment:
+      LIGHTPANDA_DISABLE_TELEMETRY: "true"
+    expose:
+      - "9222"
+    restart: unless-stopped
+
   app:
     build:
       context: .
@@ -79,6 +88,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      lightpanda:
+        condition: service_started
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}@db:5432/${POSTGRES_DB:-rs}
       JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET no .env}
@@ -88,6 +99,7 @@ services:
       # que burlaria o rate-limit por IP). Ver server/src/config.ts.
       TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
       RECOMMEND_WORK_MEM: ${RECOMMEND_WORK_MEM:-64MB}
+      LIGHTPANDA_CDP_URL: ws://lightpanda:9222
       AUTH_RATE_LIMIT_MAX: ${AUTH_RATE_LIMIT_MAX:-10}
       AUTH_RATE_LIMIT_WINDOW: ${AUTH_RATE_LIMIT_WINDOW:-1 minute}
       # Cadastro público (POST /api/auth/register). Produção sobe fechado: só
@@ -150,6 +162,8 @@ services:
       # Precisa bater EXATAMENTE com o Redirect URI cadastrado no app da Meta:
       # ${AUTOPOST_BASE_URL}/accounts/meta/callback
       PUBLIC_BASE_URL: ${AUTOPOST_BASE_URL:-https://autopost.${DOMAIN}}
+      MCP_RATE_LIMIT_PER_MINUTE: ${AUTOPOST_MCP_RATE_LIMIT_PER_MINUTE:-120}
+      MCP_MAX_PROMPT_CHARS: ${AUTOPOST_MCP_MAX_PROMPT_CHARS:-12000}
     volumes:
       - autopost_data:/srv/data
     # Não publica porta no host: só o nginx alcança (autopost:8000).

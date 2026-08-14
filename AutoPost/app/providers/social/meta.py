@@ -8,13 +8,14 @@ salvas como contas separadas (provider='instagram').
 As credenciais do app (App ID/Secret) vêm do tenant, não do ambiente — ver
 app/routes/credentials.py.
 """
+import json
 import mimetypes
 from urllib.parse import urlencode
 
 import httpx
 
 from app.config import settings
-from app.providers.social import AppCredentials, PublishError, TokenExpired
+from app.providers.social import AppCredentials, PublishError, PublishMedia, TokenExpired
 
 # Cada versão da Graph API vive ~2 anos. v24.0 (out/2025) expira em fev/2028;
 # a v21.0 que estava aqui morre em jan/2027. Revise antes disso:
@@ -134,15 +135,78 @@ class FacebookProvider:
         self, external_id: str, access_token: str, texto: str,
         media_path: str | None = None, media_mime: str | None = None,
         media_url: str | None = None,
+        media_items: list[PublishMedia] | None = None,
+        placement: str = "feed",
     ) -> str:
+        items = media_items or (
+            [PublishMedia(media_path, media_mime, media_url)]
+            if media_path and media_mime else []
+        )
+        if placement == "story":
+            items = items[:1]
         async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-            if media_path and media_mime and media_mime.startswith("image/"):
-                ext = mimetypes.guess_extension(media_mime) or ".jpg"
-                with open(media_path, "rb") as f:
+            if placement == "story":
+                if not items or not items[0].mime.startswith("image/"):
+                    raise PublishError("Story do Facebook exige imagem")
+                item = items[0]
+                if item.url:
+                    r = await client.post(
+                        f"{GRAPH}/{external_id}/photos",
+                        data={"url": item.url, "published": "false", "access_token": access_token},
+                    )
+                else:
+                    ext = mimetypes.guess_extension(item.mime) or ".jpg"
+                    with open(item.path, "rb") as f:
+                        r = await client.post(
+                            f"{GRAPH}/{external_id}/photos",
+                            data={"published": "false", "access_token": access_token},
+                            files={"source": (f"media{ext}", f, item.mime)},
+                        )
+                photo = r.json()
+                _raise_for_graph_error(photo)
+                photo_id = str(photo["id"])
+                r = await client.post(
+                    f"{GRAPH}/{external_id}/photo_stories",
+                    data={"photo_id": photo_id, "access_token": access_token},
+                )
+                data = r.json()
+                _raise_for_graph_error(data)
+                return str(data.get("post_id") or data.get("id") or photo_id)
+            if len(items) > 1:
+                if any(not item.mime.startswith("image/") for item in items):
+                    raise PublishError("carrossel do Facebook aceita somente imagens")
+                photo_ids: list[str] = []
+                for item in items:
+                    if item.url:
+                        r = await client.post(
+                            f"{GRAPH}/{external_id}/photos",
+                            data={"url": item.url, "published": "false", "access_token": access_token},
+                        )
+                    else:
+                        ext = mimetypes.guess_extension(item.mime) or ".jpg"
+                        with open(item.path, "rb") as f:
+                            r = await client.post(
+                                f"{GRAPH}/{external_id}/photos",
+                                data={"published": "false", "access_token": access_token},
+                                files={"source": (f"media{ext}", f, item.mime)},
+                            )
+                    data = r.json()
+                    _raise_for_graph_error(data)
+                    photo_ids.append(str(data["id"]))
+                payload = {"message": texto, "access_token": access_token}
+                payload.update({
+                    f"attached_media[{i}]": json.dumps({"media_fbid": photo_id})
+                    for i, photo_id in enumerate(photo_ids)
+                })
+                r = await client.post(f"{GRAPH}/{external_id}/feed", data=payload)
+            elif items and items[0].mime.startswith("image/"):
+                item = items[0]
+                ext = mimetypes.guess_extension(item.mime) or ".jpg"
+                with open(item.path, "rb") as f:
                     r = await client.post(
                         f"{GRAPH}/{external_id}/photos",
                         data={"caption": texto, "access_token": access_token},
-                        files={"source": (f"media{ext}", f, media_mime)},
+                        files={"source": (f"media{ext}", f, item.mime)},
                     )
             else:
                 r = await client.post(
@@ -168,28 +232,69 @@ class InstagramProvider:
         self, external_id: str, access_token: str, texto: str,
         media_path: str | None = None, media_mime: str | None = None,
         media_url: str | None = None,
+        media_items: list[PublishMedia] | None = None,
+        placement: str = "feed",
     ) -> str:
+        items = media_items or (
+            [PublishMedia(media_path, media_mime, media_url)]
+            if media_path and media_mime else []
+        )
+        if placement == "story":
+            items = items[:1]
         # O Instagram aceita só JPEG (PNG, MPO e JPS são recusados). Barrar aqui
         # troca um erro obscuro da Graph API por uma mensagem acionável.
-        if media_mime and media_mime not in ("image/jpeg", "image/jpg"):
+        invalid_mime = next(
+            (item.mime for item in items if item.mime not in ("image/jpeg", "image/jpg")), None
+        )
+        if invalid_mime:
             raise PublishError(
-                f"Instagram aceita apenas imagem JPEG — o arquivo enviado é {media_mime}"
+                f"Instagram aceita apenas imagem JPEG — o arquivo enviado é {invalid_mime}"
             )
         # Limitação da Graph API: o Instagram só aceita mídia por URL pública.
-        if not media_url:
+        if not items or any(not item.url for item in items):
             raise PublishError(
                 "Instagram exige imagem com URL pública — configure PUBLIC_BASE_URL"
                 " e anexe uma imagem ao post"
             )
         async with httpx.AsyncClient(timeout=60.0) as client:
-            r = await client.post(f"{GRAPH}/{external_id}/media", data={
-                "image_url": media_url,
-                "caption": texto,
-                "access_token": access_token,
-            })
-            data = r.json()
-            _raise_for_graph_error(data)
-            creation_id = data["id"]
+            if placement == "story":
+                r = await client.post(f"{GRAPH}/{external_id}/media", data={
+                    "image_url": items[0].url,
+                    "media_type": "STORIES",
+                    "access_token": access_token,
+                })
+                data = r.json()
+                _raise_for_graph_error(data)
+                creation_id = data["id"]
+            elif len(items) > 1:
+                children: list[str] = []
+                for item in items:
+                    r = await client.post(f"{GRAPH}/{external_id}/media", data={
+                        "image_url": item.url,
+                        "is_carousel_item": "true",
+                        "access_token": access_token,
+                    })
+                    data = r.json()
+                    _raise_for_graph_error(data)
+                    children.append(str(data["id"]))
+                r = await client.post(f"{GRAPH}/{external_id}/media", data={
+                    "media_type": "CAROUSEL",
+                    "children": ",".join(children),
+                    "caption": texto,
+                    "access_token": access_token,
+                })
+                data = r.json()
+                _raise_for_graph_error(data)
+                creation_id = data["id"]
+            else:
+                r = await client.post(f"{GRAPH}/{external_id}/media", data={
+                    "image_url": items[0].url,
+                    "caption": texto,
+                    "access_token": access_token,
+                })
+                data = r.json()
+                _raise_for_graph_error(data)
+                creation_id = data["id"]
 
             r = await client.post(f"{GRAPH}/{external_id}/media_publish", data={
                 "creation_id": creation_id,

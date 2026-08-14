@@ -40,6 +40,13 @@ class AppCredentials:
     extra: dict
 
 
+@dataclass(frozen=True)
+class PublishMedia:
+    path: str
+    mime: str
+    url: str | None = None
+
+
 # grupo -> provedores que aquele OAuth pode conectar
 GROUPS: dict[str, tuple[str, ...]] = {
     "meta": ("facebook", "instagram"),
@@ -68,6 +75,8 @@ class SocialProvider(Protocol):
         media_path: str | None = None,
         media_mime: str | None = None,
         media_url: str | None = None,
+        media_items: list[PublishMedia] | None = None,
+        placement: str = "feed",
     ) -> str:
         """Publica e retorna o id externo do post."""
         ...

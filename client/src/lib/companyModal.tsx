@@ -231,16 +231,18 @@ export function CompanyModal({ companyId, onClose }: { companyId: number; onClos
 
   const buscarSite = (): void => {
     setSitePend(true);
-    const forcar = site !== null ? '?forcar=true' : '';
-    void api.get<{ dominio: SiteBusca }>(`/api/companies/${companyId}/dominio${forcar}`)
+    void api.get<{ dominio: SiteBusca }>(`/api/companies/${companyId}/dominio`)
       .then((r) => setSite(r.dominio))
       .catch((e) => toast.error(e instanceof ApiError ? e.message : 'Falha ao buscar o site'))
       .finally(() => setSitePend(false));
   };
 
   const buscarContatos = (): void => {
+    if (!site?.site_url) return;
     setContatosPend(true);
-    void api.get<BuscaContatosSite>(`/api/companies/${companyId}/contatos-site`)
+    void api.get<BuscaContatosSite>(
+      `/api/companies/${companyId}/contatos-site?site_url=${encodeURIComponent(site.site_url)}`,
+    )
       .then(setContatos)
       .catch((e) => toast.error(e instanceof ApiError ? e.message : 'Falha ao ler o site'))
       .finally(() => setContatosPend(false));

@@ -45,7 +45,7 @@ function ipPrivado(addr: string): boolean {
       || v6.startsWith('fe80');
 }
 
-async function hostSeguro(host: string): Promise<boolean> {
+export async function hostSeguro(host: string): Promise<boolean> {
   try {
     const enderecos = await lookup(host, { all: true });
     return enderecos.length > 0 && enderecos.every((e) => !ipPrivado(e.address));

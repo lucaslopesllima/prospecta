@@ -23,7 +23,7 @@ describe('GET /api/companies/:id/dominio', () => {
     const id = await makeCompany({ razao: 'ACME LTDA', fantasia: 'ACME' });
     const achado = {
       dominio: 'acme.com.br', site_url: 'https://www.acme.com.br/', site_status: 'vivo',
-      status: 'achou', fonte: 'registrobr', confianca: 100, cached: false,
+      status: 'achou', fonte: 'registrobr', confianca: 100,
     };
     descobrirDominio.mockResolvedValueOnce(achado);
     const r = await buscar(id);
@@ -39,7 +39,7 @@ describe('GET /api/companies/:id/dominio', () => {
     const id = await makeCompany();
     descobrirDominio.mockResolvedValueOnce({
       dominio: null, site_url: null, site_status: null,
-      status: 'nao_encontrado', fonte: 'registrobr', confianca: 0, cached: true,
+      status: 'nao_encontrado', fonte: 'registrobr', confianca: 0,
     });
     const r = await buscar(id);
     expect(r.statusCode).toBe(200);

@@ -69,17 +69,32 @@ services:
     # não publicado por padrão (porta do host pode estar em uso). Descomente p/ inspecionar:
     # ports: ["5432:5432"]
 
+  lightpanda:
+    image: lightpanda/browser:nightly@sha256:b4f155389e172bbc82c3dcbc2282e64db3e2160b27871ef1c53dbc28f7e96887
+    command: ["lightpanda", "serve", "--host", "0.0.0.0", "--port", "9222", "--cdp-max-connections", "4", "--user-agent-suffix", "Rovva/1.0"]
+    environment:
+      LIGHTPANDA_DISABLE_TELEMETRY: "true"
+    expose:
+      - "9222"
+    restart: unless-stopped
+
   app:
-    image: node:24-slim
+    build:
+      context: .
+      dockerfile: server/Dockerfile.dev
+    image: rovva-app-dev
     working_dir: /app
     depends_on:
       db:
         condition: service_healthy
+      lightpanda:
+        condition: service_started
     environment:
       DATABASE_URL: postgres://postgres:postgres@db:5432/rs
       JWT_SECRET: dev-secret
       PORT: "8080"
       RECOMMEND_WORK_MEM: 64MB
+      LIGHTPANDA_CDP_URL: ws://lightpanda:9222
       # WhatsApp (Evolution API). URL interna do container + key global. O webhook
       # aponta de volta pro próprio app; o token valida o POST de entrada.
       EVOLUTION_API_URL: http://evolution:8080

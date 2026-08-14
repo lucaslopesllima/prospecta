@@ -2,17 +2,20 @@
 //
 // NADA daqui é persistido. O resultado vai para a tela, o representante escolhe
 // quais linhas viram contato e só essas entram no banco pelo POST /api/contacts
-// de sempre. O único dado que a descoberta grava é o site em si, e quem grava é
-// enriquecimento.ts (company_dominio) — não este módulo.
+// de sempre. Descoberta do site também não grava nada; URL segue do modal para
+// rota de raspagem na própria requisição.
 //
-// Sem parser de DOM (o servidor não tem dependência de HTML) e sem navegador
-// headless. O HTML é linearizado em linhas de texto, com os links de contato
+// O caminho rápido continua sem parser de DOM. Quando o HTML é só a casca de uma
+// SPA ou o servidor barra o fetch simples, Lightpanda renderiza primeiro e
+// Chromium cobre incompatibilidade/WAF. HTML resultante entra no mesmo extrator.
+// O HTML é linearizado em linhas de texto, com os links de contato
 // (mailto:/tel:/wa.me) convertidos em marcadores inline, e os valores são
 // agrupados por VIZINHANÇA nessa linearização. É o que torna a raspagem genérica:
 // não depende de classe CSS, de CMS nem de dado estruturado — depende só de que
 // o rótulo fique perto do valor, que é como página de contato é escrita em
 // qualquer site. Medido em coocam.com.br: 1 e-mail na home, 21 em /contato.
 import { buscarPagina } from './site.ts';
+import { buscarPaginaRenderizada, type MotorRenderizacao } from './renderizar_site.ts';
 
 export interface ContatoSite {
   nome: string | null;      // 'Silvio Zanon'        (null em contato institucional)
@@ -124,14 +127,15 @@ export function normalizarEmail(bruto: string): string | null {
   return e;
 }
 
-// Telefone brasileiro em dígitos, sem DDI. Rejeita o que a regex pesca por
-// acidente: CPF/CNPJ solto, código de rastreio, 0800 de template.
+// Telefone brasileiro em dígitos, sem DDI. Inclui números nacionais de serviço
+// (0800/0300/0500/0900), comuns em páginas institucionais.
 export function normalizarFone(bruto: string): string | null {
   let d = bruto.replace(/\D/g, '');
   if (d.length === 12 || d.length === 13) {
     if (!d.startsWith('55')) return null; // número estrangeiro: não é para cá
     d = d.slice(2);
   }
+  if (/^0(?:300|500|800|900)\d{7}$/.test(d)) return d;
   if (d.length !== 10 && d.length !== 11) return null;
   const ddd = Number(d.slice(0, 2));
   if (ddd < 11 || ddd > 99) return null;
@@ -147,7 +151,7 @@ interface Valor { tipo: 'email' | 'telefone' | 'whatsapp'; valor: string }
 const RE_EMAIL_TEXTO = /[a-z0-9][a-z0-9._%+-]{0,62}@[a-z0-9][a-z0-9.-]{0,61}\.[a-z]{2,}/gi;
 // (?<!\d) e (?!\d) são o que impede casar DENTRO de uma sequência maior: sem
 // eles, um CPF de 11 dígitos ou um WhatsApp de 13 viravam "telefone" truncado.
-const RE_FONE_TEXTO = /(?<!\d)(?:\+?55[\s.-]?)?\(?\d{2}\)?[\s.-]?\d{4,5}[\s.-]?\d{4}(?!\d)/g;
+const RE_FONE_TEXTO = /(?<!\d)(?:\+?55[\s.-]?)?(?:0(?:300|500|800|900)[\s.-]?\d{3}[\s.-]?\d{4}|\(?\d{2}\)?[\s.-]?\d{4,5}[\s.-]?\d{4})(?!\d)/g;
 const CTX_WHATS = /(whats|zap|wpp|celular|\bcel\b|m[óo]vel)/i;
 const CTX_FONE = /(fone|tel|telefone|contato|whats|zap|wpp|celular|\bcel\b|ligue|central|atendimento|comercial)/i;
 // Obfuscação comum no rodapé para escapar de robô de spam.
@@ -419,11 +423,71 @@ const BLOQUEIO = new Set([401, 403, 405, 406, 429]);
 const legivel = (p: { html: string; status: number } | null): boolean =>
   p != null && p.status === 200 && p.html !== '';
 
+// Casca comum de Vue/React/Angular: quase nenhum texto útil, raiz vazia e scripts.
+// Evita abrir Chromium para todo site estático que simplesmente não publica contato.
+export function pareceSPA(html: string): boolean {
+  const raiz = /<(div|main)\b[^>]*\bid=["'](?:app|root|__next|__nuxt)["'][^>]*>\s*<\/\1>/i.test(html)
+    || /<(?:app-root|app-shell)\b/i.test(html);
+  return raiz && /<script\b[^>]*\bsrc=["']/i.test(html);
+}
+
+type Pagina = { url: string; html: string; status: number; bloqueado?: boolean };
+
+async function rasparRenderizado(siteUrl: string, motor: MotorRenderizacao): Promise<BuscaContatos | null> {
+  const inicio = Date.now();
+  const home = await buscarPaginaRenderizada(siteUrl, undefined, motor);
+  if (!home) return null;
+  if (home.bloqueado) return { contatos: [], paginas: [], bloqueado: true };
+  if (home.status >= 500) return { contatos: [], paginas: [], bloqueado: false };
+  if (home.html === '') return null;
+
+  const paginas: Pagina[] = [home];
+  const fila: string[] = [];
+  const enfileirar = (u: string): void => {
+    if (u !== home.url && !fila.includes(u)) fila.push(u);
+  };
+  for (const l of linksCandidatos(home.html, home.url)) enfileirar(l);
+  for (const c of CAMINHOS_COMUNS) {
+    try { enfileirar(new URL(c, home.url).toString()); } catch { /* base estranha */ }
+  }
+
+  for (const alvo of fila) {
+    if (paginas.length >= MAX_PAGINAS || Date.now() - inicio > PRAZO_MS) break;
+    const p = await buscarPaginaRenderizada(alvo, home.url, motor);
+    if (!p || p.bloqueado || p.html === '' || paginas.some((x) => x.url === p.url)) continue;
+    // SPAs em S3/CloudFront frequentemente devolvem 404 junto do index.html;
+    // Chromium ainda executa o app e produz página válida, então status não veta.
+    paginas.push(p);
+  }
+
+  const contatos = mesclar(paginas.flatMap((p) => extrairContatos(p.html, p.url)))
+    .map((c, i) => ({ c, i }))
+    .sort((a, b) => peso(a.c) - peso(b.c) || a.i - b.i)
+    .slice(0, MAX_CONTATOS)
+    .map(({ c }) => c);
+  return { contatos, paginas: paginas.map((p) => p.url), bloqueado: false };
+}
+
+async function rasparComFallback(siteUrl: string): Promise<BuscaContatos | null> {
+  const leve = await rasparRenderizado(siteUrl, 'lightpanda');
+  if (leve?.contatos.length) return leve;
+  return (await rasparRenderizado(siteUrl, 'chromium')) ?? leve;
+}
+
 export async function buscarContatosNoSite(siteUrl: string): Promise<BuscaContatos> {
   const inicio = Date.now();
   const home = await buscarPagina(siteUrl);
   if (home === null || !legivel(home)) {
-    return { contatos: [], paginas: [], bloqueado: home !== null && BLOQUEIO.has(home.status) };
+    const bloqueado = home !== null && BLOQUEIO.has(home.status);
+    if (bloqueado) {
+      const renderizado = await rasparComFallback(siteUrl);
+      if (renderizado) return renderizado;
+    }
+    return { contatos: [], paginas: [], bloqueado };
+  }
+  if (pareceSPA(home.html)) {
+    const renderizado = await rasparComFallback(siteUrl);
+    if (renderizado) return renderizado;
   }
 
   const paginas = [home];
@@ -452,5 +516,6 @@ export async function buscarContatosNoSite(siteUrl: string): Promise<BuscaContat
     .slice(0, MAX_CONTATOS)
     .map(({ c }) => c);
 
-  return { contatos, paginas: paginas.map((p) => p.url), bloqueado: false };
+  const estatico = { contatos, paginas: paginas.map((p) => p.url), bloqueado: false };
+  return estatico;
 }

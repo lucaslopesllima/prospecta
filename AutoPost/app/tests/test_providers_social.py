@@ -7,7 +7,9 @@ import httpx
 import pytest
 
 from app.providers import social
-from app.providers.social import AppCredentials, PublishError, TokenExpired, linkedin, tiktok
+from app.providers.social import (
+    AppCredentials, PublishError, PublishMedia, TokenExpired, linkedin, tiktok,
+)
 
 CREDS = AppCredentials(client_id="id-do-app", client_secret="segredo", extra={})
 
@@ -120,6 +122,113 @@ async def test_instagram_recusa_png():
             "ig-id", "tok", "texto", media_path="/tmp/x.png",
             media_mime="image/png", media_url="https://ex.com/x.png",
         )
+
+
+class _GraphResponse:
+    def __init__(self, data):
+        self.data = data
+
+    def json(self):
+        return self.data
+
+
+class _GraphClient:
+    def __init__(self, responses, calls):
+        self.responses = iter(responses)
+        self.calls = calls
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        return None
+
+    async def post(self, url, **kwargs):
+        self.calls.append((url, kwargs.get("data", {})))
+        return _GraphResponse(next(self.responses))
+
+
+@pytest.mark.anyio
+async def test_instagram_publica_carrossel(monkeypatch):
+    from app.providers.social import meta
+
+    calls = []
+    monkeypatch.setattr(
+        meta.httpx, "AsyncClient",
+        lambda **kw: _GraphClient(
+            [{"id": "c1"}, {"id": "c2"}, {"id": "parent"}, {"id": "post"}], calls
+        ),
+    )
+    media = [
+        PublishMedia("/tmp/1.jpg", "image/jpeg", "https://x/1.jpg"),
+        PublishMedia("/tmp/2.jpg", "image/jpeg", "https://x/2.jpg"),
+    ]
+    result = await meta.InstagramProvider().publish(
+        "ig", "tok", "legenda", media_items=media
+    )
+    assert result == "post"
+    assert calls[0][1]["is_carousel_item"] == "true"
+    assert calls[2][1]["media_type"] == "CAROUSEL"
+    assert calls[2][1]["children"] == "c1,c2"
+
+
+@pytest.mark.anyio
+async def test_instagram_publica_story_com_capa(monkeypatch):
+    from app.providers.social import meta
+
+    calls = []
+    monkeypatch.setattr(
+        meta.httpx, "AsyncClient",
+        lambda **kw: _GraphClient([{"id": "story-container"}, {"id": "story"}], calls),
+    )
+    result = await meta.InstagramProvider().publish(
+        "ig", "tok", "legenda",
+        media_items=[PublishMedia("/tmp/1.jpg", "image/jpeg", "https://x/1.jpg")],
+        placement="story",
+    )
+    assert result == "story"
+    assert calls[0][1]["media_type"] == "STORIES"
+    assert "caption" not in calls[0][1]
+
+
+@pytest.mark.anyio
+async def test_facebook_publica_carrossel(monkeypatch):
+    from app.providers.social import meta
+
+    calls = []
+    monkeypatch.setattr(
+        meta.httpx, "AsyncClient",
+        lambda **kw: _GraphClient([{"id": "p1"}, {"id": "p2"}, {"id": "feed"}], calls),
+    )
+    result = await meta.FacebookProvider().publish(
+        "page", "tok", "legenda",
+        media_items=[
+            PublishMedia("/tmp/1.jpg", "image/jpeg", "https://x/1.jpg"),
+            PublishMedia("/tmp/2.jpg", "image/jpeg", "https://x/2.jpg"),
+        ],
+    )
+    assert result == "feed"
+    assert calls[0][1]["published"] == "false"
+    assert "attached_media[0]" in calls[2][1]
+
+
+@pytest.mark.anyio
+async def test_facebook_publica_story(monkeypatch):
+    from app.providers.social import meta
+
+    calls = []
+    monkeypatch.setattr(
+        meta.httpx, "AsyncClient",
+        lambda **kw: _GraphClient([{"id": "photo"}, {"post_id": "story"}], calls),
+    )
+    result = await meta.FacebookProvider().publish(
+        "page", "tok", "legenda",
+        media_items=[PublishMedia("/tmp/1.jpg", "image/jpeg", "https://x/1.jpg")],
+        placement="story",
+    )
+    assert result == "story"
+    assert calls[1][0].endswith("/page/photo_stories")
+    assert calls[1][1]["photo_id"] == "photo"
 
 
 def _status_client(monkeypatch, respostas):

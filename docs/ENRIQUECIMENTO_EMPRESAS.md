@@ -69,10 +69,9 @@ Medido contra o serviço real em 2026-08-03, ao implementar `server/src/rdap.ts`
   a resposta continua **200 e completa, só que sem o campo `publicIds`** — degrada
   calado, sem 429 e sem cabeçalho de rate limit. O mesmo domínio consultado com 3s de
   intervalo devolveu o CNPJ numa vez e omitiu na seguinte.
-  **Armadilha:** ler "sem `publicIds`" como "não é desta empresa" gera falso negativo, e
-  cachear esse falso negativo marca a empresa como "sem site" por semanas. Por isso o
-  resultado tem três estados, e só `livre`/`confirmado` concluem algo — `sem_titular`
-  devolve `indeterminado` e **não** é gravado.
+  **Armadilha:** ler "sem `publicIds`" como "não é desta empresa" gera falso negativo.
+  Por isso o resultado tem três estados, e só `livre`/`confirmado` concluem algo —
+  `sem_titular` devolve `indeterminado`. Nenhum resultado é persistido.
 
 - **Paralelismo derruba a conexão** (ECONNRESET, sem 429): 40 consultas simultâneas
   devolveram 5 resets. Consulta é sequencial, com throttle global.
@@ -196,7 +195,7 @@ endpoint de *find similar companies*, ótimo para lookalike de ICP).
 - **Fila de jobs** (pg-boss ou tabela `enrichment_jobs` + worker). Enriquecimento é lento
   e falha com frequência; não pode ser síncrono no request.
 
-- **Cache por domínio, não por CNPJ** — matriz e filiais compartilham o mesmo site.
+- **Sem cache na descoberta atual** — cada solicitação consulta fontes novamente.
 
 - **Tiering de custo**:
   - grátis para todos: Maps + crawl do site próprio;
@@ -227,10 +226,11 @@ endpoint de *find similar companies*, ótimo para lookalike de ICP).
 
 ## 5. Ordem de implementação recomendada
 
-1. ~~**WHOIS registro.br + resolução do site**~~ — **feito** (migrações
-   `076_company_dominio.sql` e `077_company_site.sql`; `server/src/rdap.ts`,
+1. ~~**WHOIS registro.br + resolução do site**~~ — **feito** (`server/src/rdap.ts`,
    `site.ts` e `enriquecimento.ts`; `GET /api/companies/:id/dominio`; botão
-   "buscar site" no modal da empresa). Limites da fonte em §2.4.
+   "buscar site" no modal da empresa). Limites da fonte em §2.4. Nenhum
+   resultado é cacheado: cada clique repete consultas RDAP e validação HTTP.
+   Migração `078_drop_domain_cache.sql` remove tabelas antigas de cache.
 
    Ponto em aberto: e-mail de domínio próprio **fora do .br** entra com
    `confianca = 70` e fonte `email_rfb`, porque o registro.br não cobre esses
@@ -257,8 +257,8 @@ endpoint de *find similar companies*, ótimo para lookalike de ICP).
    tela e só vira registro pelo `POST /api/contacts` do que o representante
    escolher. Boa parte do que sai é dado de pessoa física (nome + celular do
    gerente), e guardar apenas o escolhido mantém a coleta na medida do uso —
-   mesma linha da migração 076, que recusa o contato administrativo do RDAP.
-   O único dado gravado continua sendo o site (`company_dominio.site_url`).
+   mesma linha adotada na descoberta, que também não persiste resultado.
+   URL encontrada segue diretamente do modal para rota de contatos.
 
    Deixado de fora: `robots.txt`. Respeitá-lo seria coerente com o `User-Agent`
    identificado, mas muito site brasileiro atrás de WAF publica `Disallow: /`

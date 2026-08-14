@@ -4,11 +4,14 @@
 // que numa varredura ingênua virava o "telefone" 5555555555.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { buscarPagina } = vi.hoisted(() => ({ buscarPagina: vi.fn() }));
+const { buscarPagina, buscarPaginaRenderizada } = vi.hoisted(() => ({
+  buscarPagina: vi.fn(), buscarPaginaRenderizada: vi.fn(),
+}));
 vi.mock('../src/site.ts', () => ({ buscarPagina }));
+vi.mock('../src/renderizar_site.ts', () => ({ buscarPaginaRenderizada }));
 
 const {
-  buscarContatosNoSite, extrairContatos, linksCandidatos, normalizarEmail, normalizarFone,
+  buscarContatosNoSite, extrairContatos, linksCandidatos, normalizarEmail, normalizarFone, pareceSPA,
 } = await import('../src/contatos_site.ts');
 
 const ORIGEM = 'https://www.acme.com.br/contato';
@@ -22,6 +25,8 @@ describe('normalizarFone', () => {
     ['5549984070087', '49984070087'],       // wa.me com DDI
     ['55+49999812382', '49999812382'],      // '+' literal no meio, como o site serve
     ['(49) 9193-8900', '4991938900'],       // celular antigo de 8 dígitos ainda publicado
+    ['0800 025 8969', '08000258969'],
+    ['+55 0800 025 8969', '08000258969'],
   ])('%s -> %s', (bruto, esperado) => expect(normalizarFone(bruto)).toBe(esperado));
 
   it.each([
@@ -123,6 +128,11 @@ describe('extrairContatos', () => {
     expect(r[0]).toMatchObject({ telefone: '4935417000', whatsapp: '49999812382' });
   });
 
+  it('aceita 0800 publicado em link telefônico', () => {
+    const r = extrair('<p>Central <a href="tel:+5508000258969">0800 025 8969</a></p>');
+    expect(r).toEqual([expect.objectContaining({ rotulo: 'Central', telefone: '08000258969' })]);
+  });
+
   it('desofusca "(arroba)" e "(ponto)"', () => {
     const r = extrair('<p>Comercial</p><p>vendas (arroba) acme (ponto) com (ponto) br</p>');
     expect(r[0]!.email).toBe('vendas@acme.com.br');
@@ -194,7 +204,16 @@ describe('linksCandidatos', () => {
 
 describe('buscarContatosNoSite', () => {
   const pagina = (url: string, html: string, status = 200) => ({ url, html, status });
-  beforeEach(() => buscarPagina.mockReset());
+  beforeEach(() => {
+    buscarPagina.mockReset();
+    buscarPaginaRenderizada.mockReset();
+    buscarPaginaRenderizada.mockResolvedValue(null);
+  });
+
+  it('reconhece casca de SPA, sem confundir página estática', () => {
+    expect(pareceSPA('<div id="app"></div><script src="/app.js"></script>')).toBe(true);
+    expect(pareceSPA('<main><p>Site institucional</p></main><script src="/menu.js"></script>')).toBe(false);
+  });
 
   it('segue o link de contato e mescla o que achou nas duas páginas', async () => {
     buscarPagina.mockImplementation(async (u: string) => {
@@ -274,6 +293,45 @@ describe('buscarContatosNoSite', () => {
     expect(await buscarContatosNoSite('https://acme.com.br/'))
       .toEqual({ contatos: [], paginas: [], bloqueado: true });
     expect(buscarPagina).toHaveBeenCalledTimes(1);
+  });
+
+  it('WAF simples é recuperado pelo navegador, sem resolver CAPTCHA', async () => {
+    buscarPagina.mockResolvedValue(pagina('https://acme.com.br/', '<p>challenge</p>', 403));
+    buscarPaginaRenderizada.mockImplementation(async (u: string) => ({
+      ...pagina(u, '<p>Comercial</p><p>Fone: (49) 3541-7000</p>'), bloqueado: false,
+    }));
+    const r = await buscarContatosNoSite('https://acme.com.br/');
+    expect(r.bloqueado).toBe(false);
+    expect(r.contatos).toEqual([expect.objectContaining({ telefone: '4935417000' })]);
+  });
+
+  it('Lightpanda falha -> Chromium assume', async () => {
+    buscarPagina.mockResolvedValue(pagina('https://acme.com.br/', '<p>challenge</p>', 403));
+    buscarPaginaRenderizada.mockImplementation(async (u: string, _base: string | undefined, motor: string) =>
+      motor === 'lightpanda'
+        ? { ...pagina(u, '<p>Service Unavailable</p>', 503), bloqueado: false }
+        : { ...pagina(u, '<p>Comercial</p><p>Fone: (49) 3541-7000</p>'), bloqueado: false });
+    const r = await buscarContatosNoSite('https://acme.com.br/');
+    expect(r.contatos).toEqual([expect.objectContaining({ telefone: '4935417000' })]);
+    expect(buscarPaginaRenderizada.mock.calls.map((c) => c[2]).slice(0, 2)).toEqual(['lightpanda', 'chromium']);
+  });
+
+  it('SPA é renderizada e segue link criado pelo JavaScript', async () => {
+    const shell = '<div id="app"></div><script src="/app.js"></script>';
+    buscarPagina.mockImplementation(async (u: string) =>
+      u === 'https://acme.com.br/' ? pagina(u, shell) : pagina(u, shell, 404));
+    buscarPaginaRenderizada.mockImplementation(async (u: string) => {
+      if (u === 'https://acme.com.br/') {
+        return { ...pagina(u, '<a href="/contato">Contato</a>'), bloqueado: false };
+      }
+      if (u === 'https://acme.com.br/contato') {
+        return { ...pagina(u, '<p>Vendas</p><a href="mailto:vendas@acme.com.br">vendas</a>', 404), bloqueado: false };
+      }
+      return null;
+    });
+    const r = await buscarContatosNoSite('https://acme.com.br/');
+    expect(r.contatos).toEqual([expect.objectContaining({ email: 'vendas@acme.com.br' })]);
+    expect(r.paginas).toContain('https://acme.com.br/contato');
   });
 
   it('página interna que responde 404 é ignorada, sem marcar bloqueio', async () => {

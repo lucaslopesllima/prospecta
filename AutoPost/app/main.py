@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app import db, scheduler
+from app import db, mcp_server, scheduler
 from app.config import settings
 from app.routes import accounts, ai, auth_routes, credentials, posts, templates, uploads
 
@@ -40,10 +40,14 @@ async def lifespan(app: FastAPI):
         scheduler.catch_up(conn)
     finally:
         conn.close()
-    if not settings.disable_scheduler:
-        scheduler.start()
-    yield
-    scheduler.shutdown()
+    mcp_server.prepare_lifespan()
+    async with mcp_server.mcp.session_manager.run():
+        if not settings.disable_scheduler:
+            scheduler.start()
+        try:
+            yield
+        finally:
+            scheduler.shutdown()
 
 
 app = FastAPI(title="AutoPost", lifespan=lifespan)
@@ -86,3 +90,7 @@ def index():
         os.path.join(STATIC_DIR, "index.html"),
         headers={"Cache-Control": NO_CACHE},
     )
+
+
+# Catch-all por ultimo: preserva rotas HTTP acima e entrega /mcp sem redirect.
+app.mount("/", mcp_server.mcp_http_app, name="mcp")

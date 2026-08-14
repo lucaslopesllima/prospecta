@@ -25,6 +25,8 @@ class Settings:
         # Credenciais de app (Meta/TikTok/LinkedIn) NÃO vêm do ambiente: são por
         # tenant, na tabela social_credentials. Ver app/routes/credentials.py.
         self.public_base_url = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
+        self.mcp_rate_limit_per_minute = int(os.getenv("MCP_RATE_LIMIT_PER_MINUTE", "120"))
+        self.mcp_max_prompt_chars = int(os.getenv("MCP_MAX_PROMPT_CHARS", "12000"))
         # Usado nos testes para não subir o APScheduler
         self.disable_scheduler = os.getenv("DISABLE_SCHEDULER", "") == "1"
 

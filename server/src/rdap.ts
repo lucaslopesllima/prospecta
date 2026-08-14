@@ -1,5 +1,5 @@
-// Cliente RDAP do registro.br. Só HTTP, sem banco — o cache e a orquestração
-// ficam em enriquecimento.ts (mesma divisão de geocode.ts x routes/companies.ts).
+// Cliente RDAP do registro.br. Só HTTP, sem banco; orquestração fica em
+// enriquecimento.ts (mesma divisão de geocode.ts x routes/companies.ts).
 //
 // O registro.br NÃO tem busca reversa CNPJ -> domínios: /domains?entityHandle=...
 // responde 501 Not Implemented. /entity/<cnpj> devolve QUANTOS domínios o CNPJ
@@ -16,7 +16,7 @@ import { config } from './config.ts';
 // 'livre'       -> 404, domínio não registrado
 // 'confirmado'  -> registrado e o CNPJ do titular veio na resposta
 // 'sem_titular' -> registrado, mas SEM o CNPJ (ver censura abaixo) ou titular PF
-// null          -> indeterminado (timeout/5xx/rede): não concluir, não cachear
+// null          -> indeterminado (timeout/5xx/rede): não concluir
 export type ResultadoDominio =
   | { estado: 'livre' }
   | { estado: 'confirmado'; titularCnpj: string } // 14 dígitos, sem máscara
@@ -32,7 +32,7 @@ export type ResultadoDominio =
 //    Degrada calado: o mesmo domínio consultado com 3s de intervalo devolveu o
 //    CNPJ numa vez e omitiu na seguinte. É anti-coleta em massa, e é por isso
 //    que 'sem_titular' NÃO pode ser lido como "não é desta empresa" — seria
-//    falso negativo gravado no cache. Só 'livre' e 'confirmado' concluem algo.
+//    falso negativo. Só 'livre' e 'confirmado' concluem algo.
 const INTERVALO_MS = 700;
 let ultimaChamada = 0;
 async function throttle(): Promise<void> {
@@ -41,7 +41,7 @@ async function throttle(): Promise<void> {
   ultimaChamada = Date.now();
 }
 
-// null = indeterminado (rede/timeout/5xx) — o chamador não deve cachear.
+// null = indeterminado (rede/timeout/5xx).
 async function get(path: string): Promise<{ ok: true; json: unknown } | { ok: false; naoExiste: boolean }> {
   try {
     await throttle();

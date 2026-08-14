@@ -211,7 +211,7 @@ function postCard(p) {
     <p class="post-text">${esc(p.texto)}</p>
     ${p.last_error ? `<p class="card-error" title="${esc(p.last_error)}">${esc(p.last_error)}</p>` : ''}
     <footer class="card-foot">
-      ${p.media_id ? '<span class="chip">🖼 com mídia</span>' : ''}
+      ${p.media_id ? `<span class="chip">🖼 ${(p.media_ids ?? [p.media_id]).length} mídia(s)</span>` : ''}
       ${p.attempts ? `<span class="chip">${p.attempts} tentativa(s)</span>` : ''}
       <span class="spacer"></span>
       <button class="btn btn-ghost btn-sm" data-act="detalhe" data-id="${p.id}">Detalhes</button>
@@ -226,16 +226,17 @@ function postCard(p) {
 }
 
 function postForm(p = null) {
-  const opts = state.media.map((m) =>
-    `<option value="${m.id}" ${p?.media_id === m.id ? 'selected' : ''}>#${m.id} · ${m.mime}</option>`).join('');
+  const selecionadas = new Set(p?.media_ids ?? (p?.media_id ? [p.media_id] : []));
+  const opts = [...state.media].reverse().map((m) =>
+    `<option value="${m.id}" ${selecionadas.has(m.id) ? 'selected' : ''}>#${m.id} · ${m.mime}</option>`).join('');
   return `<label class="field">
       <span>Texto do post</span>
       <textarea id="post-texto" rows="7" placeholder="Escreva ou gere com IA…">${esc(p?.texto ?? '')}</textarea>
     </label>
     <div class="row">
       <label class="field grow">
-        <span>Mídia (opcional)</span>
-        <select id="post-media"><option value="">Sem mídia</option>${opts}</select>
+        <span>Mídias (opcional, até 10; ordem exibida)</span>
+        <select id="post-media" multiple size="5">${opts}</select>
       </label>
       <button class="btn btn-soft" type="button" data-act="gerar-ia">
         <svg viewBox="0 0 24 24"><path d="m12 3 2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/></svg>Gerar com IA
@@ -255,8 +256,8 @@ async function openPostForm(post) {
   $('[data-act="save"]', $('#modal-foot')).onclick = async () => {
     const texto = $('#post-texto').value.trim();
     if (!texto) return showFormError('#post-error', 'O texto não pode ficar vazio.');
-    const mediaVal = $('#post-media').value;
-    const body = { texto, media_id: mediaVal ? Number(mediaVal) : null };
+    const media_ids = [...$('#post-media').selectedOptions].map((o) => Number(o.value));
+    const body = { texto, media_ids };
     try {
       if (post) await api(`/posts/${post.id}`, { method: 'PUT', body });
       else await api('/posts', { method: 'POST', body });
@@ -352,6 +353,15 @@ async function openAgendar(postId) {
        <span>Publicar em</span>
        <div class="checks">${lista}</div>
      </div>
+     <div class="field">
+       <span>Formatos</span>
+       <div class="checks">
+         <label class="check"><input type="checkbox" name="placement" value="feed" checked>
+           <span class="check-box"></span><span class="check-label"><strong>Feed</strong></span></label>
+         <label class="check"><input type="checkbox" name="placement" value="story">
+           <span class="check-box"></span><span class="check-label"><strong>Story</strong><small>Facebook e Instagram</small></span></label>
+       </div>
+     </div>
      <p class="form-error" id="ag-error" hidden></p>`,
     `<button class="btn btn-ghost" data-act="cancel">Cancelar</button>
      <button class="btn btn-primary" data-act="ok">Agendar</button>`);
@@ -359,13 +369,15 @@ async function openAgendar(postId) {
   $('[data-act="cancel"]', $('#modal-foot')).onclick = closeModal;
   $('[data-act="ok"]', $('#modal-foot')).onclick = async () => {
     const quando = $('#ag-quando').value;
-    const ids = $$('.checks input:checked').map((i) => Number(i.value));
+    const ids = $$('.checks input:not([name="placement"]):checked').map((i) => Number(i.value));
+    const placements = $$('input[name="placement"]:checked').map((i) => i.value);
     if (!quando) return showFormError('#ag-error', 'Escolha a data e a hora.');
     if (!ids.length) return showFormError('#ag-error', 'Escolha ao menos uma conta.');
+    if (!placements.length) return showFormError('#ag-error', 'Escolha ao menos um formato.');
     try {
       await api(`/posts/${postId}/schedule`, {
         method: 'POST',
-        body: { scheduled_at: localInputToISO(quando), account_ids: ids },
+        body: { scheduled_at: localInputToISO(quando), account_ids: ids, placements },
       });
       closeModal();
       toast('Post agendado.');
@@ -384,7 +396,7 @@ async function openDetalhe(postId) {
     ? `<table class="table">
         <thead><tr><th>Conta</th><th>Status</th><th>ID externo</th></tr></thead>
         <tbody>${post.targets.map((t) => `<tr>
-          <td>${esc(nome(t.social_account_id))}</td>
+          <td>${esc(nome(t.social_account_id))} · ${esc(t.placement ?? 'feed')}</td>
           <td>${badge(t.status === 'pending' ? 'draft' : t.status === 'published' ? 'published' : 'failed')}</td>
           <td class="mono">${esc(t.external_post_id ?? '—')}</td>
         </tr>`).join('')}</tbody></table>`
