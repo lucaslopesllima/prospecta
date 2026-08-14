@@ -96,27 +96,26 @@ describe('descobrirDominio', () => {
   // O domínio do e-mail declarado na Receita é o único candidato que não é
   // palpite, então vai à frente de todos os derivados do nome.
   describe('domínio do e-mail da Receita', () => {
-    it('e-mail .br é primeira tentativa, antes da marca e do resto', async () => {
+    it('e-mail .br com site é usado antes do Registro.br', async () => {
       const e = await empresa('NOME QUE NAO VIRA DOMINIO LTDA', nome('NQNVD'), `vendas@${dom('mailbr')}`);
-      consultarDominio.mockResolvedValueOnce({ estado: 'confirmado', titularCnpj: e.cnpj });
 
-      expect((await descobrirDominio(e)).dominio).toBe(dom('mailbr'));
-      expect(consultarDominio).toHaveBeenCalledTimes(1);
-      expect(consultarDominio.mock.calls[0]![0]).toBe(dom('mailbr'));
+      expect(await descobrirDominio(e)).toMatchObject({
+        dominio: dom('mailbr'), fonte: 'email_rfb', confianca: 70,
+      });
+      expect(contarDominios).not.toHaveBeenCalled();
+      expect(consultarDominio).not.toHaveBeenCalled();
     });
 
-    it('sem nome fantasia, o e-mail é o primeiro candidato', async () => {
+    it('sem nome fantasia, e-mail com site não consulta Registro.br', async () => {
       const e = await empresa('NOME QUE NAO VIRA DOMINIO LTDA', null, `vendas@${dom('mailsf')}`);
-      consultarDominio.mockResolvedValueOnce({ estado: 'confirmado', titularCnpj: e.cnpj });
       expect((await descobrirDominio(e)).dominio).toBe(dom('mailsf'));
-      expect(consultarDominio.mock.calls[0]![0]).toBe(dom('mailsf'));
+      expect(consultarDominio).not.toHaveBeenCalled();
     });
 
-    it('e-mail corporativo ganha da marca quando os dois são confirmados', async () => {
+    it('e-mail corporativo ganha da marca sem consultar Registro.br', async () => {
       const e = await empresa('AMC TEXTIL LTDA', nome('COLCCI'), `joao@${dom('amctextil')}`);
-      consultarDominio.mockResolvedValue({ estado: 'confirmado', titularCnpj: e.cnpj });
       expect((await descobrirDominio(e)).dominio).toBe(dom('amctextil'));
-      expect(consultarDominio).toHaveBeenCalledTimes(1); // para no primeiro
+      expect(consultarDominio).not.toHaveBeenCalled();
     });
 
     it('provedor gratuito é ignorado, cai nos candidatos do nome', async () => {

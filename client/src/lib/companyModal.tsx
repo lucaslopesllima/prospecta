@@ -102,7 +102,7 @@ type SiteBusca = {
   site_url: string | null;
   site_status: 'vivo' | 'bloqueado' | 'sem_pagina' | 'sem_dns' | null;
   // 100 = CNPJ do titular confirmado no registro.br. 70 = domínio do e-mail que
-  // a empresa declarou à Receita, fora do .br, que o registro.br não verifica.
+  // empresa declarou à Receita e responde como site, sem confirmação dessa fonte.
   // 40 = site da MARCA que a empresa opera, registrado por outro CNPJ.
   confianca: number;
   fonte: string;

@@ -5,12 +5,10 @@
 // os ~29M de CNPJs da base é inviável; enriquece-se o que o representante abre.
 //
 // Estratégia, em ordem de custo crescente (para na primeira que resolve):
-//   1. contarDominios() — 1 consulta: CNPJ tem 0 domínios? encerra sem varrer.
-//   2. varredura        — domínio do e-mail da Receita primeiro (único candidato
-//                         que não é palpite), depois os derivados do nome; todos
-//                         confirmados pelo CNPJ do titular.
-//   3. e-mail fora do .br — o registro.br não cobre, então entra com confiança
-//                         menor e só se o site responder.
+//   1. domínio do e-mail da Receita — dado declarado pela empresa; se publica
+//      site, retorna sem depender do Registro.br.
+//   2. contarDominios() — 1 consulta: CNPJ tem 0 domínios? encerra sem varrer.
+//   3. varredura — palpites derivados do nome, confirmados pelo CNPJ do titular.
 import { one, query } from './db.ts';
 import { candidatosDominio, consultarDominio, contarDominios, dominioDeEmail } from './rdap.ts';
 import { resolverSite, type StatusSite } from './site.ts';
@@ -29,7 +27,7 @@ export interface DominioEmpresa {
   site_status: StatusSite | null;
   status: StatusDominio;
   // 'registrobr' -> domínio da própria empresa, confirmado pelo CNPJ raiz
-  // 'email_rfb'  -> domínio do e-mail declarado à Receita, fora do .br
+  // 'email_rfb'  -> domínio do e-mail declarado à Receita, com site acessível
   // 'marca'      -> domínio da MARCA que a empresa opera, de outro CNPJ
   fonte: string;
   confianca: number;
@@ -54,11 +52,9 @@ export interface EmpresaParaEnriquecer {
 // .com.br é esmagadoramente dominante, então TODOS os candidatos são testados
 // nele antes de qualquer outro TLD. ind.br/agr.br só para o candidato mais
 // provável (o 1º), e só se ainda sobrar orçamento de consultas.
-// O domínio do e-mail da Receita vem PRIMEIRO quando é .br: é o único candidato
-// que não é palpite. Fantasia e razão social vêm depois, pois são derivados do
-// nome. Fora do .br o registro.br não sabe responder (devolveria 404, que
-// viraria "domínio livre" incorretamente); ele é testado como site
-// antes da varredura, sem passar pelo registro.br.
+// Fantasia e razão social geram somente palpites para Registro.br. Domínio do
+// e-mail é resolvido antes, sem Registro.br; se não publicar site, .br entra
+// como candidato para confirmação de domínio registrado sem página.
 function dominiosAlvo(candidatos: string[], emailDom: string | null): string[] {
   const alvos = candidatos.map((c) => `${c}.com.br`);
   if (candidatos[0]) alvos.push(`${candidatos[0]}.ind.br`, `${candidatos[0]}.agr.br`);
@@ -66,9 +62,8 @@ function dominiosAlvo(candidatos: string[], emailDom: string | null): string[] {
   return [...new Set(lista)].slice(0, MAX_CONSULTAS);
 }
 
-// Confiança do domínio vindo do e-mail da Receita sem confirmação no registro.br
-// (o domínio não é .br). É o cadastro da própria empresa, mas ninguém provou que
-// o domínio é dela — pode ser do contador. A UI diferencia isso de 100.
+// Confiança do domínio vindo do e-mail da Receita sem confirmação no Registro.br.
+// É cadastro da própria empresa, mas pode ser do contador. UI diferencia de 100.
 const CONFIANCA_EMAIL = 70;
 
 // Domínio da MARCA que a empresa opera, registrado por outro CNPJ (a loja
@@ -123,13 +118,12 @@ export async function descobrirDominio(e: EmpresaParaEnriquecer): Promise<Domini
   const raiz = e.cnpj.slice(0, 8);
   const emailDom = dominioDeEmail(e.email);
 
-  // Último recurso, para e-mail de domínio próprio FORA do .br: o registro.br
-  // não cobre esses TLDs, então ninguém confirma a posse. Aceita mesmo assim —
-  // é o domínio que a empresa declarou à Receita — mas só se o site estiver de
-  // pé (domínio de contador desativado não vira "site da empresa") e com
-  // confiança menor, para a ficha poder dizer de onde veio.
+  // Domínio declarado no e-mail é melhor pista de site que um nome derivado.
+  // Consulta primeiro, inclusive .br: Registro.br confirma titularidade, mas
+  // não pode bloquear descoberta de site quando a titularidade divergir ou a
+  // resposta estiver censurada. Só aceita site de pé, com confiança menor.
   const porEmail = async (): Promise<DominioEmpresa | null> => {
-    if (!emailDom || emailDom.endsWith('.br')) return null;
+    if (!emailDom) return null;
     const site = await siteDoDominio(emailDom);
     if (site.status !== 'vivo' && site.status !== 'bloqueado') return null;
     return achou(emailDom, site, 'email_rfb', CONFIANCA_EMAIL);
@@ -162,10 +156,10 @@ export async function descobrirDominio(e: EmpresaParaEnriquecer): Promise<Domini
   const dominiosMarca = new Set(marcas.map((m) => `${m}.com.br`));
   const alvos = dominiosAlvo(candidatosDominio(e.razao_social, e.nome_fantasia), emailDom);
 
-  // E-mail corporativo fora do .br é sondado em paralelo à busca no registro.br.
-  // Sem confirmação possível nessa fonte, só entra se responder como site; se
-  // responder, mantém prioridade sobre os palpites de marca ou nome.
-  const emailForaBr = porEmail();
+  // E-mail corporativo é sondado antes de Registro.br. Se responder, evita
+  // consulta externa desnecessária e mantém prioridade sobre qualquer palpite.
+  const emailEncontrado = await porEmail();
+  if (emailEncontrado) return emailEncontrado;
 
   // 1. Portão: CNPJ sem domínio nenhum -> não há o que varrer. null (RDAP
   //    instável) cai na varredura, para não gravar falso negativo.
@@ -189,9 +183,6 @@ export async function descobrirDominio(e: EmpresaParaEnriquecer): Promise<Domini
   );
   const total = (estab?.n ?? 1) > 1 ? null : await contarDominios(e.cnpj);
   if (total === 0) {
-    // Zero domínios .br não exclui um domínio .com no e-mail do cadastro.
-    const email = await emailForaBr;
-    if (email) return email;
     // Nem exclui a MARCA: a loja franqueada de fantasia COLCCI não tem domínio
     // nenhum, e é justamente aí que o site da marca é a única pista. Custa até
     // 2 consultas, e só para empresa que tem fantasia.
@@ -212,8 +203,6 @@ export async function descobrirDominio(e: EmpresaParaEnriquecer): Promise<Domini
     if (titular === 'censurado') { indeterminado = true; continue; }
 
     if (titular && titular.slice(0, 8) === raiz) {
-      const email = await emailForaBr;
-      if (email) return email;
       const site = await siteDoDominio(dominio);
       return achou(dominio, site);
     }
@@ -221,9 +210,6 @@ export async function descobrirDominio(e: EmpresaParaEnriquecer): Promise<Domini
     // Titular de OUTRA raiz. Descartado, com uma exceção: o domínio da marca.
     if (titular && dominiosMarca.has(dominio)) marcaDeTerceiro ??= { dominio, titularCnpj: titular };
   }
-
-  const email = await emailForaBr;
-  if (email) return email;
 
   // Site da marca. Entra atrás de tudo que fala da empresa em si (domínio
   // próprio e do e-mail declarado). Confiança baixa e fonte 'marca' fazem
