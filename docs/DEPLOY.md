@@ -48,8 +48,9 @@ Na **1ª vez** (como root) o script:
    updates de segurança automáticos.
 2. Builda a imagem.
 3. Emite o **certificado TLS** (dummy → real via Let's Encrypt → reload).
-4. Sobe a stack, roda migrations no boot, espera o app *healthy* e confere o
-   `https://$DOMAIN/api/health`.
+4. Sobe a stack, roda migrations no boot, espera o app *healthy*, reinicia o
+   nginx para resolver o IP novo do container e exige HTTP 200 em
+   `https://app.$DOMAIN/api/health`.
 
 Nas **execuções seguintes** ele detecta firewall + cert já prontos e pula essas
 etapas — só `git pull` + build + up + health.

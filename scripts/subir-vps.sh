@@ -187,6 +187,6 @@ REMOTE
 
 echo ""
 echo "==> concluído. Próximos passos:"
-echo "    - conferir: https://SEU_DOMINIO/api/health"
+echo "    - conferir: https://app.SEU_DOMINIO/api/health"
 echo "    - limpar dados de dev (tenants/usuários de teste) antes de abrir p/ cliente"
 echo "    - depois de instalar sua chave SSH: sudo ./deploy.sh --lock-ssh na VPS"

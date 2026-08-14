@@ -217,13 +217,22 @@ if [ "$ok" != "1" ]; then
 fi
 echo "    app healthy ✓"
 
-# confirma que o edge HTTPS responde de fora (nginx -> app)
-echo "==> checando HTTPS público em https://${DOMAIN}/api/health"
-if curl -fsS --max-time 10 "https://${DOMAIN}/api/health" >/dev/null 2>&1; then
-  echo "    HTTPS ok ✓"
+# O app recriado recebe outro IP na rede Docker. Reinício completo do nginx
+# força novos workers a resolverem o upstream, evitando 502 no IP antigo.
+echo "==> reiniciando nginx para apontar ao app novo"
+"${COMPOSE[@]}" restart nginx
+
+# Domínio raiz redireciona para app, e curl considera 302 sucesso. Testar o host
+# do app exige resposta 200 do proxy real, não só TLS/nginx de pé.
+app_health_url="https://app.${DOMAIN}/api/health"
+echo "==> checando HTTPS público em ${app_health_url}"
+http_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "$app_health_url" || true)"
+if [ "$http_code" = "200" ]; then
+  echo "    HTTPS/proxy ok ✓"
 else
-  echo "    AVISO: não respondeu via https://${DOMAIN} (DNS/cert/porta?). App está de pé; verifique o nginx:" >&2
-  "${COMPOSE[@]}" logs --tail=20 nginx >&2 || true
+  echo "ERRO: proxy público devolveu HTTP ${http_code:-sem resposta}. Logs nginx:" >&2
+  "${COMPOSE[@]}" logs --tail=40 nginx >&2 || true
+  exit 1
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
