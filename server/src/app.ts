@@ -38,12 +38,13 @@ import { emailScheduleRoutes } from './routes/emailSchedules.ts';
 import { settingsRoutes } from './routes/settings.ts';
 import { whatsappRoutes } from './routes/whatsapp.ts';
 import { webhookRoutes } from './routes/webhooks.ts';
+import { leadRoutes } from './routes/leads.ts';
 
 // Monta a app com todas as rotas de API, sem listen e sem estáticos —
 // index.ts (produção) adiciona o resto; os testes usam app.inject().
 // Async porque o plugin de rate limit precisa estar registrado ANTES das rotas
 // que o referenciam via config.rateLimit.
-export async function buildApp(opts: { logger?: boolean; authRateLimitMax?: number } = {}): Promise<FastifyInstance> {
+export async function buildApp(opts: { logger?: boolean; authRateLimitMax?: number; leadsAdminEmail?: string } = {}): Promise<FastifyInstance> {
   // Produção: nível configurável, sem log por request (ruído/custo) e com redact
   // dos campos sensíveis. Dev mantém o logger padrão; testes passam logger:false.
   const isProd = process.env.NODE_ENV === 'production';
@@ -99,6 +100,7 @@ export async function buildApp(opts: { logger?: boolean; authRateLimitMax?: numb
   // cadastro está aberto (SIGNUP_ENABLED). Nada sensível pode entrar aqui.
   app.get('/api/config', async () => ({ signup_enabled: config.signupEnabled }));
 
+  leadRoutes(app, (opts.leadsAdminEmail ?? config.leadsAdminEmail).trim().toLowerCase());
   authRoutes(app);
   municipiosRoutes(app);
   recommendRoutes(app);

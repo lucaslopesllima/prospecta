@@ -52,6 +52,10 @@ export const config = {
   // uso real, apertado o bastante para inviabilizar brute force.
   authRateLimitMax: Number(process.env.AUTH_RATE_LIMIT_MAX ?? 10),
   authRateLimitWindow: process.env.AUTH_RATE_LIMIT_WINDOW ?? '1 minute',
+  // Captação da landing. Só este login visualiza e administra os pedidos.
+  leadsAdminEmail: (process.env.LEADS_ADMIN_EMAIL ?? 'lucaslopesllima@gmail.com').trim().toLowerCase(),
+  leadRateLimitMax: Number(process.env.LEAD_RATE_LIMIT_MAX ?? 5),
+  leadRateLimitWindow: process.env.LEAD_RATE_LIMIT_WINDOW ?? '1 hour',
   // Evolution API (gateway WhatsApp não oficial). URL interna do container e a
   // API key global (cria/opera instâncias). Vazio = integração desligada (os
   // endpoints respondem 503). webhookUrl é onde a Evolution entrega os eventos

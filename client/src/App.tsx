@@ -36,6 +36,9 @@ const Contatos = lazy(() => import('./pages/Contatos.tsx').then((m) => ({ defaul
 const PrivateLabels = lazy(() => import('./pages/PrivateLabels.tsx').then((m) => ({ default: m.PrivateLabels })));
 const Representadas = lazy(() => import('./pages/Representadas.tsx').then((m) => ({ default: m.Representadas })));
 const Logs = lazy(() => import('./pages/Logs.tsx').then((m) => ({ default: m.Logs })));
+const DemoRequests = lazy(() => import('./pages/DemoRequests.tsx').then((m) => ({ default: m.DemoRequests })));
+
+const LEADS_ADMIN_EMAIL = 'lucaslopesllima@gmail.com';
 
 function FullScreenSpinner(): React.JSX.Element {
   return (
@@ -71,7 +74,13 @@ function RequireOffice({ children }: { children: ReactNode }): React.JSX.Element
   return <>{children}</>;
 }
 
-type NavItem = { to: string; label: string; icon: IconName; requires?: string; officeOnly?: boolean };
+function RequireLeadsOwner({ children }: { children: ReactNode }): React.JSX.Element {
+  const { user } = useAuth();
+  if (user?.email.trim().toLowerCase() !== LEADS_ADMIN_EMAIL) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
+type NavItem = { to: string; label: string; icon: IconName; requires?: string; officeOnly?: boolean; ownerOnly?: boolean };
 type NavGroup = { label?: string; items: NavItem[] };
 
 // Menu agrupado por intenção (chunking) e ordenado por FREQUÊNCIA DE USO, não
@@ -113,6 +122,7 @@ const NAV_GROUPS: NavGroup[] = [
     { to: '/relatorios', label: 'Relatórios', icon: 'barChart', requires: 'reports.sales' },
   ] },
   { label: 'Sistema', items: [
+    { to: '/demonstracoes', label: 'Demonstrações', icon: 'sparkles', ownerOnly: true },
     { to: '/config', label: 'Config', icon: 'settings' },
     { to: '/equipe', label: 'Vendedores', icon: 'users', requires: 'users.list', officeOnly: true },
     { to: '/grupos', label: 'Grupos Usuários', icon: 'shield', requires: 'groups.list', officeOnly: true },
@@ -126,15 +136,17 @@ const NAV: NavItem[] = NAV_GROUPS.flatMap((g) => g.items);
 // Itens visíveis: permissão do grupo (sem `requires` = livre) e, para itens de
 // equipe (officeOnly), só em conta escritório.
 function useNav(): NavItem[] {
-  const { can, isOffice } = useAuth();
-  return NAV.filter((n) => (!n.officeOnly || isOffice) && (!n.requires || can(n.requires)));
+  const { can, isOffice, user } = useAuth();
+  const isLeadsOwner = user?.email.trim().toLowerCase() === LEADS_ADMIN_EMAIL;
+  return NAV.filter((n) => (!n.officeOnly || isOffice) && (!n.ownerOnly || isLeadsOwner) && (!n.requires || can(n.requires)));
 }
 
 // Grupos visíveis: filtra itens por permissão/tipo de conta e descarta grupos vazios.
 function useNavGroups(): NavGroup[] {
-  const { can, isOffice } = useAuth();
+  const { can, isOffice, user } = useAuth();
+  const isLeadsOwner = user?.email.trim().toLowerCase() === LEADS_ADMIN_EMAIL;
   return NAV_GROUPS
-    .map((g) => ({ ...g, items: g.items.filter((n) => (!n.officeOnly || isOffice) && (!n.requires || can(n.requires))) }))
+    .map((g) => ({ ...g, items: g.items.filter((n) => (!n.officeOnly || isOffice) && (!n.ownerOnly || isLeadsOwner) && (!n.requires || can(n.requires))) }))
     .filter((g) => g.items.length > 0);
 }
 
@@ -534,6 +546,7 @@ export function App(): React.JSX.Element {
       <Route path="/equipe" element={<RequireAuth><RequireOffice><RequirePermission code="users.list"><Shell><Team /></Shell></RequirePermission></RequireOffice></RequireAuth>} />
       <Route path="/grupos" element={<RequireAuth><RequireOffice><RequirePermission code="groups.list"><Shell><Groups /></Shell></RequirePermission></RequireOffice></RequireAuth>} />
       <Route path="/logs" element={<RequireAuth><RequirePermission code="audit.read"><Shell><Logs /></Shell></RequirePermission></RequireAuth>} />
+      <Route path="/demonstracoes" element={<RequireAuth><RequireLeadsOwner><Shell><DemoRequests /></Shell></RequireLeadsOwner></RequireAuth>} />
       <Route path="/trocar-senha" element={<RequireAuth><ChangePassword /></RequireAuth>} />
       <Route path="/config" element={<RequireAuth><Shell><Settings /></Shell></RequireAuth>} />
       <Route path="/conta" element={<RequireAuth><Shell><Account /></Shell></RequireAuth>} />

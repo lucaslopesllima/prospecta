@@ -102,6 +102,10 @@ services:
       LIGHTPANDA_CDP_URL: ws://lightpanda:9222
       AUTH_RATE_LIMIT_MAX: ${AUTH_RATE_LIMIT_MAX:-10}
       AUTH_RATE_LIMIT_WINDOW: ${AUTH_RATE_LIMIT_WINDOW:-1 minute}
+      # Formulário da landing: pedidos ficam visíveis só para este login.
+      LEADS_ADMIN_EMAIL: ${LEADS_ADMIN_EMAIL:-lucaslopesllima@gmail.com}
+      LEAD_RATE_LIMIT_MAX: ${LEAD_RATE_LIMIT_MAX:-5}
+      LEAD_RATE_LIMIT_WINDOW: ${LEAD_RATE_LIMIT_WINDOW:-1 hour}
       # Cadastro público (POST /api/auth/register). Produção sobe fechado: só
       # entra quem já tem conta criada por dentro. Ligue com SIGNUP_ENABLED=true
       # no .env quando quiser abrir a inscrição.
