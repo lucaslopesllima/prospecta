@@ -309,15 +309,14 @@ async function openComposer(network, type, accounts) {
   const accountChecks = selectedAccounts.map((account) => `<label class="check"><input type="checkbox" name="composer-account" value="${account.id}" checked><span class="check-box"></span><span class="check-label"><strong>${esc(account.name)}</strong><small>${esc(account.provider)}</small></span></label>`).join('');
   const mediaPicker = (id, multiple = false) => `<div class="media-picker" id="${id}" data-multiple="${multiple}">
     <label class="btn btn-soft btn-sm">Adicionar arquivo local<input class="composer-upload" type="file" ${multiple ? 'multiple' : ''} hidden accept="image/*,video/mp4"></label>
-    <div class="media-choice-grid">${mediaChoices()}</div></div>`;
+    <details class="media-library"><summary>Usar mídia existente (${state.media.length})</summary><div class="media-choice-grid">${mediaChoices()}</div></details></div>`;
   const storyItem = (index) => `<section class="panel" data-story="${index}"><div class="panel-head"><h3>Story ${index + 1}</h3></div><div class="field"><span>Mídia</span>${mediaPicker(`story-picker-${index}`)}</div><label class="field"><span>Texto (opcional)</span><textarea class="story-text" rows="3" placeholder="Texto deste story"></textarea></label></section>`;
   const content = type === 'story'
     ? `<div id="story-list">${storyItem(0)}</div><button class="btn btn-ghost" type="button" data-act="adicionar-story">Adicionar story</button>`
     : `<label class="field"><span>Texto</span><textarea id="composer-text" rows="6" placeholder="Escreva conteúdo do feed"></textarea></label><div class="field"><span>Mídias (opcional)</span>${mediaPicker('feed-picker', true)}</div>`;
   openModal(`${network} · ${type === 'story' ? 'Stories' : 'Feed'}`, `<label class="field"><span>3. Publicar em</span><div class="checks">${accountChecks}</div></label>${content}
     <label class="field"><span>Agendar para</span><input type="datetime-local" id="composer-when"></label><p class="form-error" id="composer-error" hidden></p>`,
-  '<button class="btn btn-ghost" data-act="cancel">Cancelar</button><button class="btn btn-primary" data-act="salvar-compositor">Agendar</button>');
-  $('[data-act="cancel"]', $('#modal-foot')).onclick = closeModal;
+  '<button class="btn btn-primary" data-act="salvar-compositor">Agendar</button>', { closeOnlyByX: true });
   $('#modal-body [data-act="adicionar-story"]')?.addEventListener('click', () => {
     const list = $('#story-list'); list.insertAdjacentHTML('beforeend', storyItem($$('[data-story]', list).length));
   });
@@ -331,7 +330,7 @@ async function openComposer(network, type, accounts) {
     if (entries.some((entry) => !entry.texto || entry.media_ids.some((media) => !media))) return showFormError('#composer-error', type === 'story' ? 'Cada story precisa de mídia.' : 'Informe texto do post.');
     try {
       for (const entry of entries) { const post = await api('/posts', { method: 'POST', body: entry }); await api(`/posts/${post.id}/schedule`, { method: 'POST', body: { account_ids, placements: [type], scheduled_at } }); }
-      closeModal(); toast(type === 'story' ? `${entries.length} stories agendados.` : 'Post agendado.'); navigate('posts');
+      closeModal(true); toast(type === 'story' ? `${entries.length} stories agendados.` : 'Post agendado.'); navigate('posts');
     } catch (error) { showFormError('#composer-error', error.message); }
   };
 }

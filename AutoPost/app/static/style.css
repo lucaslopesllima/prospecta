@@ -446,6 +446,10 @@ input::placeholder, textarea::placeholder { color: var(--ink-400); }
 
 /* Seletor reutilizável: miniatura direta e prévia ampliada somente no hover. */
 .media-picker { display: grid; gap: 10px; }
+.media-library { border: 1px solid var(--ink-200); border-radius: var(--r-md); background: var(--ink-100); }
+.media-library summary { cursor: pointer; padding: 11px 13px; color: var(--ink-700); font-size: 13px; font-weight: 600; }
+.media-library[open] summary { border-bottom: 1px solid var(--ink-200); }
+.media-library .media-choice-grid { padding: 10px; }
 .media-choice-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 8px; }
 .media-choice { position: relative; min-width: 0; overflow: visible; border: 2px solid transparent; border-radius: 9px; padding: 0; background: var(--ink-100); color: var(--ink-600); cursor: pointer; }
 .media-choice > img, .media-choice > video { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 7px; }
