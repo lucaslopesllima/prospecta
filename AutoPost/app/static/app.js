@@ -301,11 +301,13 @@ async function openComposer(network, type, accounts) {
   state.media = await api('/media').catch(() => []);
   const selectedAccounts = accounts.filter((account) => account.provider === network);
   const accountChecks = selectedAccounts.map((account) => `<label class="check"><input type="checkbox" name="composer-account" value="${account.id}" checked><span class="check-box"></span><span class="check-label"><strong>${esc(account.name)}</strong><small>${esc(account.provider)}</small></span></label>`).join('');
-  const mediaOptions = [...state.media].reverse().map((media) => `<option value="${media.id}">#${media.id} · ${esc(media.mime)}</option>`).join('');
-  const storyItem = (index) => `<section class="panel" data-story="${index}"><div class="panel-head"><h3>Story ${index + 1}</h3></div><label class="field"><span>Mídia</span><select class="story-media"><option value="">Selecione mídia</option>${mediaOptions}</select></label><label class="field"><span>Texto (opcional)</span><textarea class="story-text" rows="3" placeholder="Texto deste story"></textarea></label></section>`;
+  const mediaPicker = (id, multiple = false) => `<div class="media-picker" id="${id}" data-multiple="${multiple}">
+    <label class="btn btn-soft btn-sm">Adicionar arquivo local<input class="composer-upload" type="file" ${multiple ? 'multiple' : ''} hidden accept="image/*,video/mp4"></label>
+    <div class="media-choice-grid">${mediaChoices()}</div></div>`;
+  const storyItem = (index) => `<section class="panel" data-story="${index}"><div class="panel-head"><h3>Story ${index + 1}</h3></div><div class="field"><span>Mídia</span>${mediaPicker(`story-picker-${index}`)}</div><label class="field"><span>Texto (opcional)</span><textarea class="story-text" rows="3" placeholder="Texto deste story"></textarea></label></section>`;
   const content = type === 'story'
     ? `<div id="story-list">${storyItem(0)}</div><button class="btn btn-ghost" type="button" data-act="adicionar-story">Adicionar story</button>`
-    : `<label class="field"><span>Texto</span><textarea id="composer-text" rows="6" placeholder="Escreva conteúdo do feed"></textarea></label><label class="field"><span>Mídias (opcional)</span><select id="composer-media" multiple size="5">${mediaOptions}</select></label>`;
+    : `<label class="field"><span>Texto</span><textarea id="composer-text" rows="6" placeholder="Escreva conteúdo do feed"></textarea></label><div class="field"><span>Mídias (opcional)</span>${mediaPicker('feed-picker', true)}</div>`;
   openModal(`${network} · ${type === 'story' ? 'Stories' : 'Feed'}`, `<label class="field"><span>3. Publicar em</span><div class="checks">${accountChecks}</div></label>${content}
     <label class="field"><span>Agendar para</span><input type="datetime-local" id="composer-when"></label><p class="form-error" id="composer-error" hidden></p>`,
   '<button class="btn btn-ghost" data-act="cancel">Cancelar</button><button class="btn btn-primary" data-act="salvar-compositor">Agendar</button>');
@@ -318,14 +320,36 @@ async function openComposer(network, type, accounts) {
     const scheduled_at = localInputToISO($('#composer-when').value);
     if (!account_ids.length || !scheduled_at) return showFormError('#composer-error', 'Selecione conta e data de agendamento.');
     const entries = type === 'story'
-      ? $$('[data-story]').map((item) => ({ texto: $('.story-text', item).value.trim() || 'Story', media_ids: [Number($('.story-media', item).value)] }))
-      : [{ texto: $('#composer-text').value.trim(), media_ids: [...$('#composer-media').selectedOptions].map((item) => Number(item.value)) }];
+      ? $$('[data-story]').map((item) => ({ texto: $('.story-text', item).value.trim() || 'Story', media_ids: [Number($('.media-choice.is-selected', item)?.dataset.mediaId)] }))
+      : [{ texto: $('#composer-text').value.trim(), media_ids: $$('#feed-picker .media-choice.is-selected').map((item) => Number(item.dataset.mediaId)) }];
     if (entries.some((entry) => !entry.texto || entry.media_ids.some((media) => !media))) return showFormError('#composer-error', type === 'story' ? 'Cada story precisa de mídia.' : 'Informe texto do post.');
     try {
       for (const entry of entries) { const post = await api('/posts', { method: 'POST', body: entry }); await api(`/posts/${post.id}/schedule`, { method: 'POST', body: { account_ids, placements: [type], scheduled_at } }); }
       closeModal(); toast(type === 'story' ? `${entries.length} stories agendados.` : 'Post agendado.'); navigate('posts');
     } catch (error) { showFormError('#composer-error', error.message); }
   };
+}
+
+function mediaChoices() {
+  if (!state.media.length) return '<p class="muted">Nenhuma mídia. Adicione arquivo local.</p>';
+  return [...state.media].reverse().map((media) => {
+    const source = `/media/${media.id}`;
+    const preview = media.mime.startsWith('video/')
+      ? `<video src="${source}" muted preload="metadata"></video>` : `<img src="${source}" alt="mídia #${media.id}">`;
+    return `<button type="button" class="media-choice" data-act="selecionar-midia" data-media-id="${media.id}" title="Clique para selecionar; passe mouse para ampliar">${preview}<span>#${media.id}</span><span class="media-hover">${preview}</span></button>`;
+  }).join('');
+}
+
+async function uploadComposerFiles(input) {
+  const files = [...input.files];
+  if (!files.length) return;
+  input.disabled = true;
+  try {
+    for (const file of files) { const form = new FormData(); form.append('file', file); state.media.push(await api('/uploads', { method: 'POST', form })); }
+    $$('.media-choice-grid').forEach((grid) => { grid.innerHTML = mediaChoices(); });
+    toast(files.length > 1 ? `${files.length} arquivos adicionados.` : 'Arquivo adicionado.');
+  } catch (error) { toast(error.message, 'danger'); }
+  finally { input.disabled = false; input.value = ''; }
 }
 
 function showFormError(sel, msg) {
@@ -782,6 +806,13 @@ document.addEventListener('click', async (ev) => {
 
   switch (btn.dataset.act) {
     case 'novo-post': return openComposerStart();
+    case 'selecionar-midia': {
+      const picker = btn.closest('.media-picker');
+      if (!picker) return;
+      if (picker.dataset.multiple !== 'true') $$('.media-choice', picker).forEach((choice) => choice.classList.remove('is-selected'));
+      btn.classList.toggle('is-selected');
+      return;
+    }
     case 'editar': return openPostForm(state.posts.find((p) => p.id === id));
     case 'agendar': return openAgendar(id);
     case 'detalhe': return openDetalhe(id);
@@ -892,6 +923,7 @@ document.addEventListener('click', async (ev) => {
 });
 
 document.addEventListener('change', async (ev) => {
+  if (ev.target.classList.contains('composer-upload')) return uploadComposerFiles(ev.target);
   if (ev.target.id !== 'upload-input') return;
   const file = ev.target.files[0];
   if (!file) return;
