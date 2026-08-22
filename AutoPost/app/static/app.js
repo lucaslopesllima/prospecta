@@ -333,12 +333,25 @@ async function openComposer(network, type, accounts, post = null) {
       : [{ texto: $('#composer-text').value.trim(), media_ids: pickerMediaIds($('#feed-picker')) }];
     if (entries.some((entry) => !entry.texto || entry.media_ids.some((media) => !media))) return showFormError('#composer-error', type === 'story' ? 'Cada story precisa de mídia.' : 'Informe texto do post.');
     try {
+      const scheduleEntry = async (postId, index, placements = [type]) => {
+        const when = type === 'story' && index > 0
+          ? new Date(new Date(scheduled_at).getTime() + (index * 60_000)).toISOString()
+          : scheduled_at;
+        await api(`/posts/${postId}/schedule`, { method: 'POST', body: { account_ids, placements, scheduled_at: when } });
+      };
       if (post) {
         await api(`/posts/${post.id}`, { method: 'PUT', body: entries[0] });
         const placements = [...new Set((post.targets ?? []).map((target) => target.placement).filter(Boolean))];
-        await api(`/posts/${post.id}/schedule`, { method: 'POST', body: { account_ids, placements: placements.length ? placements : [type], scheduled_at } });
+        await scheduleEntry(post.id, 0, placements.length ? placements : [type]);
+        for (const [index, entry] of entries.slice(1).entries()) {
+          const created = await api('/posts', { method: 'POST', body: entry });
+          await scheduleEntry(created.id, index + 1);
+        }
       } else {
-        for (const entry of entries) { const created = await api('/posts', { method: 'POST', body: entry }); await api(`/posts/${created.id}/schedule`, { method: 'POST', body: { account_ids, placements: [type], scheduled_at } }); }
+        for (const [index, entry] of entries.entries()) {
+          const created = await api('/posts', { method: 'POST', body: entry });
+          await scheduleEntry(created.id, index);
+        }
       }
       closeModal(true); toast(post ? 'Agendamento atualizado.' : type === 'story' ? `${entries.length} stories agendados.` : 'Post agendado.'); navigate('posts');
     } catch (error) { showFormError('#composer-error', error.message); }
