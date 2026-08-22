@@ -230,7 +230,7 @@ function postCard(p) {
       <button class="btn btn-ghost btn-sm" data-act="detalhe" data-id="${p.id}">Detalhes</button>
       ${editavel ? `<button class="btn btn-ghost btn-sm" data-act="editar" data-id="${p.id}">Editar</button>
         <button class="btn btn-soft btn-sm" data-act="agendar" data-id="${p.id}">Agendar</button>` : ''}
-      ${p.status === 'scheduled' ? `<button class="btn btn-ghost btn-sm" data-act="cancelar" data-id="${p.id}">Cancelar</button>` : ''}
+      ${p.status === 'scheduled' ? `<button class="btn btn-ghost btn-sm" data-act="excluir-agendamento" data-id="${p.id}">Excluir agendamento</button>` : ''}
       ${['draft', 'canceled', 'failed', 'missed'].includes(p.status)
         ? `<button class="icon-btn danger" data-act="excluir" data-id="${p.id}" title="Excluir">
              <svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/></svg></button>` : ''}
@@ -592,10 +592,11 @@ async function renderMidia() {
     <figure class="media-item">
       ${m.mime.startsWith('image/')
         ? `<img src="/media/${m.id}" alt="mídia ${m.id}" loading="lazy">`
-        : '<div class="media-video">🎬</div>'}
+        : `<video class="media-video" src="/media/${m.id}" controls muted preload="metadata"></video>`}
       <figcaption>
         <span>#${m.id}</span>
-        <small>${(m.size_bytes / 1024).toFixed(0)} KB</small>
+        <small>${m.mime.replace('image/', '').replace('video/', '')} · ${(m.size_bytes / 1024).toFixed(0)} KB</small>
+        <button class="icon-btn danger" data-act="excluir-midia" data-id="${m.id}" title="Excluir mídia">×</button>
       </figcaption>
     </figure>`).join('')}</div>`;
 }
@@ -821,6 +822,10 @@ document.addEventListener('click', async (ev) => {
       return confirmDialog('Cancelar agendamento',
         'O post volta para a lista sem sair nas redes. Confirmar?',
         async () => { await api(`/posts/${id}/cancel`, { method: 'POST' }); toast('Agendamento cancelado.'); navigate(state.view); });
+    case 'excluir-agendamento':
+      return confirmDialog('Excluir agendamento',
+        'O post volta a rascunho e não será publicado. Confirmar?',
+        async () => { await api(`/posts/${id}/schedule`, { method: 'DELETE' }); toast('Agendamento excluído.'); navigate(state.view); });
     case 'excluir':
       return confirmDialog('Excluir post', 'Esta ação não pode ser desfeita.',
         async () => { await api(`/posts/${id}`, { method: 'DELETE' }); toast('Post excluído.'); navigate(state.view); });
@@ -871,6 +876,13 @@ document.addEventListener('click', async (ev) => {
             toast('Conta removida.');
             navigate('contas');
           } catch (e) { toast(e.message, 'danger'); }
+        });
+    case 'excluir-midia':
+      return confirmDialog('Excluir mídia',
+        'Arquivo será removido do servidor. Mídias usadas em posts não podem ser excluídas.',
+        async () => {
+          try { await api(`/media/${id}`, { method: 'DELETE' }); toast('Mídia excluída.'); navigate('midia'); }
+          catch (e) { toast(e.message, 'danger'); }
         });
     case 'novo-template': return openTemplateForm(null);
     case 'novo-mcp-token': return openMcpTokenForm();

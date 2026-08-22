@@ -91,6 +91,22 @@ def get_media_file(
     return FileResponse(row["path"], media_type=row["mime"])
 
 
+@router.delete("/media/{media_id}", status_code=204)
+def delete_media_file(
+    media_id: int,
+    user: sqlite3.Row = Depends(get_current_user),
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    row = db.get_media(conn, user["tenant_id"], media_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="mídia não encontrada")
+    if db.media_in_use(conn, user["tenant_id"], media_id):
+        raise HTTPException(status_code=409, detail="mídia vinculada a um post; remova-a do post antes")
+    path = db.delete_media(conn, user["tenant_id"], media_id)
+    if path and os.path.exists(path):
+        os.remove(path)
+
+
 @router.get("/media/public/{token}")
 def get_public_media(token: str, conn: sqlite3.Connection = Depends(get_db)):
     """Link assinado e temporário (1h) — usado só para publicação no Instagram,

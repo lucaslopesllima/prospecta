@@ -443,6 +443,23 @@ def list_media(conn, tenant_id: int):
     ).fetchall()
 
 
+def media_in_use(conn, tenant_id: int, media_id: int) -> bool:
+    return conn.execute(
+        "SELECT 1 FROM posts WHERE tenant_id = ? AND media_id = ? "
+        "UNION SELECT 1 FROM post_media WHERE tenant_id = ? AND media_id = ? LIMIT 1",
+        (tenant_id, media_id, tenant_id, media_id),
+    ).fetchone() is not None
+
+
+def delete_media(conn, tenant_id: int, media_id: int) -> str | None:
+    row = get_media(conn, tenant_id, media_id)
+    if row is None:
+        return None
+    conn.execute("DELETE FROM media WHERE tenant_id = ? AND id = ?", (tenant_id, media_id))
+    conn.commit()
+    return row["path"]
+
+
 # ------------------------------------------------------------------------ posts
 
 def _set_post_media(
@@ -562,6 +579,18 @@ def cancel_post(conn, tenant_id: int, post_id: int) -> bool:
         " WHERE tenant_id = ? AND id = ? AND status = 'scheduled'",
         (now_utc(), tenant_id, post_id),
     )
+    conn.commit()
+    return cur.rowcount == 1
+
+
+def delete_schedule(conn, tenant_id: int, post_id: int) -> bool:
+    cur = conn.execute(
+        "UPDATE posts SET status = 'draft', scheduled_at = NULL, attempts = 0, last_error = NULL, updated_at = ?"
+        " WHERE tenant_id = ? AND id = ? AND status = 'scheduled'",
+        (now_utc(), tenant_id, post_id),
+    )
+    if cur.rowcount:
+        conn.execute("DELETE FROM post_targets WHERE tenant_id = ? AND post_id = ?", (tenant_id, post_id))
     conn.commit()
     return cur.rowcount == 1
 

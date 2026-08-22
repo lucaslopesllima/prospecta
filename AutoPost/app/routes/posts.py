@@ -207,6 +207,16 @@ def cancel_post(
     return _post_out(db.get_post(conn, user["tenant_id"], post_id), _tz(conn, user))
 
 
+@router.delete("/{post_id}/schedule", status_code=204)
+def delete_schedule(
+    post_id: int,
+    user: sqlite3.Row = Depends(get_current_user),
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    if not db.delete_schedule(conn, user["tenant_id"], post_id):
+        raise HTTPException(status_code=404, detail="agendamento não encontrado")
+
+
 @router.delete("/{post_id}", status_code=204)
 def delete_post(
     post_id: int,

@@ -208,6 +208,16 @@ class FacebookProvider:
                         data={"caption": texto, "access_token": access_token},
                         files={"source": (f"media{ext}", f, item.mime)},
                     )
+            elif items and items[0].mime.startswith("video/"):
+                if len(items) > 1:
+                    raise PublishError("Facebook aceita um vídeo por postagem")
+                item = items[0]
+                with open(item.path, "rb") as f:
+                    r = await client.post(
+                        f"{GRAPH}/{external_id}/videos",
+                        data={"description": texto, "access_token": access_token},
+                        files={"source": ("video.mp4", f, item.mime)},
+                    )
             else:
                 r = await client.post(
                     f"{GRAPH}/{external_id}/feed",
@@ -243,12 +253,10 @@ class InstagramProvider:
             items = items[:1]
         # O Instagram aceita só JPEG (PNG, MPO e JPS são recusados). Barrar aqui
         # troca um erro obscuro da Graph API por uma mensagem acionável.
-        invalid_mime = next(
-            (item.mime for item in items if item.mime not in ("image/jpeg", "image/jpg")), None
-        )
+        invalid_mime = next((item.mime for item in items if item.mime not in ("image/jpeg", "image/jpg", "video/mp4")), None)
         if invalid_mime:
             raise PublishError(
-                f"Instagram aceita apenas imagem JPEG — o arquivo enviado é {invalid_mime}"
+                f"Instagram aceita JPEG ou MP4 — o arquivo enviado é {invalid_mime}"
             )
         # Limitação da Graph API: o Instagram só aceita mídia por URL pública.
         if not items or any(not item.url for item in items):
@@ -258,11 +266,12 @@ class InstagramProvider:
             )
         async with httpx.AsyncClient(timeout=60.0) as client:
             if placement == "story":
-                r = await client.post(f"{GRAPH}/{external_id}/media", data={
-                    "image_url": items[0].url,
+                payload = {
                     "media_type": "STORIES",
                     "access_token": access_token,
-                })
+                }
+                payload["video_url" if items[0].mime.startswith("video/") else "image_url"] = items[0].url
+                r = await client.post(f"{GRAPH}/{external_id}/media", data=payload)
                 data = r.json()
                 _raise_for_graph_error(data)
                 creation_id = data["id"]
@@ -287,11 +296,12 @@ class InstagramProvider:
                 _raise_for_graph_error(data)
                 creation_id = data["id"]
             else:
-                r = await client.post(f"{GRAPH}/{external_id}/media", data={
-                    "image_url": items[0].url,
-                    "caption": texto,
-                    "access_token": access_token,
-                })
+                payload = {"caption": texto, "access_token": access_token}
+                if items[0].mime.startswith("video/"):
+                    payload.update({"media_type": "REELS", "video_url": items[0].url})
+                else:
+                    payload["image_url"] = items[0].url
+                r = await client.post(f"{GRAPH}/{external_id}/media", data=payload)
                 data = r.json()
                 _raise_for_graph_error(data)
                 creation_id = data["id"]
