@@ -303,21 +303,24 @@ async function openComposerStart() {
   $('#modal-foot [data-act="abrir-compositor"]').onclick = () => openComposer($('#composer-network').value, $('#composer-type').value, accounts);
 }
 
-async function openComposer(network, type, accounts) {
+async function openComposer(network, type, accounts, post = null) {
   state.media = await api('/media').catch(() => []);
-  const selectedAccounts = accounts.filter((account) => account.provider === network);
-  const accountChecks = selectedAccounts.map((account) => `<label class="check"><input type="checkbox" name="composer-account" value="${account.id}" checked><span class="check-box"></span><span class="check-label"><strong>${esc(account.name)}</strong><small>${esc(account.provider)}</small></span></label>`).join('');
+  const selectedAccounts = post ? accounts : accounts.filter((account) => account.provider === network);
+  const selectedAccountIds = new Set((post?.targets ?? []).map((target) => target.social_account_id));
+  const selectedMediaIds = new Set(post?.media_ids ?? (post?.media_id ? [post.media_id] : []));
+  const accountChecks = selectedAccounts.map((account) => `<label class="check"><input type="checkbox" name="composer-account" value="${account.id}" ${post ? (selectedAccountIds.has(account.id) ? 'checked' : '') : 'checked'}><span class="check-box"></span><span class="check-label"><strong>${esc(account.name)}</strong><small>${esc(account.provider)}</small></span></label>`).join('');
   const mediaPicker = (id, multiple = false) => `<div class="media-picker" id="${id}" data-multiple="${multiple}">
     <label class="btn btn-soft btn-sm">Adicionar arquivo local<input class="composer-upload" type="file" ${multiple ? 'multiple' : ''} hidden accept="image/*,video/mp4"></label>
-    <p class="media-file-path muted">Nenhum arquivo selecionado.</p>
-    <details class="media-library"><summary>Usar mídia existente (${state.media.length})</summary><div class="media-choice-grid">${mediaChoices()}</div></details></div>`;
-  const storyItem = (index) => `<section class="panel" data-story="${index}"><div class="panel-head"><h3>Story ${index + 1}</h3></div><div class="field"><span>Mídia</span>${mediaPicker(`story-picker-${index}`)}</div><label class="field"><span>Texto (opcional)</span><textarea class="story-text" rows="3" placeholder="Texto deste story"></textarea></label></section>`;
+    <p class="media-file-path muted">${selectedMediaIds.size ? [...selectedMediaIds].map((mediaId) => `Mídia #${mediaId}`).join(', ') : 'Nenhum arquivo selecionado.'}</p>
+    <details class="media-library"><summary>Usar mídia existente (${state.media.length})</summary><div class="media-choice-grid">${mediaChoices(selectedMediaIds)}</div></details></div>`;
+  const storyItem = (index) => `<section class="panel" data-story="${index}"><div class="panel-head"><h3>Story ${index + 1}</h3></div><div class="field"><span>Mídia</span>${mediaPicker(`story-picker-${index}`)}</div><label class="field"><span>Texto (opcional)</span><textarea class="story-text" rows="3" placeholder="Texto deste story">${esc(index === 0 ? post?.texto ?? '' : '')}</textarea></label></section>`;
   const content = type === 'story'
     ? `<div id="story-list">${storyItem(0)}</div><button class="btn btn-ghost" type="button" data-act="adicionar-story">Adicionar story</button>`
-    : `<label class="field"><span>Texto</span><textarea id="composer-text" rows="6" placeholder="Escreva conteúdo do feed"></textarea></label><div class="field"><span>Mídias (opcional)</span>${mediaPicker('feed-picker', true)}</div>`;
-  openModal(`${network} · ${type === 'story' ? 'Stories' : 'Feed'}`, `<label class="field"><span>3. Publicar em</span><div class="checks">${accountChecks}</div></label>${content}
+    : `<label class="field"><span>Texto</span><textarea id="composer-text" rows="6" placeholder="Escreva conteúdo do feed">${esc(post?.texto ?? '')}</textarea></label><div class="field"><span>Mídias (opcional)</span>${mediaPicker('feed-picker', true)}</div>`;
+  openModal(`${post ? 'Editar agendamento' : network} · ${type === 'story' ? 'Stories' : 'Feed'}`, `<label class="field"><span>3. Publicar em</span><div class="checks">${accountChecks}</div></label>${content}
     <label class="field"><span>Agendar para</span><input type="datetime-local" id="composer-when"></label><p class="form-error" id="composer-error" hidden></p>`,
-  '<button class="btn btn-primary" data-act="salvar-compositor">Agendar</button>', { closeOnlyByX: true });
+  `<button class="btn btn-primary" data-act="salvar-compositor">${post ? 'Salvar' : 'Agendar'}</button>`, { closeOnlyByX: true });
+  $('#composer-when').value = isoToLocalInput(post?.scheduled_at);
   $('#modal-body [data-act="adicionar-story"]')?.addEventListener('click', () => {
     const list = $('#story-list'); list.insertAdjacentHTML('beforeend', storyItem($$('[data-story]', list).length));
   });
@@ -330,19 +333,25 @@ async function openComposer(network, type, accounts) {
       : [{ texto: $('#composer-text').value.trim(), media_ids: $$('#feed-picker .media-choice.is-selected').map((item) => Number(item.dataset.mediaId)) }];
     if (entries.some((entry) => !entry.texto || entry.media_ids.some((media) => !media))) return showFormError('#composer-error', type === 'story' ? 'Cada story precisa de mídia.' : 'Informe texto do post.');
     try {
-      for (const entry of entries) { const post = await api('/posts', { method: 'POST', body: entry }); await api(`/posts/${post.id}/schedule`, { method: 'POST', body: { account_ids, placements: [type], scheduled_at } }); }
-      closeModal(true); toast(type === 'story' ? `${entries.length} stories agendados.` : 'Post agendado.'); navigate('posts');
+      if (post) {
+        await api(`/posts/${post.id}`, { method: 'PUT', body: entries[0] });
+        const placements = [...new Set((post.targets ?? []).map((target) => target.placement).filter(Boolean))];
+        await api(`/posts/${post.id}/schedule`, { method: 'POST', body: { account_ids, placements: placements.length ? placements : [type], scheduled_at } });
+      } else {
+        for (const entry of entries) { const created = await api('/posts', { method: 'POST', body: entry }); await api(`/posts/${created.id}/schedule`, { method: 'POST', body: { account_ids, placements: [type], scheduled_at } }); }
+      }
+      closeModal(true); toast(post ? 'Agendamento atualizado.' : type === 'story' ? `${entries.length} stories agendados.` : 'Post agendado.'); navigate('posts');
     } catch (error) { showFormError('#composer-error', error.message); }
   };
 }
 
-function mediaChoices() {
+function mediaChoices(selected = new Set()) {
   if (!state.media.length) return '<p class="muted">Nenhuma mídia. Adicione arquivo local.</p>';
   return [...state.media].reverse().map((media) => {
     const source = `/media/${media.id}`;
     const preview = media.mime.startsWith('video/')
       ? `<video src="${source}" muted preload="metadata"></video>` : `<img src="${source}" alt="mídia #${media.id}">`;
-    return `<button type="button" class="media-choice" data-act="selecionar-midia" data-media-id="${media.id}" title="Clique para selecionar; passe mouse para ampliar">${preview}<span>#${media.id}</span><span class="media-hover">${preview}</span></button>`;
+    return `<button type="button" class="media-choice${selected.has(media.id) ? ' is-selected' : ''}" data-act="selecionar-midia" data-media-id="${media.id}" title="Clique para selecionar; passe mouse para ampliar">${preview}<span>#${media.id}</span><span class="media-hover">${preview}</span></button>`;
   }).join('');
 }
 
@@ -435,52 +444,9 @@ async function openAgendar(postId) {
     $('[data-act="cancel"]', $('#modal-foot')).onclick = closeModal;
     return;
   }
-
-  const jaSelecionadas = new Set((post.targets ?? []).map((t) => t.social_account_id));
-  const lista = conectadas.map((a) => `<label class="check">
-      <input type="checkbox" value="${a.id}" ${jaSelecionadas.has(a.id) ? 'checked' : ''}>
-      <span class="check-box"></span>
-      <span class="check-label"><strong>${esc(a.name)}</strong><small>${a.provider}</small></span>
-    </label>`).join('');
-
-  openModal(`Agendar post #${postId}`,
-    `<label class="field">
-       <span>Data e hora (seu fuso)</span>
-       <input type="datetime-local" id="ag-quando" value="${isoToLocalInput(post.scheduled_at)}">
-     </label>
-     <div class="field">
-       <span>Publicar em</span>
-       <div class="checks">${lista}</div>
-     </div>
-     <div class="field">
-       <span>Formatos</span>
-       <div class="checks">
-         <label class="check"><input type="checkbox" name="placement" value="feed" checked>
-           <span class="check-box"></span><span class="check-label"><strong>Feed</strong></span></label>
-         <label class="check"><input type="checkbox" name="placement" value="story">
-           <span class="check-box"></span><span class="check-label"><strong>Story</strong><small>Facebook e Instagram</small></span></label>
-       </div>
-     </div>
-     <p class="form-error" id="ag-error" hidden></p>`,
-    '<button class="btn btn-primary" data-act="ok">Agendar</button>',
-    { closeOnlyByX: true });
-  $('[data-act="ok"]', $('#modal-foot')).onclick = async () => {
-    const quando = $('#ag-quando').value;
-    const ids = $$('.checks input:not([name="placement"]):checked').map((i) => Number(i.value));
-    const placements = $$('input[name="placement"]:checked').map((i) => i.value);
-    if (!quando) return showFormError('#ag-error', 'Escolha a data e a hora.');
-    if (!ids.length) return showFormError('#ag-error', 'Escolha ao menos uma conta.');
-    if (!placements.length) return showFormError('#ag-error', 'Escolha ao menos um formato.');
-    try {
-      await api(`/posts/${postId}/schedule`, {
-        method: 'POST',
-        body: { scheduled_at: localInputToISO(quando), account_ids: ids, placements },
-      });
-      closeModal(true);
-      toast('Post agendado.');
-      navigate(state.view);
-    } catch (e) { showFormError('#ag-error', e.message); }
-  };
+  const target = (post.targets ?? []).find((item) => conectadas.some((account) => account.id === item.social_account_id));
+  const account = target ? conectadas.find((item) => item.id === target.social_account_id) : conectadas[0];
+  await openComposer(account.provider, target?.placement ?? 'feed', conectadas, post);
 }
 
 async function openDetalhe(postId) {
