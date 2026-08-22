@@ -309,6 +309,7 @@ async function openComposer(network, type, accounts) {
   const accountChecks = selectedAccounts.map((account) => `<label class="check"><input type="checkbox" name="composer-account" value="${account.id}" checked><span class="check-box"></span><span class="check-label"><strong>${esc(account.name)}</strong><small>${esc(account.provider)}</small></span></label>`).join('');
   const mediaPicker = (id, multiple = false) => `<div class="media-picker" id="${id}" data-multiple="${multiple}">
     <label class="btn btn-soft btn-sm">Adicionar arquivo local<input class="composer-upload" type="file" ${multiple ? 'multiple' : ''} hidden accept="image/*,video/mp4"></label>
+    <p class="media-file-path muted">Nenhum arquivo selecionado.</p>
     <details class="media-library"><summary>Usar mídia existente (${state.media.length})</summary><div class="media-choice-grid">${mediaChoices()}</div></details></div>`;
   const storyItem = (index) => `<section class="panel" data-story="${index}"><div class="panel-head"><h3>Story ${index + 1}</h3></div><div class="field"><span>Mídia</span>${mediaPicker(`story-picker-${index}`)}</div><label class="field"><span>Texto (opcional)</span><textarea class="story-text" rows="3" placeholder="Texto deste story"></textarea></label></section>`;
   const content = type === 'story'
@@ -348,10 +349,19 @@ function mediaChoices() {
 async function uploadComposerFiles(input) {
   const files = [...input.files];
   if (!files.length) return;
+  const picker = input.closest('.media-picker');
   input.disabled = true;
   try {
-    for (const file of files) { const form = new FormData(); form.append('file', file); state.media.push(await api('/uploads', { method: 'POST', form })); }
+    const uploaded = [];
+    for (const file of files) { const form = new FormData(); form.append('file', file); uploaded.push({ media: await api('/uploads', { method: 'POST', form }), name: file.name }); }
+    state.media.push(...uploaded.map((item) => item.media));
     $$('.media-choice-grid').forEach((grid) => { grid.innerHTML = mediaChoices(); });
+    if (picker) {
+      const ids = uploaded.map((item) => String(item.media.id));
+      if (picker.dataset.multiple !== 'true') $$('.media-choice', picker).forEach((choice) => choice.classList.remove('is-selected'));
+      ids.forEach((id) => $$('.media-choice', picker).find((choice) => choice.dataset.mediaId === id)?.classList.add('is-selected'));
+      $('.media-file-path', picker).textContent = `Arquivo local: ${uploaded.map((item) => item.name).join(', ')}`;
+    }
     toast(files.length > 1 ? `${files.length} arquivos adicionados.` : 'Arquivo adicionado.');
   } catch (error) { toast(error.message, 'danger'); }
   finally { input.disabled = false; input.value = ''; }
@@ -814,6 +824,8 @@ document.addEventListener('click', async (ev) => {
       if (!picker) return;
       if (picker.dataset.multiple !== 'true') $$('.media-choice', picker).forEach((choice) => choice.classList.remove('is-selected'));
       btn.classList.toggle('is-selected');
+      const selected = $$('.media-choice.is-selected', picker).map((choice) => `Mídia #${choice.dataset.mediaId}`);
+      $('.media-file-path', picker).textContent = selected.length ? selected.join(', ') : 'Nenhum arquivo selecionado.';
       return;
     }
     case 'editar': return openPostForm(state.posts.find((p) => p.id === id));
