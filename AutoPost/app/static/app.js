@@ -42,13 +42,19 @@ function toast(msg, kind = 'ok') {
   setTimeout(() => el.remove(), 3600);
 }
 
-function openModal(title, bodyHTML, footHTML) {
+let modalCloseOnlyByX = false;
+function openModal(title, bodyHTML, footHTML, { closeOnlyByX = false } = {}) {
   $('#modal-title').textContent = title;
   $('#modal-body').innerHTML = bodyHTML;
   $('#modal-foot').innerHTML = footHTML ?? '';
+  modalCloseOnlyByX = closeOnlyByX;
   $('#modal').hidden = false;
 }
-const closeModal = () => { $('#modal').hidden = true; };
+const closeModal = (fromX = false) => {
+  if (modalCloseOnlyByX && !fromX) return;
+  $('#modal').hidden = true;
+  modalCloseOnlyByX = false;
+};
 
 function confirmDialog(title, message, onConfirm, { danger = true } = {}) {
   openModal(title, `<p class="dialog-text">${esc(message)}</p>`,
@@ -447,10 +453,8 @@ async function openAgendar(postId) {
        </div>
      </div>
      <p class="form-error" id="ag-error" hidden></p>`,
-    `<button class="btn btn-ghost" data-act="cancel">Cancelar</button>
-     <button class="btn btn-primary" data-act="ok">Agendar</button>`);
-
-  $('[data-act="cancel"]', $('#modal-foot')).onclick = closeModal;
+    '<button class="btn btn-primary" data-act="ok">Agendar</button>',
+    { closeOnlyByX: true });
   $('[data-act="ok"]', $('#modal-foot')).onclick = async () => {
     const quando = $('#ag-quando').value;
     const ids = $$('.checks input:not([name="placement"]):checked').map((i) => Number(i.value));
@@ -463,7 +467,7 @@ async function openAgendar(postId) {
         method: 'POST',
         body: { scheduled_at: localInputToISO(quando), account_ids: ids, placements },
       });
-      closeModal();
+      closeModal(true);
       toast('Post agendado.');
       navigate(state.view);
     } catch (e) { showFormError('#ag-error', e.message); }
@@ -936,7 +940,7 @@ document.addEventListener('change', async (ev) => {
   } catch (e) { toast(e.message, 'danger'); }
 });
 
-$('#modal-close').onclick = closeModal;
+$('#modal-close').onclick = () => closeModal(true);
 $('#modal').addEventListener('click', (ev) => { if (ev.target.id === 'modal') closeModal(); });
 document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') closeModal(); });
 
