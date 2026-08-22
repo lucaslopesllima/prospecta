@@ -736,6 +736,16 @@ def revoke_mcp_token(conn, tenant_id: int, token_id: int) -> bool:
     return cur.rowcount == 1
 
 
+def update_mcp_token(conn, tenant_id: int, token_id: int, name: str, scopes: str, expires_at: str | None) -> bool:
+    cur = conn.execute(
+        "UPDATE mcp_tokens SET name = ?, scopes = ?, expires_at = ?"
+        " WHERE tenant_id = ? AND id = ? AND revoked_at IS NULL",
+        (name, scopes, expires_at, tenant_id, token_id),
+    )
+    conn.commit()
+    return cur.rowcount == 1
+
+
 def add_mcp_audit(
     conn, tenant_id: int, token_id: int, tool_name: str,
     success: bool, error: str | None = None,

@@ -101,7 +101,7 @@ function isoToLocalInput(iso) {
 
 const state = {
   user: null, view: 'posts', posts: [], accounts: [], media: [], templates: [],
-  credentials: [], credentialsTab: 'meta',
+  credentials: [], credentialsTab: 'meta', mcpTokens: [],
 };
 
 const PROVIDER_ICON = {
@@ -165,6 +165,13 @@ const VIEWS = {
     sub: 'Provedor, modelo e chave usados para gerar textos',
     actions: '',
     render: renderIA,
+  },
+  mcp: {
+    title: 'Acesso MCP',
+    sub: 'Tokens e permissões para conectar assistentes ao AutoPost',
+    actions: '<button class="btn btn-primary" data-act="novo-mcp-token">'
+      + '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Novo token</button>',
+    render: renderMcp,
   },
 };
 
@@ -265,6 +272,59 @@ async function openPostForm(post) {
       toast(post ? 'Post atualizado.' : 'Post criado.');
       navigate(state.view);
     } catch (e) { showFormError('#post-error', e.message); }
+  };
+}
+
+// Novo conteúdo sempre começa pelo destino. Um story é uma publicação própria:
+// isso permite texto e mídia diferentes por tela, sem misturar sequência com feed.
+async function openComposerStart() {
+  const accounts = (await api('/accounts')).filter((account) => account.status === 'connected');
+  if (!accounts.length) {
+    openModal('Novo conteúdo', '<div class="callout callout-warn">Conecte uma conta social antes de criar conteúdo.</div>', '<button class="btn btn-ghost" data-act="cancel">Fechar</button>');
+    $('[data-act="cancel"]', $('#modal-foot')).onclick = closeModal;
+    return;
+  }
+  const networks = [...new Set(accounts.map((account) => account.provider))];
+  openModal('Novo conteúdo', `<label class="field"><span>1. Rede</span><select id="composer-network">${networks.map((network) => `<option value="${network}">${esc(network)}</option>`).join('')}</select></label>
+    <label class="field"><span>2. Tipo de publicação</span><select id="composer-type"><option value="feed">Feed</option><option value="story">Stories</option></select></label>
+    <p class="muted">Depois escolha contas e crie conteúdo específico para este formato.</p>`,
+  '<button class="btn btn-ghost" data-act="cancel">Cancelar</button><button class="btn btn-primary" data-act="abrir-compositor">Continuar</button>');
+  $('[data-act="cancel"]', $('#modal-foot')).onclick = closeModal;
+  $('#composer-network').onchange = () => {
+    const supportsStory = ['facebook', 'instagram'].includes($('#composer-network').value);
+    $('#composer-type').innerHTML = '<option value="feed">Feed</option>' + (supportsStory ? '<option value="story">Stories</option>' : '');
+  };
+  $('#modal-foot [data-act="abrir-compositor"]').onclick = () => openComposer($('#composer-network').value, $('#composer-type').value, accounts);
+}
+
+async function openComposer(network, type, accounts) {
+  state.media = await api('/media').catch(() => []);
+  const selectedAccounts = accounts.filter((account) => account.provider === network);
+  const accountChecks = selectedAccounts.map((account) => `<label class="check"><input type="checkbox" name="composer-account" value="${account.id}" checked><span class="check-box"></span><span class="check-label"><strong>${esc(account.name)}</strong><small>${esc(account.provider)}</small></span></label>`).join('');
+  const mediaOptions = [...state.media].reverse().map((media) => `<option value="${media.id}">#${media.id} · ${esc(media.mime)}</option>`).join('');
+  const storyItem = (index) => `<section class="panel" data-story="${index}"><div class="panel-head"><h3>Story ${index + 1}</h3></div><label class="field"><span>Mídia</span><select class="story-media"><option value="">Selecione mídia</option>${mediaOptions}</select></label><label class="field"><span>Texto (opcional)</span><textarea class="story-text" rows="3" placeholder="Texto deste story"></textarea></label></section>`;
+  const content = type === 'story'
+    ? `<div id="story-list">${storyItem(0)}</div><button class="btn btn-ghost" type="button" data-act="adicionar-story">Adicionar story</button>`
+    : `<label class="field"><span>Texto</span><textarea id="composer-text" rows="6" placeholder="Escreva conteúdo do feed"></textarea></label><label class="field"><span>Mídias (opcional)</span><select id="composer-media" multiple size="5">${mediaOptions}</select></label>`;
+  openModal(`${network} · ${type === 'story' ? 'Stories' : 'Feed'}`, `<label class="field"><span>3. Publicar em</span><div class="checks">${accountChecks}</div></label>${content}
+    <label class="field"><span>Agendar para</span><input type="datetime-local" id="composer-when"></label><p class="form-error" id="composer-error" hidden></p>`,
+  '<button class="btn btn-ghost" data-act="cancel">Cancelar</button><button class="btn btn-primary" data-act="salvar-compositor">Agendar</button>');
+  $('[data-act="cancel"]', $('#modal-foot')).onclick = closeModal;
+  $('#modal-body [data-act="adicionar-story"]')?.addEventListener('click', () => {
+    const list = $('#story-list'); list.insertAdjacentHTML('beforeend', storyItem($$('[data-story]', list).length));
+  });
+  $('#modal-foot [data-act="salvar-compositor"]').onclick = async () => {
+    const account_ids = $$('[name="composer-account"]:checked').map((input) => Number(input.value));
+    const scheduled_at = localInputToISO($('#composer-when').value);
+    if (!account_ids.length || !scheduled_at) return showFormError('#composer-error', 'Selecione conta e data de agendamento.');
+    const entries = type === 'story'
+      ? $$('[data-story]').map((item) => ({ texto: $('.story-text', item).value.trim() || 'Story', media_ids: [Number($('.story-media', item).value)] }))
+      : [{ texto: $('#composer-text').value.trim(), media_ids: [...$('#composer-media').selectedOptions].map((item) => Number(item.value)) }];
+    if (entries.some((entry) => !entry.texto || entry.media_ids.some((media) => !media))) return showFormError('#composer-error', type === 'story' ? 'Cada story precisa de mídia.' : 'Informe texto do post.');
+    try {
+      for (const entry of entries) { const post = await api('/posts', { method: 'POST', body: entry }); await api(`/posts/${post.id}/schedule`, { method: 'POST', body: { account_ids, placements: [type], scheduled_at } }); }
+      closeModal(); toast(type === 'story' ? `${entries.length} stories agendados.` : 'Post agendado.'); navigate('posts');
+    } catch (error) { showFormError('#composer-error', error.message); }
   };
 }
 
@@ -609,6 +669,54 @@ async function renderIA() {
   </div>`;
 }
 
+// ── MCP ────────────────────────────────────────────────────
+
+const MCP_SCOPES = {
+  read: 'Consultar contas, templates e posts',
+  generate: 'Gerar textos com IA',
+  write: 'Enviar mídia e criar rascunhos',
+  schedule: 'Agendar publicações',
+};
+
+async function renderMcp() {
+  state.mcpTokens = await api('/mcp-tokens');
+  if (!state.mcpTokens.length) {
+    $('#content').innerHTML = empty('🔑', 'Nenhum token MCP',
+      'Crie token com permissões mínimas para conectar Claude, ChatGPT ou outra ferramenta MCP.');
+    return;
+  }
+  $('#content').innerHTML = `<div class="callout">Cada token pertence somente a esta conta. Segredo aparece uma vez, nunca é salvo em texto aberto.</div>
+    <div class="cards">${state.mcpTokens.map((token) => {
+      const expired = token.expires_at && new Date(token.expires_at) <= new Date();
+      const disabled = token.revoked_at || expired;
+      return `<article class="card"><header class="card-head"><div><strong>${esc(token.name)}</strong><p class="muted">${esc(token.token_prefix)}…</p></div>
+        <span class="badge ${disabled ? 'badge-failed' : 'badge-published'}">${token.revoked_at ? 'Revogado' : expired ? 'Expirado' : 'Ativo'}</span></header>
+        <p class="muted">Permissões: ${token.scopes.map(esc).join(', ')}</p>
+        <p class="muted">Último uso: ${fmtDate(token.last_used_at)}${token.expires_at ? ` · Expira: ${fmtDate(token.expires_at)}` : ''}</p>
+        ${!disabled ? `<footer class="card-foot"><span class="spacer"></span><button class="btn btn-ghost btn-sm" data-act="editar-mcp-token" data-id="${token.id}">Editar</button><button class="btn btn-ghost btn-danger btn-sm" data-act="revogar-mcp-token" data-id="${token.id}">Revogar</button></footer>` : ''}
+      </article>`;
+    }).join('')}</div>`;
+}
+
+function openMcpTokenForm(token = null) {
+  const selected = new Set(token?.scopes ?? ['read']);
+  const selectedChecks = Object.entries(MCP_SCOPES).map(([scope, label]) => `<label class="check"><input type="checkbox" name="mcp-scope" value="${scope}" ${selected.has(scope) ? 'checked' : ''}>
+    <span class="check-box"></span><span class="check-label"><strong>${scope}</strong><small>${label}</small></span></label>`).join('');
+  openModal(token ? 'Editar token MCP' : 'Novo token MCP', `<div class="callout callout-warn">Conceda somente permissões necessárias.${token ? '' : ' Token será exibido uma única vez.'}</div>
+    <label class="field"><span>Nome</span><input id="mcp-name" maxlength="120" value="${esc(token?.name ?? '')}" placeholder="Ex.: Assistente comercial"></label>
+    <label class="field"><span>Expiração (opcional)</span><input type="datetime-local" id="mcp-expiry" value="${isoToLocalInput(token?.expires_at)}"></label>
+    <div class="field"><span>Permissões</span><div class="checks">${selectedChecks}</div></div>
+    <p class="form-error" id="mcp-error" hidden></p>`,
+  `<button class="btn btn-ghost" data-act="cancel">Cancelar</button><button class="btn btn-primary" data-act="${token ? 'salvar-mcp-token' : 'criar-mcp-token'}" data-id="${token?.id ?? ''}">${token ? 'Salvar' : 'Criar token'}</button>`);
+  $('[data-act="cancel"]', $('#modal-foot')).onclick = closeModal;
+}
+
+function showMcpToken(token) {
+  openModal('Copie token agora', `<div class="callout callout-warn">Ele não será mostrado novamente.</div>
+    <label class="field"><span>Token MCP</span><textarea id="mcp-secret" rows="3" readonly>${esc(token)}</textarea></label>`,
+  `<button class="btn btn-ghost" data-act="fechar-mcp-token">Fechar</button><button class="btn btn-primary" data-act="copiar-mcp-token">Copiar token</button>`);
+}
+
 // ── credenciais ────────────────────────────────────────────
 
 async function renderCredenciais() {
@@ -673,7 +781,7 @@ document.addEventListener('click', async (ev) => {
   const id = Number(btn.dataset.id);
 
   switch (btn.dataset.act) {
-    case 'novo-post': return openPostForm(null);
+    case 'novo-post': return openComposerStart();
     case 'editar': return openPostForm(state.posts.find((p) => p.id === id));
     case 'agendar': return openAgendar(id);
     case 'detalhe': return openDetalhe(id);
@@ -733,6 +841,32 @@ document.addEventListener('click', async (ev) => {
           } catch (e) { toast(e.message, 'danger'); }
         });
     case 'novo-template': return openTemplateForm(null);
+    case 'novo-mcp-token': return openMcpTokenForm();
+    case 'editar-mcp-token': return openMcpTokenForm(state.mcpTokens.find((token) => token.id === id));
+    case 'criar-mcp-token': {
+      const name = $('#mcp-name').value.trim();
+      const scopes = $$('[name="mcp-scope"]:checked').map((input) => input.value);
+      if (!name || !scopes.length) return showFormError('#mcp-error', 'Informe nome e ao menos uma permissão.');
+      try {
+        const result = await api('/mcp-tokens', { method: 'POST', body: { name, scopes, expires_at: localInputToISO($('#mcp-expiry').value) || null } });
+        showMcpToken(result.token);
+      } catch (e) { showFormError('#mcp-error', e.message); }
+      return;
+    }
+    case 'salvar-mcp-token': {
+      const name = $('#mcp-name').value.trim();
+      const scopes = $$('[name="mcp-scope"]:checked').map((input) => input.value);
+      if (!name || !scopes.length) return showFormError('#mcp-error', 'Informe nome e ao menos uma permissão.');
+      try { await api(`/mcp-tokens/${id}`, { method: 'PUT', body: { name, scopes, expires_at: localInputToISO($('#mcp-expiry').value) || null } }); closeModal(); toast('Token atualizado.'); navigate('mcp'); }
+      catch (e) { showFormError('#mcp-error', e.message); }
+      return;
+    }
+    case 'revogar-mcp-token': return confirmDialog('Revogar token MCP', 'Assistentes usando este token perderão acesso imediatamente.',
+      async () => { try { await api(`/mcp-tokens/${id}`, { method: 'DELETE' }); toast('Token revogado.'); navigate('mcp'); } catch (e) { toast(e.message, 'danger'); } });
+    case 'copiar-mcp-token':
+      try { await navigator.clipboard.writeText($('#mcp-secret').value); toast('Token copiado.'); } catch { $('#mcp-secret').select(); toast('Selecione e copie token.', 'warn'); }
+      return;
+    case 'fechar-mcp-token': closeModal(); return;
     case 'editar-template': return openTemplateForm(state.templates.find((t) => t.id === id));
     case 'excluir-template':
       return confirmDialog('Excluir template', 'Esta ação não pode ser desfeita.',

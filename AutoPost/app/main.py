@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app import db, mcp_server, scheduler
 from app.config import settings
-from app.routes import accounts, ai, auth_routes, credentials, posts, templates, uploads
+from app.routes import accounts, ai, auth_routes, credentials, mcp_tokens, posts, templates, uploads
 
 
 def setup_logging() -> None:
@@ -59,6 +59,7 @@ app.include_router(accounts.router)
 app.include_router(ai.router)
 app.include_router(uploads.router)
 app.include_router(templates.router)
+app.include_router(mcp_tokens.router)
 
 
 @app.get("/health")
