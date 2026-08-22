@@ -583,14 +583,11 @@ def cancel_post(conn, tenant_id: int, post_id: int) -> bool:
     return cur.rowcount == 1
 
 
-def delete_schedule(conn, tenant_id: int, post_id: int) -> bool:
+def delete_scheduled_post(conn, tenant_id: int, post_id: int) -> bool:
     cur = conn.execute(
-        "UPDATE posts SET status = 'draft', scheduled_at = NULL, attempts = 0, last_error = NULL, updated_at = ?"
-        " WHERE tenant_id = ? AND id = ? AND status = 'scheduled'",
-        (now_utc(), tenant_id, post_id),
+        "DELETE FROM posts WHERE tenant_id = ? AND id = ? AND status = 'scheduled'",
+        (tenant_id, post_id),
     )
-    if cur.rowcount:
-        conn.execute("DELETE FROM post_targets WHERE tenant_id = ? AND post_id = ?", (tenant_id, post_id))
     conn.commit()
     return cur.rowcount == 1
 

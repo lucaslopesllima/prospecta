@@ -824,8 +824,8 @@ document.addEventListener('click', async (ev) => {
         async () => { await api(`/posts/${id}/cancel`, { method: 'POST' }); toast('Agendamento cancelado.'); navigate(state.view); });
     case 'excluir-agendamento':
       return confirmDialog('Excluir agendamento',
-        'O post volta a rascunho e não será publicado. Confirmar?',
-        async () => { await api(`/posts/${id}/schedule`, { method: 'DELETE' }); toast('Agendamento excluído.'); navigate(state.view); });
+        'Post e agendamento serão apagados permanentemente. Confirmar?',
+        async () => { await api(`/posts/${id}/schedule`, { method: 'DELETE' }); toast('Post e agendamento excluídos.'); navigate(state.view); });
     case 'excluir':
       return confirmDialog('Excluir post', 'Esta ação não pode ser desfeita.',
         async () => { await api(`/posts/${id}`, { method: 'DELETE' }); toast('Post excluído.'); navigate(state.view); });

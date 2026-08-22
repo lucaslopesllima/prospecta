@@ -213,7 +213,7 @@ def delete_schedule(
     user: sqlite3.Row = Depends(get_current_user),
     conn: sqlite3.Connection = Depends(get_db),
 ):
-    if not db.delete_schedule(conn, user["tenant_id"], post_id):
+    if not db.delete_scheduled_post(conn, user["tenant_id"], post_id):
         raise HTTPException(status_code=404, detail="agendamento não encontrado")
 
 
