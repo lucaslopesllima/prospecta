@@ -309,7 +309,7 @@ async function openComposer(network, type, accounts, post = null) {
   const selectedAccountIds = new Set((post?.targets ?? []).map((target) => target.social_account_id));
   const selectedMediaIds = new Set(post?.media_ids ?? (post?.media_id ? [post.media_id] : []));
   const accountChecks = selectedAccounts.map((account) => `<label class="check"><input type="checkbox" name="composer-account" value="${account.id}" ${post ? (selectedAccountIds.has(account.id) ? 'checked' : '') : 'checked'}><span class="check-box"></span><span class="check-label"><strong>${esc(account.name)}</strong><small>${esc(account.provider)}</small></span></label>`).join('');
-  const mediaPicker = (id, multiple = false) => `<div class="media-picker" id="${id}" data-multiple="${multiple}">
+  const mediaPicker = (id, multiple = false) => `<div class="media-picker" id="${id}" data-multiple="${multiple}" data-selected-media-ids="${[...selectedMediaIds].join(',')}">
     <label class="btn btn-soft btn-sm">Adicionar arquivo local<input class="composer-upload" type="file" ${multiple ? 'multiple' : ''} hidden accept="image/*,video/mp4"></label>
     <p class="media-file-path muted">${selectedMediaIds.size ? [...selectedMediaIds].map((mediaId) => `Mídia #${mediaId}`).join(', ') : 'Nenhum arquivo selecionado.'}</p>
     <details class="media-library"><summary>Usar mídia existente (${state.media.length})</summary><div class="media-choice-grid">${mediaChoices(selectedMediaIds)}</div></details></div>`;
@@ -329,8 +329,8 @@ async function openComposer(network, type, accounts, post = null) {
     const scheduled_at = localInputToISO($('#composer-when').value);
     if (!account_ids.length || !scheduled_at) return showFormError('#composer-error', 'Selecione conta e data de agendamento.');
     const entries = type === 'story'
-      ? $$('[data-story]').map((item) => ({ texto: $('.story-text', item).value.trim() || 'Story', media_ids: [Number($('.media-choice.is-selected', item)?.dataset.mediaId)] }))
-      : [{ texto: $('#composer-text').value.trim(), media_ids: $$('#feed-picker .media-choice.is-selected').map((item) => Number(item.dataset.mediaId)) }];
+      ? $$('[data-story]').map((item) => ({ texto: $('.story-text', item).value.trim() || 'Story', media_ids: pickerMediaIds($('.media-picker', item)) }))
+      : [{ texto: $('#composer-text').value.trim(), media_ids: pickerMediaIds($('#feed-picker')) }];
     if (entries.some((entry) => !entry.texto || entry.media_ids.some((media) => !media))) return showFormError('#composer-error', type === 'story' ? 'Cada story precisa de mídia.' : 'Informe texto do post.');
     try {
       if (post) {
@@ -355,6 +355,10 @@ function mediaChoices(selected = new Set()) {
   }).join('');
 }
 
+function pickerMediaIds(picker) {
+  return (picker?.dataset.selectedMediaIds ?? '').split(',').filter(Boolean).map(Number);
+}
+
 async function uploadComposerFiles(input) {
   const files = [...input.files];
   if (!files.length) return;
@@ -363,14 +367,16 @@ async function uploadComposerFiles(input) {
   try {
     const uploaded = [];
     for (const file of files) { const form = new FormData(); form.append('file', file); uploaded.push({ media: await api('/uploads', { method: 'POST', form }), name: file.name }); }
-    state.media.push(...uploaded.map((item) => item.media));
-    $$('.media-choice-grid').forEach((grid) => { grid.innerHTML = mediaChoices(); });
     if (picker) {
-      const ids = uploaded.map((item) => String(item.media.id));
-      if (picker.dataset.multiple !== 'true') $$('.media-choice', picker).forEach((choice) => choice.classList.remove('is-selected'));
-      ids.forEach((id) => $$('.media-choice', picker).find((choice) => choice.dataset.mediaId === id)?.classList.add('is-selected'));
+      const selected = picker.dataset.multiple === 'true' ? new Set(pickerMediaIds(picker)) : new Set();
+      uploaded.forEach((item) => selected.add(Number(item.media.id)));
+      picker.dataset.selectedMediaIds = [...selected].join(',');
       $('.media-file-path', picker).textContent = `Arquivo local: ${uploaded.map((item) => item.name).join(', ')}`;
     }
+    state.media.push(...uploaded.map((item) => item.media));
+    $$('.media-picker').forEach((current) => {
+      $('.media-choice-grid', current).innerHTML = mediaChoices(new Set(pickerMediaIds(current)));
+    });
     toast(files.length > 1 ? `${files.length} arquivos adicionados.` : 'Arquivo adicionado.');
   } catch (error) { toast(error.message, 'danger'); }
   finally { input.disabled = false; input.value = ''; }
@@ -791,6 +797,7 @@ document.addEventListener('click', async (ev) => {
       if (picker.dataset.multiple !== 'true') $$('.media-choice', picker).forEach((choice) => choice.classList.remove('is-selected'));
       btn.classList.toggle('is-selected');
       const selected = $$('.media-choice.is-selected', picker).map((choice) => `Mídia #${choice.dataset.mediaId}`);
+      picker.dataset.selectedMediaIds = $$('.media-choice.is-selected', picker).map((choice) => choice.dataset.mediaId).join(',');
       $('.media-file-path', picker).textContent = selected.length ? selected.join(', ') : 'Nenhum arquivo selecionado.';
       return;
     }
