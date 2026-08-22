@@ -801,7 +801,7 @@ document.addEventListener('click', async (ev) => {
       $('.media-file-path', picker).textContent = selected.length ? selected.join(', ') : 'Nenhum arquivo selecionado.';
       return;
     }
-    case 'editar': return openPostForm(state.posts.find((p) => p.id === id));
+    case 'editar': return openAgendar(id);
     case 'agendar': return openAgendar(id);
     case 'detalhe': return openDetalhe(id);
     case 'cancelar':
