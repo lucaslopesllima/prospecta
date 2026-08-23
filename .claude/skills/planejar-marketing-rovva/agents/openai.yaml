@@ -1,0 +1,4 @@
+interface:
+  display_name: "Planejar marketing Rovva"
+  short_description: "Pesquisa mercado e planeja conteúdo SaaS"
+  default_prompt: "Use $planejar-marketing-rovva para criar plano de marketing de 30 dias para Rovva."
